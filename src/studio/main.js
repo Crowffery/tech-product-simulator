@@ -479,7 +479,7 @@ function confetti(host) {
 function shell() {
   document.getElementById('app').innerHTML = `
   <header class="studio-head kbox">
-    <a class="back" href="./index.html">← 回游戏</a>
+    <a class="back" href="${import.meta.env.VITE_GAME_HREF || './index.html'}">← 回游戏</a>
     <h1>外观台 <span class="badge">Demo</span></h1>
     <div class="news"><span class="news-tag">年度新闻</span> 今年流行 <b class="news-dot" style="background:${trend.color}"></b><b>${trend.colorName}</b> · <b>${trend.layoutName}</b></div>
     <button type="button" class="mute" data-act="mute" title="音效">${sfx.muted ? '🔇' : '🔊'}</button>
@@ -616,12 +616,23 @@ function bind() {
         sfx.click();
         closeReveal();
       } else if (act === 'clear-museum') {
-        if (museum.length && confirm('清空机型馆？')) {
-          museum = [];
-          writeJSON(MUSEUM_KEY, museum);
-          renderMuseum();
-          renderReadouts();
+        // 页内二次确认（部分环境不支持 confirm 弹窗）
+        if (!museum.length) return;
+        if (t.dataset.armed !== '1') {
+          t.dataset.armed = '1';
+          t.textContent = '再点一次清空';
+          setTimeout(() => {
+            t.dataset.armed = '';
+            t.textContent = '清空';
+          }, 2500);
+          return;
         }
+        museum = [];
+        writeJSON(MUSEUM_KEY, museum);
+        renderMuseum();
+        renderReadouts();
+        t.dataset.armed = '';
+        t.textContent = '清空';
       }
     }
   });

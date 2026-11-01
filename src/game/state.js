@@ -1,3 +1,4 @@
+import { lsGet, lsSet, lsRemove } from './storage.js';
 import { SAVE_KEY, SLOTS } from './data.js';
 
 /** @typedef {'title'|'create'|'hire'|'plan'|'logistics'|'dev'|'event'|'launch'|'score'|'sales'|'monthReport'|'bust'} Phase */
@@ -40,12 +41,12 @@ export function createNewGame(companyName) {
 }
 
 export function saveGame(state) {
-  localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  lsSet(SAVE_KEY, JSON.stringify(state));
 }
 
 export function loadGame() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = lsGet(SAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (!data || data.version !== 1) return null;
@@ -59,9 +60,9 @@ export function loadGame() {
 }
 
 export function clearSave() {
-  localStorage.removeItem(SAVE_KEY);
+  lsRemove(SAVE_KEY);
 }
 
 export function hasSave() {
-  return !!localStorage.getItem(SAVE_KEY);
+  return !!lsGet(SAVE_KEY);
 }

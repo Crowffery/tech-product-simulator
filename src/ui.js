@@ -17,6 +17,7 @@ import {
   hasSave,
 } from './game/state.js';
 import * as L from './game/logic.js';
+import { lsGet, lsSet } from './game/storage.js';
 import { mountOffice, syncOffice } from './office.js';
 
 let state = null;
@@ -27,7 +28,7 @@ let draft = {
   alloc: null,
   supplierId: 'balanced',
   stockId: 'normal',
-  reduceMotion: localStorage.getItem('epdg-reduce-motion') === '1',
+  reduceMotion: lsGet('epdg-reduce-motion') === '1',
 };
 let flashText = '';
 let flashTimer = 0;
@@ -176,7 +177,7 @@ function renderTitle() {
     <div class="row" style="justify-content:center;flex-direction:column;align-items:center;gap:10px">
       ${saved ? '<button type="button" class="primary blink" data-act="continue" style="font-size:1.15rem;padding:14px 28px">▶ 继续游戏（自动存档）</button>' : ''}
       <button type="button" class="${saved ? '' : 'primary blink'}" data-act="new">${saved ? '新开一局' : '▶ 新开一局'}</button>
-      <a class="studio-link" href="./studio.html">🎨 外观台 Demo（3D 配机型）</a>
+      <a class="studio-link" href="${import.meta.env.VITE_STUDIO_HREF || './studio.html'}">🎨 外观台 Demo（3D 配机型）</a>
     </div>
     <label class="eco" style="margin-top:8px"><input type="checkbox" data-act="toggle-motion-box" ${draft.reduceMotion ? 'checked' : ''}/> 减少动画</label>
   </div>`;
@@ -430,7 +431,7 @@ function onClick(e) {
 
   if (act === 'toggle-motion') {
     draft.reduceMotion = !draft.reduceMotion;
-    localStorage.setItem('epdg-reduce-motion', draft.reduceMotion ? '1' : '0');
+    lsSet('epdg-reduce-motion', draft.reduceMotion ? '1' : '0');
     document.body.classList.toggle('reduce-motion', draft.reduceMotion);
     toast(draft.reduceMotion ? '已减少动画' : '已开启短动画');
     render();
@@ -567,7 +568,7 @@ function onChange(e) {
   const act = t.dataset.act;
   if (act === 'toggle-motion-box') {
     draft.reduceMotion = t.checked;
-    localStorage.setItem('epdg-reduce-motion', draft.reduceMotion ? '1' : '0');
+    lsSet('epdg-reduce-motion', draft.reduceMotion ? '1' : '0');
     document.body.classList.toggle('reduce-motion', draft.reduceMotion);
     return;
   }
