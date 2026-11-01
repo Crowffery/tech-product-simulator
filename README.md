@@ -1,3 +1,5 @@
+**在线试玩：** https://tech-product-simulator.vercel.app
+
 # 电子产品发展国
 
 > **暂定名（已决议）**：《电子产品发展国》  
