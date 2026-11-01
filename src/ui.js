@@ -171,19 +171,19 @@ function renderSheet() {
     const p = draft.plan;
     body = `<h2 class="kbox-title">自己定方向</h2>
       <div class="grid2">
-        <div><strong>定位</strong>${POSITIONING.map((x)=>`<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
-        <div><strong>售价</strong>${PRICE_BANDS.map((x)=>`<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
+        <div><strong>做成什么样</strong>${POSITIONING.map((x)=>`<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
+        <div><strong>卖多少钱</strong>${PRICE_BANDS.map((x)=>`<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
       </div>
-      <p style="margin:8px 0 4px"><strong>卖点</strong></p>
+      <p style="margin:8px 0 4px"><strong>主打卖点</strong></p>
       <div class="row">${SELL_POINTS.map((x)=>`<button type="button" class="chip ${p.pointIds.includes(x.id)?'on':''}" data-act="toggle-point" data-id="${x.id}">${x.name}</button>`).join('')}</div>
-      <label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco?'checked':''} ${state.generation===1?'disabled':''}/> 绑上代生态</label>
+      <label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco?'checked':''} ${state.generation===1?'disabled':''}/> 跟上一款连着用</label>
       <button type="button" class="primary choice" data-act="confirm-plan">用自定义锁定并关闭</button>
       <button type="button" class="choice" data-act="close-sheet">取消</button>`;
   } else if (sheet === 'logistics-adv') {
     body = `<h2 class="kbox-title">自己选工厂和备货</h2>
-      <p><strong>供应商</strong></p>
+      <p><strong>找哪家厂</strong></p>
       ${SUPPLIERS.map((s)=>`<label class="radio"><input type="radio" name="sup" data-act="draft-sup" data-id="${s.id}" ${draft.supplierId===s.id?'checked':''}/> <img src="${supplierIconDataUrl(s.id)}" width="28" height="28" style="image-rendering:pixelated;vertical-align:middle"/> ${s.name}</label>`).join('')}
-      <p><strong>备货</strong></p>
+      <p><strong>备多少货</strong></p>
       ${STOCK_OPTS.map((s)=>`<label class="radio"><input type="radio" name="stk" data-act="draft-stk" data-id="${s.id}" ${draft.stockId===s.id?'checked':''}/> ${s.name} — ${s.note}</label>`).join('')}
       <button type="button" class="primary choice" data-act="confirm-logistics">锁定自选并关闭</button>
       <button type="button" class="choice" data-act="close-sheet">取消</button>`;
@@ -300,7 +300,7 @@ function renderPlan() {
   const p = draft.plan;
   const tri = L.trianglePreview(p.positioningId, p.priceId);
   return shellGame(`
-    <h2 class="kbox-title">企划 <span class="badge">Gen${state.generation}</span></h2>
+    <h2 class="kbox-title">定方向 <span class="badge">第${state.generation}代</span></h2>
     <p class="tip">上面那台手机会跟着你的选择变。推荐：大众款 + 又快又薄 + 正常价。</p>
     ${gauge('好不好用（预期）', tri.experience)}
     ${gauge('贵不贵（压力）', tri.costPressure, 'warn')}
