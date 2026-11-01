@@ -1,12 +1,16 @@
 /**
- * 像素化 3D 机型渲染：参数化生成机身 → 低分辨率渲染 → 减色 + 深度描边 → 最近邻放大
+ * 像素化 3D 机型舞台
+ * - 参数化生成机身（中框 / 后盖 / 前屏 / 内部元件分层，可拆解）
+ * - 低分辨率渲染 → 亮度分段 + 同色系暗描边 + 法线折边高光 → 最近邻放大
+ * - 软箱环境反射、投影、浮尘、火花、发布会舞台（光柱 / 观众 / LED 大屏 / 闪光灯）
  * 单位：毫米。手机正面朝 +Z，Y 向上。
  */
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CORNERS, SCREEN_FORMS, physical, tier } from './parts.js';
 
-// ———————————————————— 工具 ————————————————————
+const FX = 1; // 不参与法线描边的图层（粒子、光柱、线条）
+
+// ═════════════════════════ 工具 ═════════════════════════
 
 function roundedRectShape(w, h, r, cx = 0, cy = 0) {
   const s = new THREE.Shape();
@@ -25,7 +29,6 @@ function roundedRectShape(w, h, r, cx = 0, cy = 0) {
   return s;
 }
 
-/** 圆角矩形的上半段（y >= splitY），用于上下拼色 */
 function topBandShape(w, h, r, splitY) {
   const s = new THREE.Shape();
   r = Math.min(r, w / 2, h / 2);
@@ -61,25 +64,75 @@ function luminance(hex) {
   return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 }
 
-// ———————————————————— 材质 ————————————————————
+const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3);
+const easeInOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+function easeOutBack(k) {
+  const c1 = 1.9;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+}
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const seg = (t, a, b) => clamp01((t - a) / (b - a));
+
+function canvasTex(w, h, draw, { nearest = false } = {}) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  if (nearest) {
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.NearestFilter;
+    t.generateMipmaps = false;
+  }
+  return t;
+}
+
+// ═════════════════════════ 环境：摄影棚软箱 ═════════════════════════
+
+function studioEnvironment(renderer) {
+  const s = new THREE.Scene();
+  s.add(new THREE.Mesh(new THREE.BoxGeometry(12, 12, 12), new THREE.MeshBasicMaterial({ color: 0x0c0d12, side: THREE.BackSide })));
+  const panel = (w, h, hex, k, pos) => {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k), side: THREE.DoubleSide }),
+    );
+    m.position.set(...pos);
+    m.lookAt(0, 0, 0);
+    s.add(m);
+  };
+  panel(7, 1.1, '#ffffff', 4.0, [0, 5.4, 1.2]); // 顶灯长条
+  panel(1.0, 6, '#bcd8ff', 3.2, [-5.4, 0.6, 1.8]); // 左冷色条
+  panel(1.0, 6, '#ffd2a0', 2.6, [5.4, 0.2, 1.0]); // 右暖色条
+  panel(4, 3, '#ffffff', 0.9, [0, 0.5, 5.6]); // 正面柔光
+  panel(10, 10, '#3b2b20', 0.8, [0, -5.8, 0]); // 地面反射
+  const pm = new THREE.PMREMGenerator(renderer);
+  const tex = pm.fromScene(s, 0.015).texture;
+  pm.dispose();
+  return tex;
+}
+
+// ═════════════════════════ 材质 ═════════════════════════
 
 let leatherTex = null;
 function leatherTexture() {
   if (leatherTex) return leatherTex;
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const g = c.getContext('2d');
-  g.fillStyle = '#fff';
-  g.fillRect(0, 0, 64, 64);
-  for (let i = 0; i < 140; i++) {
-    const v = 236 + Math.floor(Math.random() * 20);
-    g.fillStyle = `rgb(${v},${v},${v})`;
-    g.fillRect(Math.random() * 64, Math.random() * 64, 2, 2);
-  }
-  leatherTex = new THREE.CanvasTexture(c);
+  leatherTex = canvasTex(128, 128, (g) => {
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 500; i++) {
+      const v = 244 + Math.floor(Math.random() * 11);
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      const r = 1 + Math.random() * 2;
+      g.beginPath();
+      g.arc(Math.random() * 128, Math.random() * 128, r, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
   leatherTex.wrapS = leatherTex.wrapT = THREE.RepeatWrapping;
-  leatherTex.repeat.set(0.05, 0.05);
-  leatherTex.colorSpace = THREE.SRGBColorSpace;
+  leatherTex.repeat.set(1 / 28, 1 / 28);
   return leatherTex;
 }
 
@@ -87,83 +140,181 @@ function bodyMaterial(matId, hex) {
   const color = new THREE.Color(hex);
   switch (matId) {
     case 1: // 玻璃
-      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.12, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.05 });
+      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.1, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.25 });
     case 2: // 金属
-      return new THREE.MeshStandardMaterial({ color, roughness: 0.32, metalness: 0.85 });
+      return new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.05, 0.08), roughness: 0.3, metalness: 0.85, envMapIntensity: 1.4 });
     case 3: // 素皮
-      return new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0, map: leatherTexture() });
+      return new THREE.MeshStandardMaterial({ color, roughness: 0.92, map: leatherTexture(), envMapIntensity: 0.35 });
     default: // 塑料
-      return new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0 });
+      return new THREE.MeshStandardMaterial({ color, roughness: 0.48, envMapIntensity: 0.7 });
   }
 }
 
 function frameMaterial(matId, hex) {
-  if (matId === 0) return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.5 });
-  // 玻璃 / 金属 / 素皮 都配金属中框
-  return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.28, metalness: 0.9 });
+  if (matId === 0) return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.45, envMapIntensity: 0.8 });
+  return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex).offsetHSL(0, -0.1, 0.1), roughness: 0.22, metalness: 0.92, envMapIntensity: 1.5 });
 }
 
-// ———————————————————— 贴图：屏幕壁纸 / 后盖文字 ————————————————————
+// ═════════════════════════ 贴图 ═════════════════════════
 
 function wallpaperTexture(accent) {
-  const c = document.createElement('canvas');
-  c.width = 72;
-  c.height = 152;
-  const g = c.getContext('2d');
-  const grd = g.createLinearGradient(0, 0, 0, 152);
-  grd.addColorStop(0, shade(accent, 0.15).getStyle());
-  grd.addColorStop(1, shade(accent, -0.3).getStyle());
-  g.fillStyle = grd;
-  g.fillRect(0, 0, 72, 152);
-  // 时钟（10:24，极客梗）
-  g.fillStyle = '#fff';
-  g.font = 'bold 16px monospace';
-  g.textAlign = 'center';
-  g.fillText('10:24', 36, 40);
-  g.font = '6px monospace';
-  g.fillText('周五 · 发布会倒计时', 36, 50);
-  // 图标格
-  const icons = ['#ff7675', '#fdcb6e', '#55efc4', '#74b9ff', '#a29bfe', '#fab1a0', '#81ecec', '#ffeaa7'];
-  for (let i = 0; i < 8; i++) {
-    const x = 9 + (i % 4) * 15;
-    const y = 104 + Math.floor(i / 4) * 16;
-    g.fillStyle = icons[i];
-    g.fillRect(x, y, 10, 10);
-  }
-  g.fillStyle = 'rgba(255,255,255,.35)';
-  g.fillRect(6, 138, 60, 10);
-  const t = new THREE.CanvasTexture(c);
-  t.magFilter = THREE.NearestFilter;
-  t.minFilter = THREE.NearestFilter;
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
+  return canvasTex(
+    96,
+    200,
+    (g, w, h) => {
+      const grd = g.createLinearGradient(0, 0, w, h);
+      grd.addColorStop(0, shade(accent, 0.22).getStyle());
+      grd.addColorStop(0.55, shade(accent, -0.05).getStyle());
+      grd.addColorStop(1, shade(accent, -0.35).getStyle());
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+      g.globalAlpha = 0.22;
+      g.fillStyle = '#fff';
+      for (let i = 0; i < 3; i++) {
+        g.beginPath();
+        g.ellipse(w * (0.2 + i * 0.35), h * (0.62 + i * 0.08), 60, 22, -0.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+      g.fillStyle = '#fff';
+      g.textAlign = 'center';
+      g.font = 'bold 26px monospace';
+      g.fillText('10:24', w / 2, 54);
+      g.font = 'bold 8px sans-serif';
+      g.fillText('周五 · 发布会倒计时', w / 2, 68);
+      const icons = ['#ff7675', '#fdcb6e', '#55efc4', '#74b9ff', '#a29bfe', '#fab1a0', '#81ecec', '#ffeaa7'];
+      for (let i = 0; i < 8; i++) {
+        const x = 12 + (i % 4) * 20;
+        const y = 138 + Math.floor(i / 4) * 21;
+        g.fillStyle = icons[i];
+        g.fillRect(x, y, 13, 13);
+        g.fillStyle = 'rgba(255,255,255,.5)';
+        g.fillRect(x, y, 13, 3);
+      }
+      g.fillStyle = 'rgba(255,255,255,.3)';
+      g.fillRect(8, 184, w - 16, 10);
+    },
+    { nearest: true },
+  );
 }
 
-function backTextTexture(design, w, h, bgHex) {
-  const scale = 4; // px / mm
-  const c = document.createElement('canvas');
-  c.width = Math.round(w * scale);
-  c.height = Math.round(h * scale);
-  const g = c.getContext('2d');
-  const light = luminance(bgHex) < 0.45;
-  g.fillStyle = light ? 'rgba(255,255,255,.85)' : 'rgba(30,25,20,.8)';
-  g.textAlign = 'center';
-  g.font = `900 ${Math.round(9 * scale)}px "Noto Sans SC", sans-serif`;
-  g.fillText(design.modelName || '', c.width / 2, c.height * 0.8);
-  g.font = `700 ${Math.round(4.2 * scale)}px "Noto Sans SC", sans-serif`;
-  g.fillText(design.company || '', c.width / 2, c.height * 0.88);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
+function glareTexture() {
+  return canvasTex(64, 128, (g, w, h) => {
+    const grd = g.createLinearGradient(0, 0, w, h * 0.6);
+    grd.addColorStop(0, 'rgba(255,255,255,0)');
+    grd.addColorStop(0.42, 'rgba(255,255,255,0)');
+    grd.addColorStop(0.5, 'rgba(255,255,255,0.22)');
+    grd.addColorStop(0.6, 'rgba(255,255,255,0.05)');
+    grd.addColorStop(0.7, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, w, h);
+  });
 }
 
-// ———————————————————— 镜头模组布局 ————————————————————
+function backDecalTexture(design, w, h, bgHex) {
+  const k = 5;
+  return canvasTex(Math.round(w * k), Math.round(h * k), (g, cw, ch) => {
+    const light = luminance(bgHex) < 0.42;
+    const ink = light ? 'rgba(255,255,255,.9)' : 'rgba(25,20,16,.85)';
+    const cx = cw / 2;
+    const cy = ch * 0.5;
+    g.strokeStyle = ink;
+    g.lineWidth = 1.2 * k;
+    g.beginPath();
+    g.arc(cx, cy, 7 * k, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = ink;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = `900 ${Math.round(8 * k)}px "ZCOOL KuaiLe","Noto Sans SC",sans-serif`;
+    g.fillText((design.company || '?').slice(0, 1), cx, cy + 0.4 * k);
+    g.textBaseline = 'alphabetic';
+    g.font = `900 ${Math.round(5.5 * k)}px "Noto Sans SC",sans-serif`;
+    g.fillText(design.modelName || '', cx, ch * 0.86);
+    g.font = `700 ${Math.round(2.6 * k)}px "Noto Sans SC",sans-serif`;
+    g.globalAlpha = 0.7;
+    g.fillText(`DESIGNED BY ${design.company || ''}`, cx, ch * 0.9);
+  });
+}
 
-/** 返回背面（观看者视角坐标：X 右、Y 下，原点在背面左上角）的模组与镜头 */
+function pcbTexture() {
+  return canvasTex(
+    128,
+    64,
+    (g, w, h) => {
+      g.fillStyle = '#1e7a46';
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = '#d4b04c';
+      g.lineWidth = 1;
+      for (let i = 0; i < 26; i++) {
+        let x = Math.random() * w;
+        let y = Math.random() * h;
+        g.beginPath();
+        g.moveTo(x, y);
+        for (let s = 0; s < 3; s++) {
+          if (Math.random() < 0.5) x += (Math.random() - 0.5) * 40;
+          else y += (Math.random() - 0.5) * 24;
+          g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+      g.fillStyle = '#e8c860';
+      for (let i = 0; i < 40; i++) g.fillRect(Math.floor(Math.random() * w), Math.floor(Math.random() * h), 2, 2);
+    },
+    { nearest: true },
+  );
+}
+
+function chipTexture(label) {
+  return canvasTex(
+    64,
+    64,
+    (g) => {
+      g.fillStyle = '#2b2e36';
+      g.fillRect(0, 0, 64, 64);
+      g.fillStyle = '#9aa0ab';
+      g.textAlign = 'center';
+      g.font = 'bold 13px sans-serif';
+      g.fillText('蜂鸟', 32, 28);
+      g.fillStyle = '#ffb347';
+      g.font = 'bold 18px monospace';
+      g.fillText(label, 32, 50);
+    },
+    { nearest: true },
+  );
+}
+
+function batteryTexture(t) {
+  const colors = ['#4aa3df', '#f5b041', '#e74c3c'];
+  return canvasTex(
+    96,
+    128,
+    (g, w, h) => {
+      g.fillStyle = '#26282e';
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = colors[t.id];
+      g.fillRect(0, h * 0.18, w, h * 0.42);
+      g.fillStyle = '#111';
+      g.textAlign = 'center';
+      g.font = 'bold 22px monospace';
+      g.fillText(t.label.split('·')[1]?.trim() || '', w / 2, h * 0.42);
+      g.font = 'bold 11px sans-serif';
+      g.fillText('mAh · 蜂鸟能源', w / 2, h * 0.55);
+      g.fillStyle = '#8b8f99';
+      g.font = '9px sans-serif';
+      g.fillText('Li-ion 3.87V', w / 2, h * 0.78);
+    },
+    { nearest: true },
+  );
+}
+
+// ═════════════════════════ 镜头模组布局 ═════════════════════════
+
+/** 背面观看者坐标：X 右、Y 下，原点在背面左上角 */
 function cameraLayout(layoutId, w, h, lensCount, tierId) {
-  const R = [3.6, 4.2, 5.3][tierId]; // 主摄半径
+  const R = [3.6, 4.2, 5.3][tierId];
   const r2 = R * 0.78;
-  const m = 7.5; // 边距
+  const m = 7.5;
   const lenses = [];
   let module = null;
   let flash = null;
@@ -185,8 +336,8 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
     }
     case 'circle': {
       const Rc = R * 1.5 + (lensCount > 1 ? r2 * 1.4 : 2);
-      module = { type: 'circle', x: w / 2, y: m + Rc + 2, r: Rc };
       const cy = m + Rc + 2;
+      module = { type: 'circle', x: w / 2, y: cy, r: Rc };
       if (lensCount === 1) lenses.push({ x: w / 2, y: cy, r: R * 1.15 });
       if (lensCount === 2) lenses.push({ x: w / 2, y: cy - Rc * 0.42, r: R * 0.95 }, { x: w / 2, y: cy + Rc * 0.45, r: r2 });
       if (lensCount === 3)
@@ -195,7 +346,7 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
           { x: w / 2 - Rc * 0.45, y: cy + Rc * 0.38, r: r2 * 0.9 },
           { x: w / 2 + Rc * 0.45, y: cy + Rc * 0.38, r: r2 * 0.9 },
         );
-      flash = { x: w / 2 + Rc + 4, y: cy - Rc * 0.5 };
+      flash = { x: w / 2 + Rc + 4, y: cy - Rc * 0.5, free: true };
       break;
     }
     case 'hpill': {
@@ -204,13 +355,13 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
       const ph = R * 2 + 4.5;
       module = { type: 'rrect', x: m + len / 2, y: m + ph / 2, w: len, h: ph, r: ph / 2 };
       for (let i = 0; i < lensCount; i++) lenses.push({ x: m + 3 + step / 2 + i * step, y: m + ph / 2, r: radii[i] });
-      flash = { x: m + len + 4, y: m + ph / 2 };
+      flash = { x: m + len + 4, y: m + ph / 2, free: true };
       break;
     }
     case 'float': {
       const step = R * 2 + 4;
       for (let i = 0; i < lensCount; i++) lenses.push({ x: m + R + 1, y: m + R + 1 + i * step, r: radii[i], ring: true });
-      flash = { x: m + R * 2 + 6, y: m + R };
+      flash = { x: m + R * 2 + 6, y: m + R, free: true };
       break;
     }
     case 'glasses': {
@@ -222,12 +373,12 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
       module = { type: 'twin', a: { x: cx1, y: cy, r: Rc }, b: { x: cx2, y: cy, r: Rc } };
       lenses.push({ x: cx1, y: cy, r: R });
       if (lensCount >= 2) lenses.push({ x: cx2, y: cy, r: lensCount === 3 ? r2 : R });
-      if (lensCount === 3) lenses.push({ x: w / 2, y: cy + Rc + 3.5, r: r2 * 0.7 });
-      flash = { x: w / 2, y: cy - Rc * 0.3 };
+      if (lensCount === 3) lenses.push({ x: w / 2, y: cy + Rc + 3.5, r: r2 * 0.7, ring: true });
+      flash = { x: w / 2, y: cy - Rc * 0.3, free: true };
       break;
     }
     case 'diamond': {
-      const D = R * 2 + r2 * 2 + 9; // 对角线长
+      const D = R * 2 + r2 * 2 + 9;
       const cx = m + D / 2;
       const cy = m + D / 2;
       module = { type: 'diamond', x: cx, y: cy, s: D / Math.SQRT2 };
@@ -251,99 +402,175 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
   return { module, lenses, flash };
 }
 
-// ———————————————————— 机型构建 ————————————————————
+// ═════════════════════════ 机型构建 ═════════════════════════
 
 export function buildPhone(design) {
-  const group = new THREE.Group();
   const phys = physical(design);
   const { w, h, thickness: t } = phys;
   const corner = CORNERS[design.corner] || CORNERS[1];
-  const b = Math.min(corner.bevel, t / 2 - 0.3);
+  const b = Math.min(corner.bevel, t / 2 - 0.5);
   const matId = design.parts.material;
-  const camTier = tier(design, 'camera');
+  const camT = tier(design, 'camera');
+  const chipT = tier(design, 'chip');
+  const batT = tier(design, 'battery');
   const form = SCREEN_FORMS.find((f) => f.id === design.screenForm) || SCREEN_FORMS[0];
-
   const backHex = design.color;
   const frameHex = design.twoTone === 'frame' ? design.color2 : design.color;
 
-  // 机身：圆角矩形挤出 + 倒角
-  const shape = roundedRectShape(w - 2 * b, h - 2 * b, Math.max(0.5, corner.r - b));
-  const depth = t - 2 * b;
-  const bodyGeo = new THREE.ExtrudeGeometry(shape, {
-    depth,
-    bevelEnabled: true,
-    bevelThickness: b,
-    bevelSize: b,
-    bevelSegments: 4,
-    curveSegments: 18,
-  });
-  bodyGeo.translate(0, 0, -depth / 2);
-  const body = new THREE.Mesh(bodyGeo, [bodyMaterial(matId, backHex), frameMaterial(matId, frameHex)]);
-  group.add(body);
+  const root = new THREE.Group();
+  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
+  Object.values(layers).forEach((g) => root.add(g));
+  const anchors = {};
 
   const capW = w - 2 * b;
   const capH = h - 2 * b;
-  const capR = Math.max(0.5, corner.r - b);
+  const capR = Math.max(0.6, corner.r - b);
 
-  // —— 正面 ——
-  const front = new THREE.Group();
-  front.position.z = t / 2 + 0.02;
-  const glass = new THREE.Mesh(
-    new THREE.ShapeGeometry(roundedRectShape(capW + 0.4, capH + 0.4, capR + 0.2), 24),
-    new THREE.MeshPhysicalMaterial({ color: 0x0b0c10, roughness: 0.1, clearcoat: 1 }),
+  // —— 中框：圆角环 + 倒角 ——
+  const inset = b + 1.5;
+  const holeW = w - 2 * inset;
+  const holeH = h - 2 * inset;
+  const outer = roundedRectShape(capW, capH, capR);
+  const hole = roundedRectShape(holeW, holeH, Math.max(0.6, corner.r - inset));
+  outer.holes.push(new THREE.Path(hole.getPoints(14).reverse()));
+  const depth = t - 2 * b;
+  const frameGeo = new THREE.ExtrudeGeometry(outer, { depth, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 4, curveSegments: 20 });
+  frameGeo.translate(0, 0, -depth / 2);
+  layers.frame.add(new THREE.Mesh(frameGeo, frameMaterial(matId, frameHex)));
+  const mid = new THREE.Mesh(
+    new THREE.ShapeGeometry(roundedRectShape(holeW - 0.5, holeH - 0.5, Math.max(0.6, corner.r - inset)), 16),
+    new THREE.MeshStandardMaterial({ color: 0x8c9099, roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide }),
   );
-  front.add(glass);
+  mid.position.z = t / 2 - 1.1;
+  layers.frame.add(mid);
+  anchors.frame = new THREE.Object3D();
+  anchors.frame.position.set(w / 2, h * 0.3, 0);
+  layers.frame.add(anchors.frame);
+
+  const keyMat = frameMaterial(matId, shade(frameHex, -0.06).getStyle());
+  const addKey = (y, len) => {
+    const k = new THREE.Mesh(new THREE.BoxGeometry(1.3, len, Math.min(3, t * 0.36)), keyMat);
+    k.position.set(w / 2 + 0.35, y, 0);
+    layers.frame.add(k);
+  };
+  addKey(h * 0.22, 14);
+  addKey(h * 0.08, 9);
+  const dark = new THREE.MeshBasicMaterial({ color: 0x07070a });
+  const port = new THREE.Mesh(new THREE.BoxGeometry(9, 1, Math.min(3, t * 0.4)), dark);
+  port.position.set(0, -h / 2 + 0.25, 0);
+  layers.frame.add(port);
+  for (let i = 0; i < 5; i++) {
+    const g = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), dark);
+    g.position.set(-14 - i * 2.4, -h / 2 + 0.2, 0);
+    layers.frame.add(g);
+  }
+  if (matId !== 0) {
+    const antMat = new THREE.MeshStandardMaterial({ color: shade(frameHex, -0.25), roughness: 0.6 });
+    for (const sy of [1, -1]) {
+      for (const sx of [1, -1]) {
+        const a = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, t * 0.7), antMat);
+        a.position.set(sx * (w / 2 + 0.05), sy * (h / 2 - 16), 0);
+        layers.frame.add(a);
+      }
+    }
+  }
+
+  // —— 前屏 ——
+  const front = layers.front;
+  const glassGeo = new THREE.ExtrudeGeometry(roundedRectShape(capW + 0.1, capH + 0.1, capR + 0.05), {
+    depth: 0.4,
+    bevelEnabled: true,
+    bevelThickness: 0.2,
+    bevelSize: 0.2,
+    bevelSegments: 2,
+    curveSegments: 20,
+  });
+  glassGeo.translate(0, 0, -0.45);
+  front.add(new THREE.Mesh(glassGeo, new THREE.MeshPhysicalMaterial({ color: 0x08090d, roughness: 0.06, clearcoat: 1, envMapIntensity: 1.3 })));
   const bez = form.bezel;
   const topExtra = form.id === 'bezel' ? 6 : 0;
   const dispW = capW - 2 * bez;
   const dispH = capH - 2 * bez - topExtra * 2;
   const dispGeo = new THREE.ShapeGeometry(roundedRectShape(dispW, dispH, Math.max(0.5, capR - bez)), 24);
-  // ShapeGeometry 的 UV 是原始坐标 → 归一化
   const uv = dispGeo.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / dispW + 0.5, uv.getY(i) / dispH + 0.5);
   const display = new THREE.Mesh(dispGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture(design.color), toneMapped: false }));
-  display.position.z = 0.03;
+  display.position.z = 0.17;
   front.add(display);
-  const holeMat = new THREE.MeshBasicMaterial({ color: 0x050507 });
+  anchors.screen = new THREE.Object3D();
+  anchors.screen.position.set(-dispW * 0.28, dispH * 0.2, 0.2);
+  front.add(anchors.screen);
+  const glare = new THREE.Mesh(
+    new THREE.PlaneGeometry(dispW, dispH),
+    new THREE.MeshBasicMaterial({ map: glareTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  glare.position.z = 0.2;
+  glare.layers.set(FX);
+  front.add(glare);
+  const holeMat = new THREE.MeshBasicMaterial({ color: 0x030304 });
   if (form.id === 'punch' || form.id === 'center') {
-    const hole = new THREE.Mesh(new THREE.CircleGeometry(1.7, 16), holeMat);
-    hole.position.set(form.id === 'punch' ? -dispW / 2 + 5.5 : 0, dispH / 2 - 5, 0.06);
-    front.add(hole);
+    const hc = new THREE.Mesh(new THREE.CircleGeometry(1.7, 16), holeMat);
+    hc.position.set(form.id === 'punch' ? -dispW / 2 + 5.5 : 0, dispH / 2 - 5, 0.22);
+    front.add(hc);
   }
   if (form.id === 'bezel') {
     const slot = new THREE.Mesh(new THREE.ShapeGeometry(roundedRectShape(12, 1.4, 0.7)), new THREE.MeshBasicMaterial({ color: 0x2a2a30 }));
-    slot.position.set(0, capH / 2 - bez - topExtra, 0.06);
+    slot.position.set(0, capH / 2 - bez - topExtra, 0.22);
     front.add(slot);
     const cam = new THREE.Mesh(new THREE.CircleGeometry(1.4, 12), holeMat);
-    cam.position.set(9, capH / 2 - bez - topExtra, 0.06);
+    cam.position.set(9, capH / 2 - bez - topExtra, 0.22);
     front.add(cam);
   }
-  group.add(front);
 
-  // —— 背面（观看者坐标）——
-  const back = new THREE.Group();
+  // —— 后盖（观看者坐标，整组翻转 180°）——
+  const back = layers.back;
   back.rotation.y = Math.PI;
-  back.position.z = -t / 2 - 0.02;
   const toLocal = (X, Y) => [-w / 2 + X, h / 2 - Y];
+  const plateGeo = new THREE.ExtrudeGeometry(roundedRectShape(capW, capH, capR), {
+    depth: 0.5,
+    bevelEnabled: true,
+    bevelThickness: 0.12,
+    bevelSize: 0.12,
+    bevelSegments: 1,
+    curveSegments: 20,
+  });
+  plateGeo.translate(0, 0, -0.55);
+  back.add(new THREE.Mesh(plateGeo, bodyMaterial(matId, backHex)));
+  anchors.back = new THREE.Object3D();
+  anchors.back.position.set(-w * 0.2, -h * 0.2, 0.2);
+  back.add(anchors.back);
 
   if (design.twoTone === 'band') {
     const split = h / 2 - Math.max(42, h * 0.3);
     const band = new THREE.Mesh(new THREE.ShapeGeometry(topBandShape(capW, capH, capR, split), 24), bodyMaterial(matId, design.color2));
+    band.position.z = 0.09;
     back.add(band);
   }
-  const text = new THREE.Mesh(
+  if (matId === 3) {
+    const pts = roundedRectShape(capW - 5, capH - 5, Math.max(0.6, capR - 2.5)).getPoints(30);
+    pts.push(pts[0]);
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineDashedMaterial({ color: shade(backHex, 0.22), dashSize: 1.6, gapSize: 1.3 }),
+    );
+    line.computeLineDistances();
+    line.position.z = 0.12;
+    line.layers.set(FX);
+    back.add(line);
+  }
+  const decal = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({ map: backTextTexture(design, w, h, backHex), transparent: true, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: backDecalTexture(design, w, h, backHex), transparent: true, depthWrite: false }),
   );
-  text.position.z = 0.04;
-  back.add(text);
+  decal.position.z = 0.14;
+  back.add(decal);
 
-  const lay = cameraLayout(design.layout, w, h, camTier.lenses, design.parts.camera);
-  const bump = camTier.bump;
+  const lay = cameraLayout(design.layout, w, h, camT.lenses, design.parts.camera);
+  const bump = camT.bump;
   const modHex = design.twoTone === 'band' ? design.color2 : design.color;
-  const modMat = bodyMaterial(matId === 3 ? 2 : matId, shade(modHex, -0.08).getStyle());
+  const modMat = bodyMaterial(matId === 3 ? 2 : matId, shade(modHex, -0.07).getStyle());
   const extrude = (s, d) =>
-    new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.35, bevelSegments: 2, curveSegments: 28 });
+    new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelThickness: 0.4, bevelSize: 0.4, bevelSegments: 3, curveSegments: 28 });
   let surf = 0.05;
   if (lay.module) {
     const md = lay.module;
@@ -367,63 +594,161 @@ export function buildPhone(design) {
       geos.push(g);
     }
     for (const g of geos) back.add(new THREE.Mesh(g, modMat));
-    surf = bump + 0.35;
+    surf = bump + 0.4;
   }
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0x8d9097, metalness: 0.9, roughness: 0.25 });
-  const lensMat = new THREE.MeshPhysicalMaterial({ color: 0x10142a, roughness: 0.05, metalness: 0.2, clearcoat: 1 });
-  const glintMat = new THREE.MeshBasicMaterial({ color: 0xbfd8ff });
-  for (const L of lay.lenses) {
+  const ringMat = new THREE.MeshStandardMaterial({ color: 0xa4a8b0, metalness: 0.95, roughness: 0.18, envMapIntensity: 1.6 });
+  const barrelMat = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.4 });
+  const lensMat = new THREE.MeshPhysicalMaterial({
+    color: 0x0c1030,
+    roughness: 0.04,
+    metalness: 0.3,
+    clearcoat: 1,
+    iridescence: 1,
+    iridescenceIOR: 1.6,
+    iridescenceThicknessRange: [200, 700],
+    envMapIntensity: 1.6,
+  });
+  const glintMat = new THREE.MeshBasicMaterial({ color: 0xdcecff });
+  const accentMat = new THREE.MeshBasicMaterial({ color: 0xe67e22 });
+  lay.lenses.forEach((L, i) => {
     const [x, y] = toLocal(L.x, L.y);
-    const ringH = L.ring ? bump + 0.8 : 0.9;
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(L.r, L.r, ringH, 28), ringMat);
+    const ringH = L.ring ? bump + 0.9 : 1.0;
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(L.r, L.r * 1.04, ringH, 32), ringMat);
     ring.rotation.x = Math.PI / 2;
     ring.position.set(x, y, surf + ringH / 2);
     back.add(ring);
-    const lens = new THREE.Mesh(new THREE.CircleGeometry(L.r * 0.74, 28), lensMat);
-    lens.position.set(x, y, surf + ringH + 0.02);
+    const top = surf + ringH;
+    const barrel = new THREE.Mesh(new THREE.CircleGeometry(L.r * 0.86, 32), barrelMat);
+    barrel.position.set(x, y, top + 0.02);
+    back.add(barrel);
+    const lens = new THREE.Mesh(new THREE.SphereGeometry(L.r * 0.66, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), lensMat);
+    lens.rotation.x = Math.PI / 2;
+    lens.scale.set(1, 0.35, 1);
+    lens.position.set(x, y, top + 0.03);
     back.add(lens);
-    const glint = new THREE.Mesh(new THREE.CircleGeometry(L.r * 0.18, 10), glintMat);
-    glint.position.set(x - L.r * 0.28, y + L.r * 0.28, surf + ringH + 0.05);
+    const glint = new THREE.Mesh(new THREE.CircleGeometry(L.r * 0.16, 10), glintMat);
+    glint.position.set(x - L.r * 0.26, y + L.r * 0.26, top + L.r * 0.24);
     back.add(glint);
-  }
+    if (i === 0 && design.parts.camera === 2) {
+      const acc = new THREE.Mesh(new THREE.RingGeometry(L.r * 0.9, L.r * 0.98, 32), accentMat);
+      acc.position.set(x, y, top + 0.05);
+      back.add(acc);
+    }
+  });
   if (lay.flash) {
     const [x, y] = toLocal(lay.flash.x, lay.flash.y);
-    const fz = lay.module && design.layout !== 'circle' ? surf : 0.05;
+    const fz = lay.module && !lay.flash.free ? surf : 0.05;
     const fl = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.5, 14), new THREE.MeshBasicMaterial({ color: 0xfff1b8 }));
     fl.rotation.x = Math.PI / 2;
     fl.position.set(x, y, fz + 0.25);
     back.add(fl);
   }
-  group.add(back);
 
-  // —— 侧键 / 接口 ——
-  const keyMat = frameMaterial(matId, shade(frameHex, -0.05).getStyle());
-  const addKey = (y, len) => {
-    const k = new THREE.Mesh(new THREE.BoxGeometry(1.2, len, Math.min(3, t * 0.38)), keyMat);
-    k.position.set(w / 2 + 0.3, y, 0);
-    group.add(k);
-  };
-  addKey(h * 0.22, 14);
-  addKey(h * 0.07, 9);
-  const port = new THREE.Mesh(new THREE.BoxGeometry(9, 1, Math.min(3, t * 0.4)), holeMat);
-  port.position.set(0, -h / 2 + 0.2, 0);
-  group.add(port);
+  // —— 内部元件（拆解时可见）——
+  const inner = layers.inner;
+  const iw = holeW - 2 * b - 1.5;
+  const ih = holeH - 2 * b - 1.5;
+  const zBack = -t / 2 + 0.7;
+  const boardH = ih * 0.36;
+  const pcbSide = new THREE.MeshStandardMaterial({ color: 0x175c34 });
+  const board = new THREE.Mesh(new THREE.BoxGeometry(iw * 0.92, boardH, 0.9), [
+    pcbSide,
+    pcbSide,
+    pcbSide,
+    pcbSide,
+    new THREE.MeshStandardMaterial({ color: 0x1e7a46, roughness: 0.6 }),
+    new THREE.MeshStandardMaterial({ map: pcbTexture(), roughness: 0.55 }),
+  ]);
+  const boardY = ih / 2 - boardH / 2 - 1;
+  board.position.set(0, boardY, 0.2);
+  inner.add(board);
+  const chipS = [9, 10.5, 12][chipT.id];
+  const chipSide = new THREE.MeshStandardMaterial({ color: 0x2b2e36, metalness: 0.4, roughness: 0.4 });
+  const chip = new THREE.Mesh(new THREE.BoxGeometry(chipS, chipS, 1.1), [
+    chipSide,
+    chipSide,
+    chipSide,
+    chipSide,
+    chipSide,
+    new THREE.MeshStandardMaterial({ map: chipTexture(chipT.label.split(' ')[1] || 'S'), roughness: 0.35, metalness: 0.2 }),
+  ]);
+  const vcT = chipT.id === 2 ? 0.35 : 0;
+  chip.position.set(iw * 0.12, boardY - 1, 0.2 - 0.45 - vcT - 0.55);
+  inner.add(chip);
+  anchors.chip = chip;
+  if (vcT) {
+    // 旗舰芯片：铜色均热板，从背面就能看到
+    const vc = new THREE.Mesh(
+      new THREE.BoxGeometry(chipS * 2, chipS * 1.6, vcT),
+      new THREE.MeshStandardMaterial({ color: 0xc8753a, metalness: 0.9, roughness: 0.25, envMapIntensity: 1.5 }),
+    );
+    vc.position.set(iw * 0.12, boardY - 1, 0.2 - 0.45 - vcT / 2);
+    inner.add(vc);
+  }
+  for (let i = 0; i < 4; i++) {
+    const comp = new THREE.Mesh(
+      new THREE.BoxGeometry(3 + (i % 2) * 2, 2.5 + i, 0.8),
+      new THREE.MeshStandardMaterial({ color: [0x3a3d46, 0x23252b, 0xb0b4bc, 0x3a3d46][i], metalness: 0.5, roughness: 0.4 }),
+    );
+    comp.position.set(-iw * 0.32 + i * 3.4, boardY + (i % 2 ? 4 : -4), 0.2 - 0.9);
+    inner.add(comp);
+  }
+  const batH = ih * [0.4, 0.46, 0.52][batT.id];
+  const batD = Math.max(2.5, t - 2.8);
+  const batY = -ih / 2 + batH / 2 + 7;
+  const batMat = new THREE.MeshStandardMaterial({ color: 0x26282e, roughness: 0.5 });
+  const battery = new THREE.Mesh(new THREE.BoxGeometry(iw * 0.86, batH, batD), [
+    batMat,
+    batMat,
+    batMat,
+    batMat,
+    batMat,
+    new THREE.MeshStandardMaterial({ map: batteryTexture(batT), roughness: 0.45 }),
+  ]);
+  battery.position.set(0, batY, 0);
+  inner.add(battery);
+  anchors.battery = battery;
+  const flexLen = boardY - boardH / 2 - (batY + batH / 2) + 4;
+  const flex = new THREE.Mesh(new THREE.BoxGeometry(5, Math.max(4, flexLen), 0.25), new THREE.MeshStandardMaterial({ color: 0xe0a030, roughness: 0.4 }));
+  flex.position.set(iw * 0.3, (boardY - boardH / 2 + batY + batH / 2) / 2, -batD / 2 - 0.2);
+  inner.add(flex);
+  const spk = new THREE.Mesh(new THREE.BoxGeometry(iw * 0.45, 5, Math.min(3.5, t - 3)), new THREE.MeshStandardMaterial({ color: 0x4a4e57, roughness: 0.6 }));
+  spk.position.set(-iw * 0.18, -ih / 2 + 3, 0);
+  inner.add(spk);
+  const sensorMat = new THREE.MeshStandardMaterial({ color: 0x30333b, metalness: 0.5, roughness: 0.4 });
+  const sensorGlass = new THREE.MeshPhysicalMaterial({ color: 0x223066, roughness: 0.05, clearcoat: 1, iridescence: 1, iridescenceIOR: 1.5 });
+  lay.lenses.forEach((L, i) => {
+    const [bx, by] = toLocal(L.x, L.y);
+    const s = L.r * (i === 0 ? 2.1 : 1.7);
+    const d = Math.min(t - 2, 4.5);
+    const cube = new THREE.Mesh(new THREE.BoxGeometry(s, s, d), sensorMat);
+    cube.position.set(-bx, by, zBack + d / 2 - 0.4);
+    inner.add(cube);
+    const gl = new THREE.Mesh(new THREE.CircleGeometry(L.r * 0.7, 20), sensorGlass);
+    gl.rotation.y = Math.PI;
+    gl.position.set(-bx, by, zBack - 0.42);
+    inner.add(gl);
+    if (i === 0) anchors.sensor = cube;
+  });
 
-  return group;
+  root.traverse((o) => {
+    if (o.isMesh) o.castShadow = true;
+  });
+  return { root, layers, anchors, dims: { w, h, t } };
 }
 
 export function disposeObject(obj) {
   obj.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
-    for (const m of mats) {
+    for (const m of new Set(mats)) {
       if (m.map && m.map !== leatherTex) m.map.dispose();
       m.dispose();
     }
   });
 }
 
-// ———————————————————— 像素化后处理 ————————————————————
+// ═════════════════════════ 像素化后处理 ═════════════════════════
 
 const postVert = /* glsl */ `
 varying vec2 vUv;
@@ -434,21 +759,22 @@ const postFrag = /* glsl */ `
 #include <packing>
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
+uniform sampler2D tNormal;
 uniform vec2 res;
 uniform float near;
 uniform float far;
-uniform float levels;
+uniform float bands;
 uniform float outline;
+uniform float flash;
+uniform float spot;
 uniform vec3 bgTop;
 uniform vec3 bgBot;
-uniform float spot;
+uniform vec3 spotCol;
 varying vec2 vUv;
 
-float viewZ(vec2 uv) {
-  float d = texture2D(tDepth, uv).x;
-  return -perspectiveDepthToViewZ(d, near, far);
-}
 float rawD(vec2 uv) { return texture2D(tDepth, uv).x; }
+float vz(vec2 uv) { return -perspectiveDepthToViewZ(rawD(uv), near, far); }
+vec3 nrm(vec2 uv) { return normalize(texture2D(tNormal, uv).xyz * 2.0 - 1.0); }
 
 float bayer(vec2 p) {
   int x = int(mod(p.x, 4.0));
@@ -471,108 +797,144 @@ void main() {
   vec2 cell = (floor(px) + 0.5) / res;
   float d = rawD(cell);
   float dith = bayer(floor(px));
+  float aspect = res.x / res.y;
   vec3 col;
   if (d >= 0.9999) {
-    // 背景：竖向渐变 + 聚光圈 + 抖动减色
-    vec3 bg = mix(bgBot, bgTop, cell.y);
-    float r = distance(cell * vec2(res.x / res.y, 1.0), vec2(0.5 * res.x / res.y, 0.55));
-    bg += spot * vec3(1.0, 0.92, 0.7) * smoothstep(0.55, 0.0, r) * 0.35;
-    col = floor(bg * (levels + 3.0) + dith * 0.45 + 0.5) / (levels + 3.0);
+    vec2 p = (cell - vec2(0.5, 0.56)) * vec2(aspect, 1.0);
+    vec3 bg = mix(bgBot, bgTop, smoothstep(0.0, 1.0, cell.y));
+    bg += spotCol * spot * smoothstep(0.62, 0.0, length(p));
+    bg *= 1.0 - 0.45 * smoothstep(0.5, 1.15, length((cell - 0.5) * vec2(aspect, 1.0)));
+    float lv = 12.0;
+    float Yb = dot(bg, vec3(0.299, 0.587, 0.114));
+    float v = Yb * lv;
+    float base = floor(v);
+    float Yq = (base + step(0.5 + dith * 0.6, v - base)) / lv;
+    col = bg * (Yq / max(Yb, 0.002));
   } else {
     vec3 c = toSRGB(texture2D(tColor, cell).rgb);
-    col = floor(c * levels + dith * 0.6 + 0.5) / levels;
+    float Y = dot(c, vec3(0.299, 0.587, 0.114));
+    float Yq = floor(Y * bands + 0.5 + dith * 0.22) / bands;
+    c *= Yq / max(Y, 0.002);
+    float g = dot(c, vec3(0.299, 0.587, 0.114));
+    c = mix(vec3(g), c, 1.12);
+    col = c;
     if (outline > 0.5) {
-      // 用 1/z 的二阶差分找边：平面上 1/z 在屏幕空间线性 → 掠射角不会误判
       vec2 o = 1.0 / res;
-      float w0 = 1.0 / viewZ(cell);
-      float edge = 0.0;
+      float w0 = 1.0 / vz(cell);
+      vec3 n0 = nrm(cell);
+      float sil = 0.0;
+      float hl = 0.0;
+      vec3 L = normalize(vec3(-0.55, 0.75, 0.4));
       vec2 axes[2];
-      axes[0] = vec2(o.x, 0.0); axes[1] = vec2(0.0, o.y);
+      axes[0] = vec2(o.x, 0.0);
+      axes[1] = vec2(0.0, o.y);
       for (int k = 0; k < 2; k++) {
         vec2 pa = cell + axes[k];
         vec2 pb = cell - axes[k];
-        bool bgA = rawD(pa) >= 0.9999;
-        bool bgB = rawD(pb) >= 0.9999;
-        if (bgA || bgB) { edge = 1.0; continue; }
-        float lap = (1.0 / viewZ(pa) + 1.0 / viewZ(pb) - 2.0 * w0) / w0;
-        if (lap < -0.0035) edge = max(edge, 0.6);
+        if (rawD(pa) >= 0.9999 || rawD(pb) >= 0.9999) { sil = 1.0; continue; }
+        float lap = (1.0 / vz(pa) + 1.0 / vz(pb) - 2.0 * w0) / w0;
+        if (lap < -0.003) sil = 1.0;
       }
-      col = mix(col, vec3(0.105, 0.075, 0.05), edge);
+      if (sil < 0.5) {
+        vec2 offs[4];
+        offs[0] = vec2(o.x, 0.0); offs[1] = vec2(-o.x, 0.0); offs[2] = vec2(0.0, o.y); offs[3] = vec2(0.0, -o.y);
+        for (int k = 0; k < 4; k++) {
+          vec2 q = cell + offs[k];
+          vec3 nq = nrm(q);
+          float nd = 1.0 - dot(n0, nq);
+          float dz = abs(1.0 / vz(q) - w0) / w0;
+          if (nd > 0.12 && dz < 0.02) {
+            float s = dot(n0 - nq, L);
+            if (s > 0.0) hl = max(hl, clamp(nd * 3.0, 0.0, 1.0));
+          }
+        }
+      }
+      vec3 ink = col * 0.3 + vec3(0.05, 0.035, 0.03);
+      col = mix(col, ink, sil);
+      col = mix(col, min(vec3(1.0), col * 1.5 + 0.08), hl * 0.85);
     }
   }
+  col = mix(col, vec3(1.0, 0.98, 0.92), flash);
   gl_FragColor = vec4(col, 1.0);
 }
 `;
 
-// ———————————————————— 舞台 ————————————————————
+// ═════════════════════════ 舞台 ═════════════════════════
+
+const IDLE_BG = { top: '#a7bfd3', bot: '#3b4a5e', spot: '#fff1d0' };
+const STAGE_BG = { top: '#140f22', bot: '#040307', spot: '#6a4fb0' };
 
 export class PhoneStage {
   constructor(host) {
     this.host = host;
-    this.pixel = 3; // 0 = 关闭像素化
+    this.pixel = 3;
     this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.autoUpdate = false;
     host.appendChild(this.renderer.domElement);
     this.renderer.domElement.className = 'stage3d-canvas';
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(28, 1, 50, 2000);
-    this.camera.position.set(0, 12, 430);
-    this.camera.lookAt(0, 0, 0);
+    this.camera = new THREE.PerspectiveCamera(28, 1, 50, 2400);
+    this.camera.layers.enable(FX);
+    this.baseZ = 480;
+    this.camera.position.set(0, 14, this.baseZ);
 
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.75;
+    this.scene.environment = studioEnvironment(this.renderer);
+    this.scene.environmentIntensity = 0.85;
 
-    this.hemi = new THREE.HemisphereLight(0xfff4e0, 0x403020, 0.9);
-    this.scene.add(this.hemi);
-    this.key = new THREE.DirectionalLight(0xffffff, 1.8);
-    this.key.position.set(160, 220, 300);
-    this.scene.add(this.key);
-    this.rim = new THREE.DirectionalLight(0x9fc7ff, 1.1);
-    this.rim.position.set(-260, 80, -200);
-    this.scene.add(this.rim);
-    this.spot = new THREE.SpotLight(0xfff0c8, 0, 900, Math.PI / 7, 0.5, 0);
-    this.spot.position.set(0, 420, 260);
-    this.scene.add(this.spot);
-    this.scene.add(this.spot.target);
+    this.hemi = new THREE.HemisphereLight(0xfff4e0, 0x3a2e26, 0.75);
+    this.key = new THREE.DirectionalLight(0xffffff, 2.0);
+    this.key.position.set(150, 260, 280);
+    this.key.castShadow = true;
+    this.key.shadow.mapSize.set(1024, 1024);
+    Object.assign(this.key.shadow.camera, { left: -140, right: 140, top: 140, bottom: -140, near: 50, far: 900 });
+    this.key.shadow.bias = -0.002;
+    this.key.shadow.normalBias = 1.6;
+    this.rim = new THREE.DirectionalLight(0x9fc7ff, 1.2);
+    this.rim.position.set(-260, 90, -220);
+    this.rimWarm = new THREE.DirectionalLight(0xffb070, 0.0);
+    this.rimWarm.position.set(260, 40, -200);
+    this.spot = new THREE.SpotLight(0xfff0c8, 0, 1400, Math.PI / 12, 0.5, 0);
+    this.spot.position.set(0, 560, 200);
+    this.spot.target.position.set(0, -60, 0);
+    this.scene.add(this.hemi, this.key, this.rim, this.rimWarm, this.spot, this.spot.target);
 
-    // 手办底座
-    this.pedestal = new THREE.Group();
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(58, 62, 10, 40), new THREE.MeshStandardMaterial({ color: 0x3b2a1e, roughness: 0.7 }));
-    const rimRing = new THREE.Mesh(new THREE.CylinderGeometry(62.5, 62.5, 3, 40), new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.5 }));
-    rimRing.position.y = 1.5;
-    this.pedestal.add(top, rimRing);
-    this.scene.add(this.pedestal);
+    this._buildPedestal();
+    this._buildFx();
+    this._buildStageSet();
 
-    this.pivot = new THREE.Group(); // 旋转
+    this.pivot = new THREE.Group();
     this.scene.add(this.pivot);
     this.phone = null;
-    this.phoneH = 152;
+    this.dims = { w: 72, h: 152, t: 7.6 };
 
-    // 低分辨率渲染目标
-    this.rt = new THREE.WebGLRenderTarget(4, 4, {
-      minFilter: THREE.NearestFilter,
-      magFilter: THREE.NearestFilter,
-      type: THREE.HalfFloatType,
-    });
+    const rtOpts = { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, type: THREE.HalfFloatType };
+    this.rt = new THREE.WebGLRenderTarget(4, 4, rtOpts);
     this.rt.depthTexture = new THREE.DepthTexture(4, 4);
+    this.nrt = new THREE.WebGLRenderTarget(4, 4, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    this.normalMat = new THREE.MeshNormalMaterial();
     this.postMat = new THREE.ShaderMaterial({
       vertexShader: postVert,
       fragmentShader: postFrag,
       uniforms: {
         tColor: { value: this.rt.texture },
         tDepth: { value: this.rt.depthTexture },
+        tNormal: { value: this.nrt.texture },
         res: { value: new THREE.Vector2(4, 4) },
         near: { value: this.camera.near },
         far: { value: this.camera.far },
-        levels: { value: 7 },
+        bands: { value: 9 },
         outline: { value: 1 },
-        bgTop: { value: new THREE.Color('#9eb6cc') },
-        bgBot: { value: new THREE.Color('#3d4f63') },
-        spot: { value: 0.35 },
+        flash: { value: 0 },
+        spot: { value: 0.42 },
+        bgTop: { value: new THREE.Color(IDLE_BG.top) },
+        bgBot: { value: new THREE.Color(IDLE_BG.bot) },
+        spotCol: { value: new THREE.Color(IDLE_BG.spot) },
       },
       depthTest: false,
       depthWrite: false,
@@ -581,28 +943,185 @@ export class PhoneStage {
     this.postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMat));
 
-    // 交互
     this.rotY = 0.55;
-    this.rotX = -0.08;
+    this.rotX = -0.06;
     this.velY = 0;
     this.targetRot = null;
     this.lastInteract = 0;
-    this.autoSpin = true;
+    this.explode = 0;
+    this.explodeTarget = 0;
+    this.morph = null;
     this.reveal = null;
+    this.stageMix = 0;
+    this.onFrame = null;
     this._bindPointer();
 
     this._ro = new ResizeObserver(() => this.resize());
     this._ro.observe(host);
     this.resize();
-    this._t0 = performance.now();
     this._loop = this._loop.bind(this);
     requestAnimationFrame(this._loop);
+  }
+
+  _buildPedestal() {
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(64, 70, 18, 48), new THREE.MeshStandardMaterial({ color: 0x4a3122, roughness: 0.55 }));
+    base.position.y = -9;
+    const led = new THREE.Mesh(new THREE.CylinderGeometry(65.5, 65.5, 2.4, 48, 1, true), new THREE.MeshBasicMaterial({ color: 0xff9a3c }));
+    led.position.y = -2;
+    this.ledMat = led.material;
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(60, 61, 3, 48), new THREE.MeshStandardMaterial({ color: 0xe9e0d0, roughness: 0.7 }));
+    top.position.y = 1.5;
+    top.receiveShadow = true;
+    base.receiveShadow = true;
+    g.add(base, led, top);
+    this.pedestal = g;
+    this.scene.add(g);
+  }
+
+  _buildFx() {
+    const n = 90;
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 700;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 500;
+      pos[i * 3 + 2] = -300 + Math.random() * 380;
+    }
+    const dg = new THREE.BufferGeometry();
+    dg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xfff1d0, size: 1, sizeAttenuation: false, transparent: true, opacity: 0.55, depthWrite: false }));
+    this.dust.layers.set(FX);
+    this.dust.frustumCulled = false;
+    this.scene.add(this.dust);
+
+    this.sparkN = 160;
+    this.sparks = Array.from({ length: this.sparkN }, () => ({ life: 0, max: 1, p: new THREE.Vector3(), v: new THREE.Vector3(), c: new THREE.Color() }));
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.sparkN * 3), 3));
+    sg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.sparkN * 3), 3));
+    this.sparkPts = new THREE.Points(
+      sg,
+      new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    this.sparkPts.layers.set(FX);
+    this.sparkPts.frustumCulled = false;
+    this.scene.add(this.sparkPts);
+  }
+
+  _buildStageSet() {
+    const set = new THREE.Group();
+    set.visible = false;
+    this.cones = [];
+    for (let i = 0; i < 3; i++) {
+      const c = new THREE.Mesh(
+        new THREE.ConeGeometry(85, 760, 32, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xc9b8ff, transparent: true, opacity: 0.04, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      c.geometry.translate(0, -380, 0);
+      c.position.set((i - 1) * 260, 430, -60);
+      c.layers.set(FX);
+      set.add(c);
+      this.cones.push(c);
+    }
+    this.wallCanvas = document.createElement('canvas');
+    this.wallCanvas.width = 240;
+    this.wallCanvas.height = 72;
+    this.wallTex = new THREE.CanvasTexture(this.wallCanvas);
+    this.wallTex.colorSpace = THREE.SRGBColorSpace;
+    this.wallTex.magFilter = THREE.NearestFilter;
+    this.wallTex.minFilter = THREE.NearestFilter;
+    this.wallTex.generateMipmaps = false;
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(330, 99), new THREE.MeshBasicMaterial({ map: this.wallTex, toneMapped: false }));
+    wall.position.set(0, 215, -700);
+    wall.layers.set(FX);
+    const bezel = new THREE.Mesh(new THREE.BoxGeometry(352, 120, 10), new THREE.MeshStandardMaterial({ color: 0x1b1922, metalness: 0.5, roughness: 0.5 }));
+    bezel.position.set(0, 215, -707);
+    set.add(wall, bezel);
+    const trussMat = new THREE.MeshStandardMaterial({ color: 0x2a2732, metalness: 0.6, roughness: 0.4 });
+    const truss = new THREE.Mesh(new THREE.BoxGeometry(1400, 12, 12), trussMat);
+    truss.position.set(0, 420, -300);
+    set.add(truss);
+    // 舞台地板
+    this.floor = new THREE.Mesh(new THREE.CircleGeometry(900, 48), new THREE.MeshStandardMaterial({ color: 0x0e0b14, roughness: 0.55, metalness: 0.3, envMapIntensity: 0.15 }));
+    this.floor.rotation.x = -Math.PI / 2;
+    this.floor.receiveShadow = true;
+    set.add(this.floor);
+    const crowdMat = new THREE.MeshBasicMaterial({ color: 0x0a090e });
+    const glow = new THREE.MeshBasicMaterial({ color: 0x9fd1ff });
+    for (let i = 0; i < 26; i++) {
+      const row = i % 2;
+      const x = (i / 25 - 0.5) * 460 + (Math.random() - 0.5) * 14;
+      const y = -118 - row * 8 + Math.random() * 6;
+      const z = 120 + row * 26;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(10 + Math.random() * 2, 12, 8), crowdMat);
+      head.position.set(x, y + 22, z);
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(15, 19, 40, 10), crowdMat);
+      body.position.set(x, y - 6, z);
+      set.add(head, body);
+      if (Math.random() < 0.35) {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(4, 34, 4), crowdMat);
+        arm.position.set(x + 12, y + 30, z - 4);
+        arm.rotation.z = -0.3;
+        const ph = new THREE.Mesh(new THREE.BoxGeometry(9, 15, 1.5), glow);
+        ph.position.set(x + 17, y + 50, z - 6);
+        set.add(arm, ph);
+      }
+    }
+    this.flashN = 18;
+    const fg = new THREE.BufferGeometry();
+    const fp = new Float32Array(this.flashN * 3);
+    this.flashes = [];
+    for (let i = 0; i < this.flashN; i++) {
+      fp[i * 3] = (Math.random() - 0.5) * 440;
+      fp[i * 3 + 1] = -80 + Math.random() * 30;
+      fp[i * 3 + 2] = 110 + Math.random() * 30;
+      this.flashes.push({ t: -1 });
+    }
+    fg.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+    fg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.flashN * 3), 3));
+    this.flashPts = new THREE.Points(fg, new THREE.PointsMaterial({ size: 4, sizeAttenuation: false, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.flashPts.layers.set(FX);
+    this.flashPts.frustumCulled = false;
+    set.add(this.flashPts);
+    this.stageSet = set;
+    this.scene.add(set);
+  }
+
+  _drawWall(mode, design, time = 0) {
+    const g = this.wallCanvas.getContext('2d');
+    const W = this.wallCanvas.width;
+    const H = this.wallCanvas.height;
+    g.fillStyle = '#07060b';
+    g.fillRect(0, 0, W, H);
+    g.textAlign = 'center';
+    if (mode === 'tease') {
+      g.fillStyle = Math.floor(time / 300) % 2 ? '#ff9a3c' : '#6b3a14';
+      g.font = 'bold 22px monospace';
+      g.fillText('COMING SOON', W / 2, H / 2 + 8);
+    } else {
+      const grd = g.createLinearGradient(0, 0, W, 0);
+      grd.addColorStop(0, '#2a1a40');
+      grd.addColorStop(0.5, shade(design.color, -0.25).getStyle());
+      grd.addColorStop(1, '#2a1a40');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, W, H);
+      g.fillStyle = '#fff';
+      g.font = '900 30px "ZCOOL KuaiLe","Noto Sans SC",sans-serif';
+      g.fillText(design.modelName || '新机', W / 2, H / 2 + 6);
+      g.font = 'bold 10px "Noto Sans SC",sans-serif';
+      g.fillStyle = '#ffd08a';
+      g.fillText(`${design.company || ''} · 发布会`, W / 2, H - 10);
+    }
+    g.fillStyle = 'rgba(0,0,0,.35)';
+    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    this.wallTex.needsUpdate = true;
   }
 
   _bindPointer() {
     const el = this.renderer.domElement;
     let drag = null;
     el.addEventListener('pointerdown', (e) => {
+      if (this.reveal && !this.reveal.done) return;
       drag = { x: e.clientX, y: e.clientY };
       this.dragging = true;
       el.setPointerCapture(e.pointerId);
@@ -616,10 +1135,13 @@ export class PhoneStage {
       drag = { x: e.clientX, y: e.clientY };
       this.rotY += dx * 0.012;
       this.velY = dx * 0.012;
-      this.rotX = Math.max(-0.7, Math.min(0.7, this.rotX + dy * 0.008));
+      this.rotX = Math.max(-0.75, Math.min(0.75, this.rotX + dy * 0.008));
       this.lastInteract = performance.now();
     });
-    const end = () => { drag = null; this.dragging = false; };
+    const end = () => {
+      drag = null;
+      this.dragging = false;
+    };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
   }
@@ -629,29 +1151,96 @@ export class PhoneStage {
     this.resize();
   }
 
-  setDesign(design) {
+  /** 换设计：重建机身 + 弹性形变 + 火花 */
+  setDesign(design, { animate = false, sparkle = false } = {}) {
+    const prev = this.phone ? { ...this.dims } : null;
     if (this.phone) {
-      this.pivot.remove(this.phone);
-      disposeObject(this.phone);
+      this.pivot.remove(this.phone.root);
+      disposeObject(this.phone.root);
     }
+    this.design = design;
     this.phone = buildPhone(design);
-    this.phoneH = physical(design).h;
-    this.pivot.add(this.phone);
-    this.pedestal.position.y = -this.phoneH / 2 - 16;
+    this.dims = this.phone.dims;
+    this.pivot.add(this.phone.root);
+    this.pedestal.position.y = -this.dims.h / 2 - 14;
+    if (this.floor) this.floor.position.y = this.pedestal.position.y - 18;
+    this._applyExplode();
+    if (animate && prev) {
+      const from = new THREE.Vector3(prev.w / this.dims.w, prev.h / this.dims.h, prev.t / this.dims.t);
+      if (Math.abs(from.x - 1) + Math.abs(from.y - 1) + Math.abs(from.z - 1) < 0.001) from.set(0.94, 0.94, 0.94);
+      else from.z = 1 + (from.z - 1) * 2.5; // 厚度变化夸张一点，看得出来
+      this.morph = { t0: performance.now(), from };
+    }
+    if (sparkle) this.burst(26);
   }
 
-  /** 预设视角：front / back / side / hero */
+  burst(n = 30, { colors = ['#ffe08a', '#ffffff', '#ff9a3c', '#8fe3ff'], speed = 1 } = {}) {
+    this.pivot.updateMatrixWorld();
+    const m = this.pivot.matrixWorld;
+    let spawned = 0;
+    for (const s of this.sparks) {
+      if (spawned >= n) break;
+      if (s.life > 0) continue;
+      const { w, h } = this.dims;
+      const local = new THREE.Vector3((Math.random() - 0.5) * (w + 10), (Math.random() - 0.5) * h, (Math.random() - 0.5) * 20);
+      s.p.copy(local.applyMatrix4(m));
+      s.v.set((Math.random() - 0.5) * 80, 30 + Math.random() * 80, (Math.random() - 0.5) * 50).multiplyScalar(speed);
+      s.max = s.life = 0.5 + Math.random() * 0.7;
+      s.c.set(colors[Math.floor(Math.random() * colors.length)]);
+      spawned++;
+    }
+  }
+
   view(name) {
     const base = Math.round(this.rotY / (Math.PI * 2)) * Math.PI * 2;
     const map = { front: 0, back: Math.PI, side: Math.PI / 2, hero: 0.55 };
-    this.targetRot = { y: base + (map[name] ?? 0.55), x: name === 'hero' ? -0.08 : 0 };
+    this.targetRot = { y: base + (map[name] ?? 0.55), x: name === 'hero' ? -0.06 : 0 };
     this.lastInteract = performance.now();
   }
 
-  /** 发布会揭幕：灯暗 → 聚光 → 升起旋转 → 定格 */
-  playReveal(onDone) {
-    this.reveal = { t0: performance.now(), dur: 3600, onDone, startRot: this.rotY };
+  setExploded(on) {
+    this.explodeTarget = on ? 1 : 0;
+    const base = Math.round(this.rotY / (Math.PI * 2)) * Math.PI * 2;
+    this.targetRot = on ? { y: base + Math.PI - 0.82, x: -0.3 } : { y: base + 0.55, x: -0.06 };
+    this.lastInteract = performance.now();
+  }
+
+  _applyExplode() {
+    if (!this.phone) return;
+    const e = easeInOut(this.explode);
+    const L = this.phone.layers;
+    L.front.position.set(0, -10 * e, this.dims.t / 2 + 62 * e);
+    L.frame.position.set(0, 0, 0);
+    L.inner.position.set(0, 8 * e, -38 * e);
+    L.back.position.set(0, 16 * e, -this.dims.t / 2 - 88 * e);
+  }
+
+  /** 锚点 → 视口 CSS 坐标 */
+  anchorScreen(name) {
+    const a = this.phone?.anchors?.[name];
+    if (!a) return null;
+    const v = new THREE.Vector3();
+    a.getWorldPosition(v);
+    v.project(this.camera);
+    return { x: (v.x * 0.5 + 0.5) * this.host.clientWidth, y: (-v.y * 0.5 + 0.5) * this.host.clientHeight };
+  }
+
+  /** 发布会时间线（约 5 秒） */
+  playReveal(design, { onBeat } = {}) {
+    this.explodeTarget = 0;
+    this.explode = 0;
+    this._applyExplode();
+    this.reveal = { t0: performance.now(), design, onBeat, fired: {}, startRot: this.rotY, done: false };
     this.targetRot = null;
+    this.stageSet.visible = true;
+    this._drawWall('tease', design, 0);
+  }
+
+  endReveal() {
+    this.reveal = null;
+    this.stageSet.visible = false;
+    this.postMat.uniforms.flash.value = 0;
+    this.lastInteract = performance.now();
   }
 
   resize() {
@@ -659,20 +1248,31 @@ export class PhoneStage {
     const h = Math.max(1, this.host.clientHeight);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    // 竖屏时拉远，保证整机可见
-    this.camera.position.z = w / h < 0.8 ? 600 : w / h < 1.1 ? 520 : 470;
+    this.baseZ = w / h < 0.8 ? 660 : w / h < 1.1 ? 560 : 490;
     this.camera.updateProjectionMatrix();
     const p = this.pixel || 1;
     const lw = Math.max(1, Math.floor(w / p));
     const lh = Math.max(1, Math.floor(h / p));
     this.rt.setSize(lw, lh);
+    this.nrt.setSize(lw, lh);
     this.postMat.uniforms.res.value.set(lw, lh);
+    const ps = this.pixel ? 1 : 3;
+    this.dust.material.size = ps;
+    this.sparkPts.material.size = ps * 2;
+    this.flashPts.material.size = ps * 4;
   }
 
   render() {
+    this.renderer.shadowMap.needsUpdate = true;
     if (this.pixel > 0) {
       this.renderer.setRenderTarget(this.rt);
       this.renderer.render(this.scene, this.camera);
+      this.camera.layers.disable(FX);
+      this.scene.overrideMaterial = this.normalMat;
+      this.renderer.setRenderTarget(this.nrt);
+      this.renderer.render(this.scene, this.camera);
+      this.scene.overrideMaterial = null;
+      this.camera.layers.enable(FX);
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.postScene, this.postCam);
     } else {
@@ -683,71 +1283,197 @@ export class PhoneStage {
     }
   }
 
-  /** 截图（用于机型馆缩略图） */
+  /** 机型馆缩略图：背面斜侧 + 摄影棚光 */
   snapshot(size = 160) {
-    const prev = { y: this.rotY, x: this.rotX };
-    this.rotY = Math.PI + 0.45;
-    this.rotX = -0.05;
-    this._applyPose(0);
+    const keep = {
+      y: this.rotY,
+      x: this.rotX,
+      ex: this.explode,
+      set: this.stageSet.visible,
+      mix: this.stageMix,
+      py: this.pivot.position.y,
+      flash: this.postMat.uniforms.flash.value,
+      cam: this.camera.position.clone(),
+    };
+    this.explode = 0;
+    this._applyExplode();
+    this.stageSet.visible = false;
+    this._setStageMix(0);
+    this.postMat.uniforms.flash.value = 0;
+    this.pivot.rotation.set(-0.06, Math.PI + 0.5, 0);
+    this.pivot.position.y = 0;
+    if (this.phone) this.phone.root.scale.set(1, 1, 1);
+    this.camera.position.set(0, 14, this.baseZ);
+    this.camera.lookAt(0, 0, 0);
     this.render();
     const src = this.renderer.domElement;
+    const sw = Math.min(src.width, src.height * 0.78);
+    const sx = (src.width - sw) / 2;
     const c = document.createElement('canvas');
-    const ratio = src.height / src.width;
     c.width = size;
-    c.height = Math.round(size * ratio);
+    c.height = Math.round((size * src.height) / sw);
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
-    g.drawImage(src, 0, 0, c.width, c.height);
-    this.rotY = prev.y;
-    this.rotX = prev.x;
+    g.drawImage(src, sx, 0, sw, src.height, 0, 0, c.width, c.height);
+    this.rotY = keep.y;
+    this.rotX = keep.x;
+    this.explode = keep.ex;
+    this._applyExplode();
+    this.stageSet.visible = keep.set;
+    this._setStageMix(keep.mix);
+    this.postMat.uniforms.flash.value = keep.flash;
+    this.pivot.position.y = keep.py;
+    this.camera.position.copy(keep.cam);
     return c.toDataURL('image/png');
   }
 
-  _applyPose(time) {
-    this.pivot.rotation.set(this.rotX, this.rotY, 0);
-    this.pivot.position.y = Math.sin(time * 0.0016) * 2.5;
+  _setStageMix(m) {
+    this.stageMix = m;
+    const u = this.postMat.uniforms;
+    u.bgTop.value.set(IDLE_BG.top).lerp(new THREE.Color(STAGE_BG.top), m);
+    u.bgBot.value.set(IDLE_BG.bot).lerp(new THREE.Color(STAGE_BG.bot), m);
+    u.spotCol.value.set(IDLE_BG.spot).lerp(new THREE.Color(STAGE_BG.spot), m);
+    u.spot.value = 0.42 * (1 - m);
+    this.hemi.intensity = 0.75 * (1 - m) + 0.12 * m;
+    this.key.intensity = 2.0 * (1 - m) + 0.5 * m;
+    this.rim.intensity = 1.2 * (1 - m) + 2.6 * m;
+    this.rimWarm.intensity = 2.2 * m;
+    this.spot.intensity = 14 * m;
+    this.scene.environmentIntensity = 0.85 * (1 - m) + 0.55 * m;
+    this.dust.material.opacity = 0.55 + 0.35 * m;
   }
 
   _loop(now) {
-    const dt = Math.min(50, now - (this._last || now));
+    const dt = Math.min(0.05, (now - (this._last || now)) / 1000);
     this._last = now;
-    const idle = now - this.lastInteract > 2500;
+    const idle = now - this.lastInteract > 2600;
+    let camZ = this.baseZ + this.explode * 150;
+    let camY = 14;
+
+    const ex = this.explode + (this.explodeTarget - this.explode) * Math.min(1, dt * 4.5);
+    if (Math.abs(ex - this.explode) > 1e-4) {
+      this.explode = Math.abs(ex - this.explodeTarget) < 0.002 ? this.explodeTarget : ex;
+      this._applyExplode();
+    }
 
     if (this.reveal) {
       const r = this.reveal;
-      const k = Math.min(1, (now - r.t0) / r.dur);
-      const e = 1 - Math.pow(1 - k, 3);
-      this.hemi.intensity = 0.9 - 0.75 * Math.min(1, k * 3) + 0.75 * Math.max(0, (k - 0.85) / 0.15);
-      this.key.intensity = 1.8 * (1 - 0.8 * Math.min(1, k * 3)) + 1.44 * Math.max(0, (k - 0.85) / 0.15);
-      this.spot.intensity = k < 0.15 ? 0 : 9;
-      this.postMat.uniforms.spot.value = k < 0.15 ? 0 : 1.4;
-      this.postMat.uniforms.bgTop.value.set(k < 0.9 ? '#1d1a24' : '#9eb6cc');
-      this.postMat.uniforms.bgBot.value.set(k < 0.9 ? '#08070b' : '#3d4f63');
-      this.rotY = r.startRot + (1 - e) * -Math.PI * 4;
-      this.rotX = -0.08;
-      this.pivot.position.y = -this.phoneH * 1.6 * (1 - Math.min(1, k * 1.8));
-      this.pivot.rotation.set(this.rotX, this.rotY, 0);
-      if (k >= 1) {
-        this.reveal = null;
-        this.postMat.uniforms.spot.value = 0.35;
-        this.spot.intensity = 0;
-        this.lastInteract = now;
-        r.onDone?.();
+      const t = (now - r.t0) / 1000;
+      const fire = (key, at, fn) => {
+        if (t >= at && !r.fired[key]) {
+          r.fired[key] = true;
+          fn();
+        }
+      };
+      this._setStageMix(easeInOut(seg(t, 0, 0.7)));
+      this.cones.forEach((c, i) => {
+        const target = t < 3.6 ? Math.sin(t * 2.2 + i * 2.1) * 0.5 : [0.33, 0, -0.33][i];
+        c.rotation.z += (target - c.rotation.z) * 0.12;
+        c.material.opacity = 0.02 + 0.035 * seg(t, 0.6, 1.2) + (t > 3.6 ? 0.02 : 0);
+      });
+      fire('drum', 0.5, () => r.onBeat?.('drumroll'));
+      if (t < 3.6 && Math.floor(t * 4) !== r.lastWall) {
+        r.lastWall = Math.floor(t * 4);
+        this._drawWall('tease', r.design, now);
       }
+      const rise = easeOutCubic(seg(t, 1.3, 3.6));
+      this.pivot.position.y = -this.dims.h * 1.25 * (1 - rise);
+      if (t < 3.6) {
+        this.rotY = r.startRot - (1 - rise) * Math.PI * 5;
+        this.rotX = -0.06;
+      } else {
+        this.rotY += dt * 0.35;
+      }
+      this.ledMat.color.setHSL((t * 0.4) % 1, 0.9, 0.6);
+      fire('boom', 3.6, () => {
+        this._drawWall('name', r.design);
+        this.burst(140, { speed: 2.4 });
+        r.onBeat?.('boom');
+      });
+      this.postMat.uniforms.flash.value = t >= 3.6 ? Math.max(0, 1 - (t - 3.6) / 0.45) * 0.9 : 0;
+      const fc = this.flashPts.geometry.attributes.color;
+      this.flashes.forEach((f, i) => {
+        if (t > 3.7 && f.t < 0 && Math.random() < dt * 1.4) {
+          f.t = 0;
+          if (Math.random() < 0.4) r.onBeat?.('shutter');
+        }
+        let v = 0;
+        if (f.t >= 0) {
+          f.t += dt;
+          v = Math.max(0, 1 - f.t / 0.18);
+          if (f.t > 0.18) f.t = -1;
+        }
+        fc.setXYZ(i, v, v, v * 0.95);
+      });
+      fc.needsUpdate = true;
+      camZ = this.baseZ - 34 * easeInOut(seg(t, 3.6, 6));
+      camY = 14 - 28 * easeInOut(seg(t, 0.5, 3.6));
+      fire('done', 4.8, () => {
+        r.done = true;
+        r.onBeat?.('done');
+      });
+      this.pivot.rotation.set(this.rotX, this.rotY, 0);
     } else {
+      if (this.stageMix > 0) this._setStageMix(Math.max(0, this.stageMix - dt * 1.8));
+      this.ledMat.color.lerp(new THREE.Color(0xff9a3c), 0.1);
       if (this.targetRot) {
-        this.rotY += (this.targetRot.y - this.rotY) * 0.12;
-        this.rotX += (this.targetRot.x - this.rotX) * 0.12;
-        if (Math.abs(this.targetRot.y - this.rotY) < 0.002) this.targetRot = null;
-      } else if (idle && this.autoSpin) {
-        this.rotY += dt * 0.00045;
+        this.rotY += (this.targetRot.y - this.rotY) * 0.1;
+        this.rotX += (this.targetRot.x - this.rotX) * 0.1;
+        if (Math.abs(this.targetRot.y - this.rotY) < 0.002 && Math.abs(this.targetRot.x - this.rotX) < 0.002) this.targetRot = null;
+      } else if (idle && this.explodeTarget === 0) {
+        this.rotY += dt * 0.32;
+        this.rotX += (-0.06 - this.rotX) * 0.02;
       } else if (!this.dragging) {
         this.rotY += this.velY;
         this.velY *= 0.9;
       }
-      this._applyPose(now);
+      this.pivot.rotation.set(this.rotX, this.rotY, 0);
+      this.pivot.position.y = Math.sin(now * 0.0015) * 2.5 + 4;
     }
+
+    if (this.phone && this.morph) {
+      const k = Math.min(1, (now - this.morph.t0) / 460);
+      const e = easeOutBack(k);
+      const f = this.morph.from;
+      this.phone.root.scale.set(f.x + (1 - f.x) * e, f.y + (1 - f.y) * e, f.z + (1 - f.z) * e);
+      if (k >= 1) {
+        this.morph = null;
+        this.phone.root.scale.set(1, 1, 1);
+      }
+    }
+
+    this.camera.position.z += (camZ - this.camera.position.z) * 0.08;
+    this.camera.position.y += (camY - this.camera.position.y) * 0.08;
+    this.camera.lookAt(0, this.reveal ? 8 : 0, 0);
+
+    const dp = this.dust.geometry.attributes.position;
+    for (let i = 0; i < dp.count; i++) {
+      let y = dp.getY(i) + dt * (6 + (i % 5));
+      if (y > 260) y = -260;
+      dp.setY(i, y);
+      dp.setX(i, dp.getX(i) + Math.sin(now * 0.0005 + i) * dt * 4);
+    }
+    dp.needsUpdate = true;
+
+    const sp = this.sparkPts.geometry.attributes.position;
+    const sc = this.sparkPts.geometry.attributes.color;
+    this.sparks.forEach((s, i) => {
+      if (s.life > 0) {
+        s.life -= dt;
+        s.v.y -= 90 * dt;
+        s.p.addScaledVector(s.v, dt);
+        const a = Math.max(0, s.life / s.max);
+        sp.setXYZ(i, s.p.x, s.p.y, s.p.z);
+        sc.setXYZ(i, s.c.r * a, s.c.g * a, s.c.b * a);
+      } else {
+        sc.setXYZ(i, 0, 0, 0);
+      }
+    });
+    sp.needsUpdate = true;
+    sc.needsUpdate = true;
+
     this.render();
+    this.onFrame?.(this);
     requestAnimationFrame(this._loop);
   }
 }

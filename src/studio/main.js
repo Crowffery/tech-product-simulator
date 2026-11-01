@@ -20,6 +20,7 @@ import {
   danmaku,
   tier,
 } from './parts.js';
+import { sfx } from './sfx.js';
 
 const MUSEUM_KEY = 'epdg-studio-museum';
 const DRAFT_KEY = 'epdg-studio-draft';
@@ -49,6 +50,8 @@ let tab = 'config';
 let stage = null;
 let pixel = 3;
 let revealing = false;
+let exploded = false;
+const shown = {}; // 读数上一次显示的值（做数字滚动）
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -57,7 +60,7 @@ function prevGen() {
   return museum.length ? museum[museum.length - 1].design : null;
 }
 
-// ———————————————————— 渲染面板 ————————————————————
+// ═════════════════════════ 面板 ═════════════════════════
 
 function configTab() {
   const pos = POSITIONS.map(
@@ -68,13 +71,14 @@ function configTab() {
     const btns = P.tiers
       .map(
         (t) =>
-          `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}" title="${esc(t.note)}">${esc(t.label)}</button>`,
+          `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}">${esc(t.label)}</button>`,
       )
       .join('');
     return `<div class="part-row"><span class="part-name">${P.name}</span><div class="tiers">${btns}</div></div>
-      <div class="part-note">${esc(tier(design, key).note)}</div>`;
+      <div class="part-note" id="note-${key}">${esc(tier(design, key).note)}</div>`;
   }).join('');
-  return `<div class="field"><span class="flabel">定位</span><div class="chips">${pos}</div></div>${parts}`;
+  return `<div class="field"><span class="flabel">定位</span><div class="chips">${pos}</div></div>${parts}
+    <p class="hint">💡 悬停档位可预览差值；点「🔩 拆解」看内部元件</p>`;
 }
 
 function appearanceTab() {
@@ -110,14 +114,14 @@ function readouts() {
   const caps = slotCaps(design);
   const checks = sellPointChecks(design);
   const ap = appearanceScore(design, trend, prevGen());
-  const gauge = (c) => `<div class="gauge mini"><div class="gauge-label"><span>${c.name}</span><span>上限 ${c.cap}</span></div>
+  const gauge = (c) => `<div class="gauge mini"><div class="gauge-label"><span>${c.name}</span><span>上限 <b data-num="cap-${c.id}" data-v="${c.cap}">${c.cap}</b></span></div>
     <div class="gauge-track"><div class="gauge-fill ${c.cap < 60 ? 'hot' : c.cap < 80 ? 'warn' : ''}" style="width:${c.cap}%"></div></div></div>`;
   return `
     <div class="readouts">
-      <div class="ro"><span>厚度</span><b>${p.thickness}<small>mm</small></b></div>
-      <div class="ro"><span>重量</span><b>${p.weight}<small>g</small></b></div>
-      <div class="ro"><span>蜂鸟实验室跑分</span><b>${p.bench.toLocaleString('en-US')}</b></div>
-      <div class="ro"><span>单台成本</span><b>¥${p.unitCost}</b><em>建议 ${p.band}</em></div>
+      <div class="ro"><span>厚度</span><b><i data-num="thick" data-v="${p.thickness}" data-dec="1">${p.thickness}</i><small>mm</small></b></div>
+      <div class="ro"><span>重量</span><b><i data-num="weight" data-v="${p.weight}">${p.weight}</i><small>g</small></b></div>
+      <div class="ro"><span>蜂鸟实验室跑分</span><b><i data-num="bench" data-v="${p.bench}" data-sep="1">${p.bench.toLocaleString('en-US')}</i></b></div>
+      <div class="ro"><span>单台成本</span><b>¥<i data-num="cost" data-v="${p.unitCost}">${p.unitCost}</i></b><em>建议 ${p.band}</em></div>
     </div>
     <h3 class="sub">研发槽上限 <small>配置台定上限 · 研发决定做到多少</small></h3>
     <div class="caps">${caps.map(gauge).join('')}</div>
@@ -125,16 +129,17 @@ function readouts() {
     <div class="checks">${checks
       .map((c) => `<span class="check ${c.ok ? 'ok' : 'no'}" title="${esc(c.why)}">${c.ok ? '✓' : '✗'} ${c.name}</span>`)
       .join('')}</div>
-    <h3 class="sub">外观分 <b class="ap-score">${ap.score}</b></h3>
+    <h3 class="sub">外观分 <b class="ap-score" data-num="ap" data-v="${ap.score}">${ap.score}</b></h3>
     <ul class="ap-items">${ap.items.map((i) => `<li><span>${esc(i.label)}</span><b class="${i.v >= 0 ? 'pos' : 'neg'}">${i.v >= 0 ? '+' : ''}${i.v}</b></li>`).join('')}</ul>
     ${ap.tags.length ? `<p class="tags">${ap.tags.map((t) => `<span>${esc(t)}</span>`).join('')}</p>` : ''}`;
 }
 
 function museumStrip() {
-  if (!museum.length) return '<p class="muted">还没有展品。发布一台放进来吧。</p>';
+  if (!museum.length) return '<p class="muted">还没有展品。办一场发布会，把它放进来吧。</p>';
   return museum
     .map(
       (m, i) => `<button type="button" class="exhibit" data-load="${i}" title="载入这台设计">
+        <span class="gen">Gen ${i + 1}</span>
         ${m.thumb ? `<img src="${m.thumb}" alt="${esc(m.design.modelName)}" />` : '<div class="noimg">📱</div>'}
         <span class="ename">${esc(m.design.modelName || '无名机')}</span>
         <span class="escore">外观 ${m.score}</span>
@@ -148,19 +153,55 @@ function renderPanel() {
   document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   renderReadouts();
 }
+
+/** 读数：数字滚动 + 变化浮字 */
 function renderReadouts() {
   $('#readouts').innerHTML = readouts();
+  document.querySelectorAll('#readouts [data-num]').forEach((el) => {
+    const key = el.dataset.num;
+    const to = Number(el.dataset.v);
+    const from = shown[key];
+    shown[key] = to;
+    if (from === undefined || from === to) return;
+    const dec = Number(el.dataset.dec || 0);
+    const fmt = (v) => (el.dataset.sep ? Math.round(v).toLocaleString('en-US') : v.toFixed(dec));
+    const t0 = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / 420);
+      const e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(from + (to - from) * e);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    const diff = to - from;
+    const up = diff > 0;
+    const good = { thick: !up, weight: !up, cost: !up }[key] ?? up;
+    const pop = document.createElement('span');
+    pop.className = `delta ${good ? 'good' : 'bad'}`;
+    pop.textContent = `${up ? '+' : ''}${el.dataset.sep ? Math.round(diff).toLocaleString('en-US') : diff.toFixed(dec)}`;
+    (el.closest('.ro') || el.closest('.gauge') || el.parentElement).appendChild(pop);
+    setTimeout(() => pop.remove(), 1100);
+    (el.closest('.ro') || el.closest('.gauge-label') || el).classList.add('bump');
+  });
 }
+
 function renderMuseum() {
   $('#museum').innerHTML = museumStrip();
   $('#btn-inherit').disabled = !museum.length;
 }
 
-function update({ panel = false } = {}) {
+function renderPlaque() {
+  const el = $('#plaque');
+  if (el) el.innerHTML = `<b>${esc(design.modelName || '无名机')}</b><span>${esc(design.company)} · ${esc(paletteName(design.color))}</span>`;
+}
+
+function update({ panel = false, animate = true, sparkle = true } = {}) {
   writeJSON(DRAFT_KEY, design);
-  stage?.setDesign(design);
+  stage?.setDesign(design, { animate, sparkle });
   if (panel) renderPanel();
   else renderReadouts();
+  renderPlaque();
+  updateLabelsText();
 }
 
 function toast(msg) {
@@ -171,7 +212,110 @@ function toast(msg) {
   setTimeout(() => el.remove(), 1600);
 }
 
-// ———————————————————— 操作 ————————————————————
+// ═════════════════════════ 悬停预览 ═════════════════════════
+
+function previewTier(key, tid) {
+  const note = document.getElementById(`note-${key}`);
+  if (!note) return;
+  if (tid === null) {
+    note.innerHTML = esc(tier(design, key).note);
+    note.classList.remove('preview');
+    return;
+  }
+  const alt = structuredClone(design);
+  alt.parts[key] = tid;
+  const a = physical(design);
+  const b = physical(alt);
+  const ca = slotCaps(design);
+  const cb = slotCaps(alt);
+  const bits = [];
+  const d = (label, x, y, unit, lowerBetter, dec = 0) => {
+    const v = +(y - x).toFixed(dec);
+    if (!v) return;
+    const good = lowerBetter ? v < 0 : v > 0;
+    bits.push(`<i class="${good ? 'g' : 'b'}">${label} ${v > 0 ? '+' : ''}${v}${unit}</i>`);
+  };
+  d('厚', a.thickness, b.thickness, 'mm', true, 1);
+  d('重', a.weight, b.weight, 'g', true);
+  d('成本', a.unitCost, b.unitCost, '', true);
+  cb.forEach((c, i) => d(c.name.slice(0, 2), ca[i].cap, c.cap, '', false));
+  note.innerHTML = bits.length ? bits.join(' ') : '<i>无变化</i>';
+  note.classList.add('preview');
+}
+
+// ═════════════════════════ 拆解标注 ═════════════════════════
+
+let labelEls = {};
+const LABEL_SIDE = { back: 'L', sensor: 'L', battery: 'L', chip: 'R', frame: 'R', screen: 'R' };
+function labelDefs() {
+  const p = physical(design);
+  return [
+    { key: 'back', title: `${tier(design, 'material').label}后盖`, sub: paletteName(design.color) },
+    { key: 'sensor', title: tier(design, 'camera').label, sub: tier(design, 'camera').note },
+    { key: 'battery', title: `${tier(design, 'battery').label.split('·')[1]?.trim()} mAh`, sub: tier(design, 'battery').note },
+    { key: 'chip', title: tier(design, 'chip').label, sub: `跑分 ${p.bench.toLocaleString('en-US')}` },
+    { key: 'frame', title: design.parts.material === 0 ? '塑料中框' : '金属中框', sub: `${p.thickness}mm · ${p.weight}g` },
+    { key: 'screen', title: tier(design, 'screen').label, sub: SCREEN_FORMS.find((f) => f.id === design.screenForm)?.label || '' },
+  ];
+}
+function buildLabels() {
+  const host = $('#labels');
+  host.innerHTML = '<svg class="leaders"></svg>';
+  labelEls = {};
+  for (const d of labelDefs()) {
+    const el = document.createElement('div');
+    el.className = `callout ${LABEL_SIDE[d.key] === 'R' ? 'right' : ''}`;
+    el.innerHTML = `<b>${esc(d.title)}</b><span>${esc(d.sub)}</span>`;
+    host.appendChild(el);
+    labelEls[d.key] = el;
+  }
+}
+function updateLabelsText() {
+  for (const d of labelDefs()) {
+    const el = labelEls[d.key];
+    if (el) el.innerHTML = `<b>${esc(d.title)}</b><span>${esc(d.sub)}</span>`;
+  }
+}
+/** 两侧分栏排布：按锚点纵坐标排序，强制最小间距，再画折线引线 */
+function positionLabels(st) {
+  const host = $('#labels');
+  const vis = st.explode > 0.85 && !st.reveal;
+  host.classList.toggle('on', vis);
+  if (!vis) return;
+  const W = st.host.clientWidth;
+  const H = st.host.clientHeight;
+  const narrow = W < 560;
+  const colW = narrow ? 96 : 132;
+  const gap = narrow ? 34 : 46;
+  const sides = { L: [], R: [] };
+  for (const [key, el] of Object.entries(labelEls)) {
+    const p = st.anchorScreen(key);
+    if (!p) continue;
+    sides[LABEL_SIDE[key]].push({ key, el, p, y: p.y });
+  }
+  let svg = '';
+  for (const side of ['L', 'R']) {
+    const arr = sides[side].sort((a, b) => a.p.y - b.p.y);
+    for (let i = 0; i < arr.length; i++) {
+      const min = i ? arr[i - 1].y + gap : 54;
+      arr[i].y = Math.max(arr[i].y, min);
+    }
+    const over = arr.length ? arr[arr.length - 1].y - (H - 70) : 0;
+    if (over > 0) arr.forEach((a) => (a.y -= over));
+    for (const a of arr) {
+      const x = side === 'L' ? 10 : W - colW - 10;
+      a.el.style.width = `${colW}px`;
+      a.el.style.transform = `translate(${x}px, ${Math.round(a.y - 16)}px)`;
+      const ex = side === 'L' ? x + colW : x;
+      const mx = side === 'L' ? ex + 14 : ex - 14;
+      svg += `<polyline points="${ex},${a.y} ${mx},${a.y} ${Math.round(a.p.x)},${Math.round(a.p.y)}" />`;
+      svg += `<rect x="${Math.round(a.p.x) - 4}" y="${Math.round(a.p.y) - 4}" width="8" height="8" />`;
+    }
+  }
+  host.querySelector('.leaders').innerHTML = svg;
+}
+
+// ═════════════════════════ 操作 ═════════════════════════
 
 function randomize() {
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -182,11 +326,14 @@ function randomize() {
   design.color = pick(PALETTE).hex;
   design.color2 = pick(PALETTE).hex;
   design.twoTone = Math.random() < 0.6 ? 'none' : pick(TWO_TONE).id;
+  sfx.whoosh();
   update({ panel: true });
+  stage?.burst(60);
 }
 
 function recommend() {
   design.parts = { ...RECOMMENDED[design.position] };
+  sfx.part(1);
   update({ panel: true });
   toast('已套用推荐配置：稳，但平庸');
 }
@@ -194,8 +341,8 @@ function recommend() {
 function inherit() {
   const prev = prevGen();
   if (!prev) return;
-  const n = museum.length + 1;
-  design = { ...structuredClone(prev), modelName: bumpName(prev.modelName, n) };
+  design = { ...structuredClone(prev), modelName: bumpName(prev.modelName, museum.length + 1) };
+  sfx.keep();
   update({ panel: true });
   toast('已沿用上代设计，微调一下就能发');
 }
@@ -214,58 +361,112 @@ function addToMuseum() {
   writeJSON(MUSEUM_KEY, museum);
   renderMuseum();
   renderReadouts();
+  sfx.keep();
+  const last = $('#museum .exhibit:last-child');
+  last?.classList.add('new');
+  last?.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
+}
+
+function setExploded(on) {
+  exploded = on;
+  stage?.setExploded(on);
+  sfx.explode(on);
+  $('#btn-explode').classList.toggle('on', on);
+  $('#btn-explode').textContent = on ? '🔩 合上' : '🔩 拆解';
 }
 
 function launch() {
   if (!stage || revealing) return;
   revealing = true;
+  if (exploded) setExploded(false);
   const overlay = $('#reveal');
   overlay.innerHTML = '';
   overlay.className = 'reveal on';
   document.body.classList.add('revealing');
   const lines = danmaku(design, trend);
-  stage.playReveal(() => {
-    const ap = appearanceScore(design, trend, prevGen());
-    overlay.innerHTML = `<div class="reveal-card kbox">
-        <div class="rc-kicker">${esc(design.company)} 发布会</div>
-        <div class="rc-name">${esc(design.modelName || '无名机')}</div>
-        <div class="rc-score"><span>外观分</span><b>${ap.score}</b></div>
-        <div class="rc-sub">${esc(paletteName(design.color))} · ${esc(tier(design, 'material').label)} · ${physical(design).thickness}mm · ${physical(design).weight}g</div>
-        <div class="row" style="justify-content:center;margin-top:10px">
-          <button type="button" class="primary" data-act="keep">放进机型馆</button>
-          <button type="button" data-act="close-reveal">再改改</button>
-        </div>
-      </div>`;
-    confetti(overlay);
-    revealing = false;
+  const ap = appearanceScore(design, trend, prevGen());
+  stage.playReveal(design, {
+    onBeat(beat) {
+      if (beat === 'drumroll') sfx.drumroll(3.0);
+      else if (beat === 'boom') {
+        sfx.boom();
+        sfx.fanfare(0.12);
+        sfx.applause(3.2, 0.3);
+        startDanmaku(lines);
+        const vp = $('.viewport');
+        vp.classList.remove('shake');
+        void vp.offsetWidth;
+        vp.classList.add('shake');
+      } else if (beat === 'shutter') sfx.shutter();
+      else if (beat === 'done') showCard(ap);
+    },
   });
-  // 弹幕
+}
+
+function showCard(ap) {
+  const overlay = $('#reveal');
+  const p = physical(design);
+  const grade = ap.score >= 85 ? 'S' : ap.score >= 70 ? 'A' : ap.score >= 55 ? 'B' : 'C';
+  overlay.innerHTML = `<div class="reveal-card kbox">
+      <div class="rc-kicker">${esc(design.company)} 发布会</div>
+      <div class="rc-name">${esc(design.modelName || '无名机')}</div>
+      <div class="rc-score"><span>外观分</span><b id="rc-num">0</b><em class="grade g-${grade}">${grade}</em></div>
+      <div class="rc-sub">${esc(paletteName(design.color))} · ${esc(tier(design, 'material').label)} · ${p.thickness}mm · ${p.weight}g · 跑分 ${p.bench.toLocaleString('en-US')}</div>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button type="button" class="primary" data-act="keep">🏛 放进机型馆</button>
+        <button type="button" data-act="close-reveal">再改改</button>
+      </div>
+    </div>`;
+  const num = $('#rc-num');
+  const t0 = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / 700);
+    num.textContent = Math.round(ap.score * (1 - Math.pow(1 - k, 3)));
+    if (k < 1) {
+      if (Math.random() < 0.3) sfx.click();
+      requestAnimationFrame(step);
+    }
+  };
+  requestAnimationFrame(step);
+  confetti(overlay);
+  revealing = false;
+}
+
+function startDanmaku(lines) {
   const host = $('#danmaku');
   host.innerHTML = '';
-  lines.sort(() => Math.random() - 0.5).slice(0, 9).forEach((txt, i) => {
-    const d = document.createElement('span');
-    d.className = 'dm';
-    d.textContent = txt;
-    d.style.top = `${8 + ((i * 37) % 70)}%`;
-    d.style.animationDelay = `${1.1 + i * 0.35}s`;
-    host.appendChild(d);
-  });
-  setTimeout(() => (host.innerHTML = ''), 9000);
+  lines
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 10)
+    .forEach((txt, i) => {
+      const d = document.createElement('span');
+      d.className = 'dm';
+      d.textContent = txt;
+      d.style.top = `${6 + ((i * 29) % 62)}%`;
+      d.style.animationDelay = `${0.2 + i * 0.32}s`;
+      host.appendChild(d);
+    });
+  setTimeout(() => (host.innerHTML = ''), 10000);
 }
 
 function closeReveal() {
   const overlay = $('#reveal');
   overlay.className = 'reveal';
   overlay.innerHTML = '';
+  $('#danmaku').innerHTML = '';
   document.body.classList.remove('revealing');
+  stage?.endReveal();
+  revealing = false;
 }
 
 function confetti(host) {
   const colors = ['#e67e22', '#f2d45c', '#33e0d0', '#f2b8c6', '#27ae60', '#fff'];
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 48; i++) {
     const c = document.createElement('i');
     c.className = 'confetti';
     c.style.left = `${Math.random() * 100}%`;
+    c.style.top = `${-10 - Math.random() * 60}px`;
+    c.style.setProperty('--dx', `${(Math.random() - 0.5) * 120}px`);
     c.style.background = colors[i % colors.length];
     c.style.animationDelay = `${Math.random() * 0.6}s`;
     c.style.animationDuration = `${1.6 + Math.random() * 1.2}s`;
@@ -273,18 +474,20 @@ function confetti(host) {
   }
 }
 
-// ———————————————————— 启动 ————————————————————
+// ═════════════════════════ 启动 ═════════════════════════
 
 function shell() {
   document.getElementById('app').innerHTML = `
   <header class="studio-head kbox">
     <a class="back" href="./index.html">← 回游戏</a>
     <h1>外观台 <span class="badge">Demo</span></h1>
-    <div class="news">📰 年度新闻：今年流行 <b style="color:${trend.color}">■</b> <b>${trend.colorName}</b> · <b>${trend.layoutName}</b></div>
+    <div class="news"><span class="news-tag">年度新闻</span> 今年流行 <b class="news-dot" style="background:${trend.color}"></b><b>${trend.colorName}</b> · <b>${trend.layoutName}</b></div>
+    <button type="button" class="mute" data-act="mute" title="音效">${sfx.muted ? '🔇' : '🔊'}</button>
   </header>
   <div class="studio">
     <section class="viewport kbox">
-      <div id="stage3d" class="stage3d"><div class="loading">像素手办装填中…</div></div>
+      <div id="stage3d" class="stage3d"><div class="loading"><span>像素手办装填中</span><i class="bar"><b></b></i></div></div>
+      <div id="labels" class="labels"></div>
       <div id="danmaku" class="danmaku"></div>
       <div id="reveal" class="reveal"></div>
       <div class="view-btns">
@@ -292,11 +495,12 @@ function shell() {
         <button type="button" data-view="back">背面</button>
         <button type="button" data-view="side">侧面</button>
         <button type="button" data-view="hero">斜侧</button>
+        <button type="button" id="btn-explode" data-act="explode">🔩 拆解</button>
       </div>
       <div class="pixel-btns" title="像素度">
-        ${[2, 3, 4, 0].map((n) => `<button type="button" data-pixel="${n}" class="${n === pixel ? 'on' : ''}">${n ? `像素×${n}` : '关'}</button>`).join('')}
+        ${[2, 3, 4, 0].map((n) => `<button type="button" data-pixel="${n}" class="${n === pixel ? 'on' : ''}">${n ? `像素×${n}` : '高清'}</button>`).join('')}
       </div>
-      <p class="drag-hint">拖拽旋转</p>
+      <div id="plaque" class="plaque"></div>
     </section>
     <aside class="panel kbox">
       <div class="tabs">
@@ -308,13 +512,13 @@ function shell() {
         <button type="button" data-act="random">🎲 一键随机</button>
         <button type="button" data-act="recommend">推荐配置</button>
         <button type="button" data-act="inherit" id="btn-inherit">沿用上代</button>
-        <button type="button" class="primary" data-act="launch">🎤 发布会揭幕</button>
+        <button type="button" class="primary launch-btn" data-act="launch">🎤 发布会揭幕</button>
       </div>
       <div id="readouts"></div>
     </aside>
   </div>
   <section class="museum-wrap kbox">
-    <h2 class="kbox-title">🏛 历代机型馆 <span class="badge">${'点击载入'}</span>
+    <h2 class="kbox-title">🏛 历代机型馆 <span class="badge">点击载入</span>
       <button type="button" class="mini-btn" data-act="add">＋ 当前机型入馆</button>
       <button type="button" class="mini-btn danger" data-act="clear-museum">清空</button></h2>
     <div id="museum" class="museum"></div>
@@ -328,40 +532,57 @@ function bind() {
     if (!t) return;
     const d = t.dataset;
     if (d.tab) {
+      sfx.click();
       tab = d.tab;
       renderPanel();
-      if (tab === 'look') stage?.view('back');
+      if (tab === 'look' && !exploded) stage?.view('back');
     } else if (d.pos) {
+      sfx.click();
       design.position = d.pos;
-      update({ panel: true });
+      update({ panel: true, animate: false, sparkle: false });
     } else if (d.part) {
-      design.parts[d.part] = Number(d.tier);
+      const tid = Number(d.tier);
+      if (design.parts[d.part] === tid) return;
+      design.parts[d.part] = tid;
+      sfx.part(tid);
       update({ panel: true });
-      if (d.part === 'camera') stage?.view('back');
-      if (d.part === 'battery' || d.part === 'chip') stage?.view('side');
+      if (!exploded) {
+        if (d.part === 'camera') stage?.view('back');
+        if (d.part === 'battery' || d.part === 'chip') stage?.view('side');
+        if (d.part === 'screen') stage?.view('front');
+      }
     } else if (d.corner) {
+      sfx.part(Number(d.corner));
       design.corner = Number(d.corner);
       update({ panel: true });
     } else if (d.form) {
+      sfx.part(1);
       design.screenForm = d.form;
       update({ panel: true });
-      stage?.view('front');
+      if (!exploded) stage?.view('front');
     } else if (d.layout) {
+      sfx.part(2);
       design.layout = d.layout;
       update({ panel: true });
-      stage?.view('back');
+      if (!exploded) stage?.view('back');
     } else if (d.color) {
+      sfx.color();
       design.color = d.color;
-      update({ panel: true });
+      update({ panel: true, animate: false });
     } else if (d.color2) {
+      sfx.color();
       design.color2 = d.color2;
-      update({ panel: true });
+      update({ panel: true, animate: false });
     } else if (d.tone) {
+      sfx.color();
       design.twoTone = d.tone;
-      update({ panel: true });
+      update({ panel: true, animate: false });
     } else if (d.view) {
+      sfx.click();
+      if (exploded) setExploded(false);
       stage?.view(d.view);
     } else if (d.pixel !== undefined) {
+      sfx.click();
       pixel = Number(d.pixel);
       stage?.setPixel(pixel);
       document.querySelectorAll('[data-pixel]').forEach((b) => b.classList.toggle('on', Number(b.dataset.pixel) === pixel));
@@ -369,6 +590,7 @@ function bind() {
       const m = museum[Number(d.load)];
       if (m) {
         design = structuredClone(m.design);
+        sfx.keep();
         update({ panel: true });
         toast(`载入：${m.design.modelName}`);
       }
@@ -378,15 +600,22 @@ function bind() {
       else if (act === 'recommend') recommend();
       else if (act === 'inherit') inherit();
       else if (act === 'launch') launch();
-      else if (act === 'add') {
+      else if (act === 'explode') setExploded(!exploded);
+      else if (act === 'mute') {
+        sfx.setMuted(!sfx.muted);
+        t.textContent = sfx.muted ? '🔇' : '🔊';
+        if (!sfx.muted) sfx.click();
+      } else if (act === 'add') {
         addToMuseum();
         toast('已入馆');
       } else if (act === 'keep') {
         addToMuseum();
         closeReveal();
         toast('已放进机型馆');
-      } else if (act === 'close-reveal') closeReveal();
-      else if (act === 'clear-museum') {
+      } else if (act === 'close-reveal') {
+        sfx.click();
+        closeReveal();
+      } else if (act === 'clear-museum') {
         if (museum.length && confirm('清空机型馆？')) {
           museum = [];
           writeJSON(MUSEUM_KEY, museum);
@@ -396,6 +625,14 @@ function bind() {
       }
     }
   });
+  app.addEventListener('pointerover', (e) => {
+    const t = e.target.closest('.tier');
+    if (t && e.pointerType === 'mouse') previewTier(t.dataset.part, Number(t.dataset.tier));
+  });
+  app.addEventListener('pointerout', (e) => {
+    const t = e.target.closest('.tier');
+    if (t && !t.contains(e.relatedTarget)) previewTier(t.dataset.part, null);
+  });
   app.addEventListener('input', (e) => {
     const el = e.target;
     if (el.dataset.custom) {
@@ -403,10 +640,12 @@ function bind() {
       writeJSON(DRAFT_KEY, design);
       stage?.setDesign(design);
       renderReadouts();
+      renderPlaque();
     } else if (el.dataset.text) {
       design[el.dataset.text] = el.value;
       writeJSON(DRAFT_KEY, design);
       stage?.setDesign(design);
+      renderPlaque();
     }
   });
   app.addEventListener('change', (e) => {
@@ -420,14 +659,22 @@ async function boot() {
   bind();
   renderPanel();
   renderMuseum();
+  renderPlaque();
   try {
     const { PhoneStage } = await import('./phone3d.js'); // three.js 按需加载
     const host = $('#stage3d');
     host.innerHTML = '';
     stage = new PhoneStage(host);
     stage.setDesign(design);
-    document.fonts?.ready.then(() => stage.setDesign(design)); // 后盖文字等字体就绪后重绘
-    window.__studio = { stage, get design() { return design; } };
+    buildLabels();
+    stage.onFrame = positionLabels;
+    document.fonts?.ready.then(() => stage.setDesign(design));
+    window.__studio = {
+      stage,
+      get design() {
+        return design;
+      },
+    };
   } catch (err) {
     console.error(err);
     $('#stage3d').innerHTML = '<div class="loading">3D 加载失败（浏览器可能不支持 WebGL）</div>';
