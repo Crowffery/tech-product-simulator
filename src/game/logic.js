@@ -80,7 +80,7 @@ export function finishPlan(state, { positioningId, pointIds, priceId, bindEco })
   };
   state.monthsLeft = pos.months;
   state.slots = emptySlots();
-  state.phase = 'supplier';
+  state.phase = 'logistics';
   return { ok: true };
 }
 
@@ -95,11 +95,113 @@ export function trianglePreview(positioningId, priceId) {
 }
 
 export function pickSupplier(state, supplierId) {
+  return pickLogistics(state, supplierId, state.stockId || 'normal');
+}
+
+/** 供应商 + 备货同一决策 */
+export function pickLogistics(state, supplierId, stockId = 'normal') {
   if (!SUPPLIERS.some((s) => s.id === supplierId)) return { ok: false };
+  if (!STOCK_OPTS.some((s) => s.id === stockId)) return { ok: false };
   state.supplierId = supplierId;
+  state.stockId = stockId;
   state.phase = 'dev';
   return { ok: true };
 }
+
+export function recommendedPlan(generation = 1) {
+  return {
+    positioningId: 'mainstream',
+    pointIds: ['fast', 'thin'],
+    priceId: 'mid',
+    bindEco: generation > 1,
+  };
+}
+
+/** 推荐班底：PM + 工业设计 + 公关，自动分派 */
+export function quickHireTeam(state) {
+  const want = [
+    { id: 'pm', assign: 'perf' },
+    { id: 'id', assign: 'design' },
+    { id: 'pr', assign: 'launch' },
+  ];
+  const msgs = [];
+  for (const w of want) {
+    if (!hiredIds(state).has(w.id)) {
+      const r = hire(state, w.id);
+      if (!r.ok) break;
+      msgs.push(r.msg);
+    }
+    assignStaff(state, w.id, w.assign);
+  }
+  return { ok: state.staff.length > 0, msg: msgs.join('；') || '班底已就绪' };
+}
+
+export function balancedAllocation(state) {
+  const cap = manpowerCap(state);
+  const n = SLOTS.length;
+  const base = Math.floor(cap / n);
+  let rem = cap - base * n;
+  const alloc = {};
+  for (const s of SLOTS) {
+    alloc[s.id] = base + (rem > 0 ? 1 : 0);
+    if (rem > 0) rem -= 1;
+  }
+  // bias to assigned staff slots
+  for (const st of state.staff) {
+    if (SLOTS.some((s) => s.id === st.assigned) && alloc[st.assigned] !== undefined) {
+      // steal 1 from a random other if possible
+      const donor = SLOTS.find((s) => s.id !== st.assigned && alloc[s.id] > 0);
+      if (donor && alloc[st.assigned] < cap) {
+        alloc[donor.id] -= 1;
+        alloc[st.assigned] += 1;
+      }
+    }
+  }
+  return alloc;
+}
+
+/** 事件：选「最稳」选项（优先不加赌、少扣槽） */
+export function recommendedEventChoice(eventId) {
+  const ev = EVENTS.find((e) => e.id === eventId);
+  if (!ev) return 0;
+  let best = 0;
+  let score = -999;
+  ev.choices.forEach((c, i) => {
+    const e = c.effect;
+    let s = 0;
+    if (e.gambleFail) s -= 5;
+    if (e.months) s -= e.months;
+    if (e.cash) s += e.cash / 20;
+    if (e.slotPenalty) s -= Object.values(e.slotPenalty).reduce((a, b) => a + b, 0) / 5;
+    if (e.hype) s += e.hype / 10;
+    if (s > score) { score = s; best = i; }
+  });
+  return best;
+}
+
+export const LAUNCH_STYLES = [
+  { id: 'safe', label: '稳妥发布', desc: '少翻车，分数中上', score: 22, risk: 0.08 },
+  { id: 'wow', label: '惊喜彩蛋', desc: '高打满也易翻车', score: 34, risk: 0.32 },
+  { id: 'specs', label: '参数轰炸', desc: '务实党点头', score: 26, risk: 0.12 },
+];
+
+/** 一键发布会：2～3 个大策略直接出分 */
+export function resolveLaunchStyle(state, styleId) {
+  const style = LAUNCH_STYLES.find((s) => s.id === styleId) || LAUNCH_STYLES[0];
+  state.launchPrepIds = styleId === 'safe' ? ['demo_stable'] : styleId === 'wow' ? ['easter'] : ['spec_sheet'];
+  let score = prLaunchBonus(state) + style.score;
+  if (Math.random() < style.risk) {
+    score -= 14;
+    state.eventLog.push(`发布会：${style.label} 翻车了一下`);
+  } else {
+    state.eventLog.push(`发布会：${style.label}`);
+  }
+  state.launchScore = score;
+  finalizeScores(state);
+  state.phase = 'score';
+  return { ok: true };
+}
+
 
 
 export function avgSlotProgress(state) {
@@ -214,11 +316,13 @@ export function afterDevCheck(state) {
   const ready = avgSlotProgress(state) >= 55 && state.monthsLeft <= 1;
   const forced = state.monthsLeft <= 0;
   if (ready || forced || avgSlotProgress(state) >= 80) {
-    state.phase = 'stock';
-    return { ok: true, toStock: true };
+    if (!state.stockId) state.stockId = 'normal';
+    state.phase = 'launch';
+    return { ok: true, toLaunch: true };
   }
-  state.phase = 'monthReport';
-  return { ok: true, report: true };
+  // 月报改为自动跳过，减少点击
+  state.phase = 'dev';
+  return { ok: true, report: false };
 }
 
 export function continueFromReport(state) {
@@ -228,8 +332,7 @@ export function continueFromReport(state) {
 export function pickStock(state, stockId) {
   if (!STOCK_OPTS.some((s) => s.id === stockId)) return { ok: false };
   state.stockId = stockId;
-  state.launchPrepIds = [];
-  state.phase = 'launchPrep';
+  state.phase = 'launch';
   return { ok: true };
 }
 

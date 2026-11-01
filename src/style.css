@@ -373,3 +373,12 @@ input[type="text"], input#cname, input[type="number"], select {
   padding: 2px 6px;
   display: inline-block;
 }
+
+button.choice.primary { width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-score, .month-flash span, .title-screen h1, .blink { animation: none !important; }
+}
+body.reduce-motion .reveal-score,
+body.reduce-motion .month-flash span,
+body.reduce-motion .blink,
+body.reduce-motion .title-screen h1 { animation: none !important; }

@@ -7,8 +7,6 @@ import {
   SUPPLIERS,
   STOCK_OPTS,
   EVENTS,
-  LAUNCH_PREP,
-  LAUNCH_BEATS,
   randomCompanyName,
 } from './game/data.js';
 import {
@@ -25,8 +23,11 @@ let state = null;
 let screen = 'title';
 let draft = {
   companyName: randomCompanyName(),
-  plan: { positioningId: 'mainstream', pointIds: ['fast'], priceId: 'mid', bindEco: false },
-  alloc: Object.fromEntries(SLOTS.map((s) => [s.id, 0])),
+  plan: L.recommendedPlan(1),
+  alloc: null,
+  supplierId: 'balanced',
+  stockId: 'normal',
+  reduceMotion: localStorage.getItem('epdg-reduce-motion') === '1',
 };
 let flashText = '';
 let flashTimer = 0;
@@ -43,7 +44,8 @@ function restart() {
   state = null;
   screen = 'title';
   draft.companyName = randomCompanyName();
-  draft.alloc = Object.fromEntries(SLOTS.map((s) => [s.id, 0]));
+  draft.plan = L.recommendedPlan(1);
+  draft.alloc = null;
   render();
 }
 
@@ -53,17 +55,25 @@ function toast(msg) {
   el.className = 'toast';
   el.textContent = msg;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1600);
+  setTimeout(() => el.remove(), 1500);
 }
 
 function flash(msg) {
+  if (draft.reduceMotion) return;
   flashText = msg;
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => {
     flashText = '';
-    const f = document.querySelector('.month-flash');
-    if (f) f.remove();
-  }, 900);
+    document.querySelector('.month-flash')?.remove();
+  }, 650);
+  // re-show flash without full rerender if possible
+  const host = document.getElementById('office-host');
+  if (host && !host.querySelector('.month-flash')) {
+    const d = document.createElement('div');
+    d.className = 'month-flash';
+    d.innerHTML = `<span>${msg}</span>`;
+    host.appendChild(d);
+  }
 }
 
 function escapeAttr(s) {
@@ -94,7 +104,6 @@ function faceDataUrl(roleId) {
   g.fillStyle = '#2d3436';
   g.fillRect(14, 18, 4, 4);
   g.fillRect(24, 18, 4, 4);
-  g.fillRect(16, 26, 10, 2);
   return c.toDataURL();
 }
 
@@ -108,18 +117,15 @@ function gauge(label, pct, cls = '') {
 
 function phaseLabel(phase) {
   return ({
-    hire: '招聘中',
-    plan: '企划会议',
-    supplier: '供应链',
+    hire: '组队',
+    plan: '企划',
+    logistics: '供应链',
     dev: '开发中',
     event: '突发！',
-    stock: '备货',
-    launchPrep: '发布会准备',
-    launch: '发布会！',
-    score: '媒体评价',
-    sales: '首月销售',
-    monthReport: '月报',
-    bust: '倒闭…',
+    launch: '发布会',
+    score: '媒体分',
+    sales: '销量',
+    bust: '倒闭',
   })[phase] || phase;
 }
 
@@ -133,17 +139,16 @@ function topbar() {
     <div class="stat faith"><span class="lbl">信仰</span><span class="val">${state.faith}</span></div>
     <div class="stat"><span class="lbl">口碑</span><span class="val">${state.reputation}</span></div>
     <div class="hud-btns">
-      <button type="button" data-act="save">存档</button>
+      <button type="button" data-act="toggle-motion">${draft.reduceMotion ? '开动画' : '跳过动画'}</button>
       <button type="button" class="danger" data-act="restart">重开</button>
     </div>
   </div>`;
 }
 
 function officeBlock() {
-  const caption =
-    state?.product?.name
-      ? `在研：${state.product.name} · 均进度 ${Math.round(L.avgSlotProgress(state) || 0)}%`
-      : '办公室日常 · 小人会走动 / 坐岗敲键盘';
+  const caption = state?.product?.name
+    ? `在研：${state.product.name} · 均进度 ${Math.round(L.avgSlotProgress(state) || 0)}%`
+    : '办公室 · 小人走动 / 敲键盘';
   return `<div class="office-panel" id="office-host">
     <div class="phase-ribbon">${phaseLabel(state?.phase)}</div>
     <div id="office-mount"></div>
@@ -153,25 +158,26 @@ function officeBlock() {
 }
 
 function shellGame(cmdHtml, { modal = '' } = {}) {
-  return `${topbar()}
-  <div class="stage">
-    ${officeBlock()}
-    <aside class="cmd kbox">${cmdHtml}</aside>
-  </div>
-  ${modal}`;
+  return `${topbar()}<div class="stage">${officeBlock()}<aside class="cmd kbox">${cmdHtml}</aside></div>${modal}`;
+}
+
+function modalWrap(inner) {
+  return `<div class="modal-backdrop"><div class="modal kbox">${inner}</div></div>`;
 }
 
 function renderTitle() {
+  const saved = hasSave();
   return `<div class="kbox title-screen">
     <canvas class="title-art" id="title-art" width="420" height="160"></canvas>
     <h1>电子产品发展国</h1>
-    <p class="lead" style="margin:0;font-weight:700">开罗式电子产品研发模拟 · 像素办公室原型</p>
-    <p class="muted">企划 → 研发 → 供应链事件 → 发布会揭晓 → 首月销量</p>
-    <p class="sfx-slot">♪ 音效：静音占位（动画优先）</p>
-    <div class="row" style="justify-content:center">
-      <button type="button" class="primary blink" data-act="new">▶ 新开一局</button>
-      ${hasSave() ? '<button type="button" data-act="continue">继续存档</button>' : ''}
+    <p style="margin:0;font-weight:800">开罗味像素办公室 · 少点击也能通关</p>
+    <p class="muted">推荐路线：下一步 → 下一步；策略藏在少数关键抉择里</p>
+    <p class="sfx-slot">♪ 音效静音占位</p>
+    <div class="row" style="justify-content:center;flex-direction:column;align-items:center;gap:10px">
+      ${saved ? '<button type="button" class="primary blink" data-act="continue" style="font-size:1.15rem;padding:14px 28px">▶ 继续游戏（自动存档）</button>' : ''}
+      <button type="button" class="${saved ? '' : 'primary blink'}" data-act="new">${saved ? '新开一局' : '▶ 新开一局'}</button>
     </div>
+    <label class="eco" style="margin-top:8px"><input type="checkbox" data-act="toggle-motion-box" ${draft.reduceMotion ? 'checked' : ''}/> 减少动画</label>
   </div>`;
 }
 
@@ -188,7 +194,6 @@ function paintTitleArt() {
       g.fillRect(x, y, 16, 16);
     }
   }
-  // mini desks
   [[80, 100], [160, 100], [240, 100], [320, 100]].forEach(([x, y], i) => {
     g.fillStyle = '#8b5a2b';
     g.fillRect(x, y, 40, 14);
@@ -199,217 +204,183 @@ function paintTitleArt() {
     g.fillStyle = ['#e17055', '#0984e3', '#fd79a8', '#55efc4'][i];
     g.fillRect(x + 14, y + 6, 12, 8);
   });
-  g.fillStyle = '#fff6df';
-  g.fillRect(140, 18, 140, 28);
-  g.strokeStyle = '#3b2a1e';
-  g.lineWidth = 3;
-  g.strokeRect(140, 18, 140, 28);
-  g.fillStyle = '#3b2a1e';
-  g.font = 'bold 14px sans-serif';
-  g.fillText('GARAGE → LAB', 158, 38);
 }
 
 function renderCreate() {
   return `<div class="kbox" style="max-width:520px;margin:40px auto;padding:20px">
-    <h2 class="kbox-title">车库开门 <span class="badge">起点</span></h2>
-    <p class="tip">现金紧、人手少，但重开很快。默认品类：手机。</p>
+    <h2 class="kbox-title">车库开门</h2>
+    <p class="tip">起个名就能开干。后面全程有「采用推荐」。</p>
     <label style="display:block;margin:12px 0">公司名
       <input id="cname" maxlength="16" value="${escapeAttr(draft.companyName)}" style="width:100%;margin-top:6px" />
     </label>
     <div class="row end">
-      <button type="button" data-act="rand-name">随机名</button>
-      <button type="button" class="primary" data-act="confirm-create">进入办公室 ▶</button>
+      <button type="button" data-act="rand-name">随机</button>
+      <button type="button" class="primary" data-act="confirm-create">开门并组队 ▶</button>
     </div>
   </div>`;
 }
 
 function renderHire() {
-  const hired = L.hiredIds(state);
-  const cards = ROLES.map((r) => {
-    const owned = hired.has(r.id);
-    const star = '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars);
-    return `<article class="staff-card ${owned ? 'hired' : ''}">
-      <img class="face" alt="" src="${faceDataUrl(r.id)}" width="40" height="40" />
-      <strong>${r.title}</strong>
-      <div class="stars">${star}</div>
-      <div class="quirk">「${r.quirk}」</div>
-      <div class="muted">签约 ${r.cost}</div>
-      ${owned ? assignSelect(r.id) : `<button type="button" data-act="hire" data-id="${r.id}" ${state.cash < r.cost ? 'disabled' : ''}>招聘</button>`}
-    </article>`;
-  }).join('');
+  const hired = [...L.hiredIds(state)];
   return shellGame(`
-    <h2 class="kbox-title">职员一览 <span class="badge">人才</span></h2>
-    <p class="lead">${state.tip} 把人分到研发槽，办公室里会坐到对应工位敲键盘。</p>
-    <div class="staff-grid">${cards}</div>
-    <div class="row end">
-      <button type="button" class="primary" data-act="to-plan" ${state.staff.length < 1 ? 'disabled' : ''}>召开企划会 ▶</button>
-    </div>
+    <h2 class="kbox-title">组队 <span class="badge">可一键</span></h2>
+    <p class="tip">推荐班底：硬件 PM + 工业设计 + 公关（已自动分派工位）。</p>
+    <button type="button" class="primary choice" data-act="quick-team" style="font-size:1.05rem">✓ 采用推荐班底，下一步</button>
+    ${hired.length ? `<p class="muted">已入职：${hired.map((id) => L.getRole(id).title).join('、')}</p>
+      <button type="button" class="primary" data-act="to-plan">下一步：企划 ▶</button>` : ''}
+    <details style="margin-top:12px">
+      <summary>高级：逐个招聘 / 改分派</summary>
+      <div class="staff-grid" style="margin-top:8px">
+        ${ROLES.map((r) => {
+          const owned = L.hiredIds(state).has(r.id);
+          return `<article class="staff-card ${owned ? 'hired' : ''}">
+            <img class="face" src="${faceDataUrl(r.id)}" alt="" width="40" height="40"/>
+            <strong>${r.title}</strong>
+            <div class="stars">${'★'.repeat(r.stars)}</div>
+            <div class="quirk">${r.quirk}</div>
+            ${owned
+              ? `<select data-act="assign" data-id="${r.id}">${[['idle','待命'],...SLOTS.map(s=>[s.id,s.name]),['launch','发布会']].map(([v,n])=>{
+                  const cur=state.staff.find(x=>x.roleId===r.id)?.assigned;
+                  return `<option value="${v}" ${cur===v?'selected':''}>${n}</option>`;
+                }).join('')}</select>`
+              : `<button type="button" data-act="hire" data-id="${r.id}">招（${r.cost}）</button>`}
+          </article>`;
+        }).join('')}
+      </div>
+    </details>
   `);
-}
-
-function assignSelect(roleId) {
-  const s = state.staff.find((x) => x.roleId === roleId);
-  const opts = [['idle', '待命'], ...SLOTS.map((sl) => [sl.id, sl.name]), ['launch', '发布会']];
-  return `<select data-act="assign" data-id="${roleId}">
-    ${opts.map(([v, n]) => `<option value="${v}" ${s.assigned === v ? 'selected' : ''}>${n}</option>`).join('')}
-  </select>`;
 }
 
 function renderPlan() {
   const p = draft.plan;
   const tri = L.trianglePreview(p.positioningId, p.priceId);
-  const ecoDisabled = state.generation === 1;
   return shellGame(`
-    <h2 class="kbox-title">产品企划 <span class="badge">Gen${state.generation}</span></h2>
-    <p class="tip">像发展国选题那样点选定位与卖点——三角权衡立刻看得见。</p>
-    <div class="grid2">
-      <div><strong>定位</strong>${POSITIONING.map((x) => `<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId === x.id ? 'checked' : ''}/> ${x.name}</label>`).join('')}</div>
-      <div><strong>售价带</strong>${PRICE_BANDS.map((x) => `<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId === x.id ? 'checked' : ''}/> ${x.name} ¥${x.price}</label>`).join('')}</div>
-    </div>
-    <strong>卖点（1～3）</strong>
-    <div class="chips" style="margin:8px 0">${SELL_POINTS.map((x) => `<button type="button" class="chip ${p.pointIds.includes(x.id) ? 'on' : ''}" data-act="toggle-point" data-id="${x.id}">${x.name}</button>`).join('')}</div>
-    <label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco ? 'checked' : ''} ${ecoDisabled ? 'disabled' : ''}/> 绑定上代生态 ${ecoDisabled ? '（首代锁定）' : ''}</label>
+    <h2 class="kbox-title">企划 <span class="badge">Gen${state.generation}</span></h2>
+    <p class="tip">推荐：主流定位 · 性能+轻薄 · 中端价。</p>
+    <button type="button" class="primary choice" data-act="quick-plan" style="font-size:1.05rem">✓ 采用推荐企划，下一步</button>
     ${gauge('体验预期', tri.experience)}
     ${gauge('成本压力', tri.costPressure, 'warn')}
-    <p><strong>预计工期</strong> ${tri.months} 个月</p>
-    <div class="row end"><button type="button" class="primary" data-act="confirm-plan">锁定企划 ▶</button></div>
+    <details style="margin-top:10px">
+      <summary>高级：自定义定位 / 卖点 / 售价</summary>
+      <div class="grid2" style="margin-top:8px">
+        <div>${POSITIONING.map((x) => `<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
+        <div>${PRICE_BANDS.map((x) => `<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
+      </div>
+      <div class="chips" style="margin:8px 0">${SELL_POINTS.map((x)=>`<button type="button" class="chip ${p.pointIds.includes(x.id)?'on':''}" data-act="toggle-point" data-id="${x.id}">${x.name}</button>`).join('')}</div>
+      <label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco?'checked':''} ${state.generation===1?'disabled':''}/> 绑上代生态</label>
+      <button type="button" class="primary" data-act="confirm-plan">用当前自定义锁定</button>
+    </details>
   `);
 }
 
-function renderSupplier() {
+function renderLogistics() {
   return shellGame(`
-    <h2 class="kbox-title">供应商 <span class="badge">三档</span></h2>
-    <p class="lead">开罗味选项：点一下定生死，不做 ERP 表格。</p>
-    ${SUPPLIERS.map((s) => `<button type="button" class="choice" data-act="pick-supplier" data-id="${s.id}">
-      <strong>${s.name}</strong> — ${s.desc}<br/><span class="muted">成本×${s.costMul} · 事件率 ${Math.round(s.eventChance * 100)}%</span>
-    </button>`).join('')}
+    <h2 class="kbox-title">供应链 + 备货 <span class="badge">一屏</span></h2>
+    <p class="tip">推荐：均衡供应商 + 正常备货。这是少数关键策略点之一。</p>
+    <button type="button" class="primary choice" data-act="quick-logistics" style="font-size:1.05rem">✓ 采用推荐组合，开始研发</button>
+    <details style="margin-top:12px">
+      <summary>高级：自选供应商 / 备货</summary>
+      <p style="margin:8px 0 4px"><strong>供应商</strong></p>
+      ${SUPPLIERS.map((s) => `<label class="radio"><input type="radio" name="sup" data-act="draft-sup" data-id="${s.id}" ${draft.supplierId===s.id?'checked':''}/> ${s.name}（${s.desc}）</label>`).join('')}
+      <p style="margin:8px 0 4px"><strong>备货</strong></p>
+      ${STOCK_OPTS.map((s) => `<label class="radio"><input type="radio" name="stk" data-act="draft-stk" data-id="${s.id}" ${draft.stockId===s.id?'checked':''}/> ${s.name} — ${s.note}</label>`).join('')}
+      <button type="button" class="primary" data-act="confirm-logistics" style="margin-top:8px">锁定并研发</button>
+    </details>
   `);
+}
+
+function ensureAlloc() {
+  if (!draft.alloc) draft.alloc = L.balancedAllocation(state);
+  return draft.alloc;
 }
 
 function renderDev() {
+  const alloc = ensureAlloc();
   const cap = L.manpowerCap(state);
-  const used = Object.values(draft.alloc).reduce((a, b) => a + b, 0);
-  const slots = SLOTS.map((s) => {
-    const sl = state.slots[s.id];
-    const cls = sl.progress > 70 ? '' : sl.progress > 40 ? 'warn' : 'hot';
-    return `<div class="slot-row">
-      <div class="top"><span>${s.name}</span><span>${sl.progress}%</span></div>
-      <div class="gauge-track"><div class="gauge-fill ${cls}" style="width:${sl.progress}%"></div></div>
-      <div class="quirk">${sl.comment}</div>
-      <label>投入 <input type="number" min="0" max="${cap}" value="${draft.alloc[s.id] || 0}" data-act="alloc" data-id="${s.id}" style="width:64px" /></label>
-    </div>`;
-  }).join('');
+  const used = Object.values(alloc).reduce((a, b) => a + b, 0);
   return shellGame(`
-    <h2 class="kbox-title">开发部屋 <span class="badge">人力 ${used}/${cap}</span></h2>
-    <p class="tip">把点数丢进模块槽，点「推进半个月」。左侧办公室会跟着忙起来。</p>
-    <details style="margin-bottom:8px"><summary>快速分派职员</summary>
-      <div class="staff-grid" style="margin-top:8px">${state.staff.map((s) => {
-        const r = L.getRole(s.roleId);
-        return `<div class="staff-card"><img class="face" src="${faceDataUrl(s.roleId)}" alt=""/><strong>${r.title}</strong>${assignSelect(s.roleId)}</div>`;
-      }).join('')}</div>
-    </details>
-    ${slots}
+    <h2 class="kbox-title">开发 <span class="badge">${used}/${cap} 点</span></h2>
+    <p class="tip">已自动「均衡分配」。连点推进即可；想偏科再展开微调。</p>
     ${gauge('综合完成度', L.avgSlotProgress(state))}
-    <div class="row end"><button type="button" class="primary" data-act="advance-month">⏱ 推进半个月 ▶</button></div>
+    <div class="row" style="margin:10px 0">
+      <button type="button" class="primary" data-act="advance-balanced" style="flex:1;font-size:1.05rem;padding:14px">⏱ 均衡推进半个月 ▶</button>
+    </div>
+    <button type="button" data-act="rebalance">重新一键均衡</button>
+    <details style="margin-top:10px">
+      <summary>高级：微调各槽投入</summary>
+      ${SLOTS.map((s) => {
+        const sl = state.slots[s.id];
+        return `<div class="slot-row">
+          <div class="top"><span>${s.name}</span><span>${sl.progress}%</span></div>
+          <div class="gauge-track"><div class="gauge-fill" style="width:${sl.progress}%"></div></div>
+          <div class="quirk">${sl.comment}</div>
+          <label>点 <input type="number" min="0" max="${cap}" value="${alloc[s.id]||0}" data-act="alloc" data-id="${s.id}" style="width:64px"/></label>
+        </div>`;
+      }).join('')}
+      <button type="button" class="primary" data-act="advance-custom">用微调方案推进</button>
+    </details>
   `);
-}
-
-function modalWrap(inner) {
-  return `<div class="modal-backdrop"><div class="modal kbox">${inner}</div></div>`;
 }
 
 function renderEvent() {
   const ev = EVENTS.find((e) => e.id === state.pendingEvent);
+  const rec = L.recommendedEventChoice(state.pendingEvent);
   const modal = modalWrap(`
-    <h2 class="kbox-title">⚠ ${ev.type} <span class="badge">事件</span></h2>
-    <h3 style="margin:0 0 8px">${ev.title}</h3>
+    <h2 class="kbox-title">⚠ ${ev.type}</h2>
+    <h3 style="margin:0 0 6px">${ev.title}</h3>
     <p>${ev.body}</p>
-    ${ev.choices.map((c, i) => `<button type="button" class="choice" data-act="event-choice" data-i="${i}">${c.label}</button>`).join('')}
+    <button type="button" class="primary choice" data-act="event-auto" style="font-size:1.05rem">✓ 一键稳妥处理（${ev.choices[rec].label}）</button>
+    <details style="margin-top:10px">
+      <summary>自己选</summary>
+      ${ev.choices.map((c, i) => `<button type="button" class="choice" data-act="event-choice" data-i="${i}">${c.label}${i===rec?' · 推荐':''}</button>`).join('')}
+    </details>
   `);
-  return shellGame(`
-    <h2 class="kbox-title">开发中断</h2>
-    <p class="lead">办公室一阵骚动……请处理弹窗事件。</p>
-    ${gauge('综合完成度', L.avgSlotProgress(state))}
-  `, { modal });
-}
-
-function renderStock() {
-  return shellGame(`
-    <h2 class="kbox-title">量产备货 <span class="badge">发布前</span></h2>
-    <p class="tip">保守 / 正常 / 激进——缺货伤口碑，积压压现金。</p>
-    ${STOCK_OPTS.map((s) => `<button type="button" class="choice" data-act="pick-stock" data-id="${s.id}"><strong>${s.name}</strong> — ${s.note}</button>`).join('')}
-  `);
-}
-
-function renderLaunchPrep() {
-  return shellGame(`
-    <h2 class="kbox-title">发布会彩排 <span class="badge">最多2项</span></h2>
-    ${LAUNCH_PREP.map((p) => {
-      const on = state.launchPrepIds.includes(p.id);
-      return `<button type="button" class="choice ${on ? 'on' : ''}" data-act="toggle-prep" data-id="${p.id}" style="${on ? 'background:#85c1e9' : ''}">
-        <strong>${p.label}</strong> — ${p.desc}（费 ${p.cost}） ${on ? '✓' : ''}
-      </button>`;
-    }).join('')}
-    <div class="row end"><button type="button" class="primary" data-act="start-launch">幕布拉开 ▶</button></div>
-  `);
+  return shellGame(`<h2 class="kbox-title">办公室骚动中</h2><p class="lead">处理弹窗即可继续。</p>`, { modal });
 }
 
 function renderLaunch() {
-  const beat = LAUNCH_BEATS[state.launchBeatIndex];
   const modal = modalWrap(`
-    <h2 class="kbox-title">发布会 LIVE <span class="badge">${state.launchBeatIndex + 1}/${LAUNCH_BEATS.length}</span></h2>
+    <h2 class="kbox-title">发布会！ <span class="badge">三选一</span></h2>
     <p class="sfx-slot">♪ 揭晓音效占位</p>
-    <h3>${beat.prompt}</h3>
-    ${beat.choices.map((c, i) => `<button type="button" class="choice" data-act="launch-choice" data-i="${i}">${c.label}</button>`).join('')}
+    <p class="tip">关键抉择：稳妥 / 彩蛋 / 参数。点一下直接出媒体分。</p>
+    ${L.LAUNCH_STYLES.map((s) => `<button type="button" class="choice primary" data-act="launch-style" data-id="${s.id}" style="margin-bottom:8px;background:linear-gradient(180deg,#f5b041,#e67e22)">
+      <strong style="font-size:1.1rem">${s.label}</strong><br/><span>${s.desc}</span>
+    </button>`).join('')}
   `);
-  return shellGame(`<h2 class="kbox-title">舞台灯光中…</h2><p class="lead">聚光灯打在舞台上，选择决定媒体第一印象。</p>`, { modal });
+  return shellGame(`<h2 class="kbox-title">舞台灯光</h2><p class="lead">聚光灯已亮。</p>`, { modal });
 }
 
 function renderScore() {
   const modal = modalWrap(`
     <h2 class="kbox-title">媒体评分揭晓</h2>
-    <p class="sfx-slot">♪ 咚咚咚…（静音占位）</p>
-    <div class="reveal-score" id="score-anim">${state.mediaScore}</div>
+    <div class="reveal-score">${state.mediaScore}</div>
     <p style="text-align:center">用户期待 <strong>${state.userScore}</strong></p>
     <div class="headline">${state.headline}</div>
-    <div class="row end"><button type="button" class="primary" data-act="to-sales">看首月销量 ▶</button></div>
+    <button type="button" class="primary choice" data-act="to-sales">看首月销量 ▶</button>
   `);
-  return shellGame(`<h2 class="kbox-title">等待打分…</h2><p class="lead">编辑部正在吵架。</p>`, { modal });
+  return shellGame(`<h2 class="kbox-title">编辑部吵架中…</h2>`, { modal });
 }
 
 function renderSales() {
   const r = state.salesResult;
   return shellGame(`
-    <h2 class="kbox-title">首月战报 <span class="badge">销量</span></h2>
+    <h2 class="kbox-title">首月战报</h2>
     <div class="reveal-score" style="font-size:3rem">${r.sold}<span style="font-size:1rem"> 台</span></div>
     ${gauge('备货消化', (r.sold / Math.max(1, r.stocked)) * 100)}
-    <p>收入 ${r.revenue} · 成本 ${r.cogs} · 积压 ${r.inventoryFee} · <strong>盈亏 ${r.profit}</strong></p>
-    <p class="tip">${r.stockNote}</p>
+    <p>盈亏 <strong>${r.profit}</strong> · ${r.stockNote}</p>
     <p>信仰 ${state.faith} · 口碑 ${state.reputation}</p>
     <div class="row end">
       <button type="button" data-act="restart">重开</button>
-      <button type="button" class="primary" data-act="next-gen">规划下一代 ▶</button>
+      <button type="button" class="primary" data-act="next-gen">下一代 ▶</button>
     </div>
   `);
 }
 
-function renderMonthReport() {
-  const modal = modalWrap(`
-    <h2 class="kbox-title">月报 <span class="badge">M${state.month - 1}</span></h2>
-    <p>资金 <strong>${state.cash}</strong></p>
-    ${gauge('在研进度', L.avgSlotProgress(state))}
-    <p class="muted">近况：${state.eventLog.slice(-1)[0] || '风平浪静'}</p>
-    <div class="row end"><button type="button" class="primary" data-act="from-report">继续开发 ▶</button></div>
-  `);
-  return shellGame(`<h2 class="kbox-title">月末结算中</h2>`, { modal });
-}
-
 function renderBust() {
   return shellGame(`
-    <h2 class="kbox-title">经营失败</h2>
+    <h2 class="kbox-title">倒闭了</h2>
     <p class="tip">${state.bustReason}</p>
-    <p class="muted">开罗传统：再开一局只要几分钟。</p>
-    <div class="row end"><button type="button" class="primary" data-act="restart">再开一局</button></div>
+    <button type="button" class="primary" data-act="restart">再开一局</button>
   `);
 }
 
@@ -422,15 +393,16 @@ export function render() {
     switch (state.phase) {
       case 'hire': html = renderHire(); break;
       case 'plan': html = renderPlan(); break;
-      case 'supplier': html = renderSupplier(); break;
-      case 'dev': html = renderDev(); break;
+      case 'logistics':
+      case 'supplier':
+      case 'stock': html = renderLogistics(); break;
+      case 'dev':
+      case 'monthReport': html = renderDev(); break;
       case 'event': html = renderEvent(); break;
-      case 'stock': html = renderStock(); break;
-      case 'launchPrep': html = renderLaunchPrep(); break;
-      case 'launch': html = renderLaunch(); break;
+      case 'launch':
+      case 'launchPrep': html = renderLaunch(); break;
       case 'score': html = renderScore(); break;
       case 'sales': html = renderSales(); break;
-      case 'monthReport': html = renderMonthReport(); break;
       case 'bust': html = renderBust(); break;
       default: html = renderTitle();
     }
@@ -455,6 +427,14 @@ function onClick(e) {
   const id = btn.dataset.id;
   const i = Number(btn.dataset.i);
 
+  if (act === 'toggle-motion') {
+    draft.reduceMotion = !draft.reduceMotion;
+    localStorage.setItem('epdg-reduce-motion', draft.reduceMotion ? '1' : '0');
+    document.body.classList.toggle('reduce-motion', draft.reduceMotion);
+    toast(draft.reduceMotion ? '已减少动画' : '已开启短动画');
+    render();
+    return;
+  }
   if (act === 'new') {
     draft.companyName = randomCompanyName();
     state = null;
@@ -466,11 +446,12 @@ function onClick(e) {
     state = loadGame();
     if (!state) { toast('没有存档'); return; }
     screen = 'game';
+    draft.plan = L.recommendedPlan(state.generation);
+    draft.alloc = null;
     render();
     return;
   }
   if (act === 'restart') { restart(); return; }
-  if (act === 'save') { persist(); toast('已存档'); return; }
   if (act === 'rand-name') {
     draft.companyName = randomCompanyName();
     const input = document.getElementById('cname');
@@ -482,8 +463,11 @@ function onClick(e) {
     const name = (input?.value || draft.companyName).trim() || randomCompanyName();
     state = createNewGame(name);
     screen = 'game';
+    // 自动推荐班底，组队页仍可改
+    L.quickHireTeam(state);
     persist();
     render();
+    toast('推荐班底已就位');
     return;
   }
   if (screen !== 'game' || !state) return;
@@ -492,9 +476,17 @@ function onClick(e) {
     toast(L.hire(state, id).msg);
     persist(); render(); return;
   }
+  if (act === 'quick-team') {
+    const r = L.quickHireTeam(state);
+    toast(r.msg);
+    state.phase = 'plan';
+    draft.plan = L.recommendedPlan(state.generation);
+    flash('班底集结！');
+    persist(); render(); return;
+  }
   if (act === 'to-plan') {
     state.phase = 'plan';
-    draft.plan = { positioningId: 'mainstream', pointIds: ['fast'], priceId: 'mid', bindEco: false };
+    draft.plan = L.recommendedPlan(state.generation);
     persist(); render(); return;
   }
   if (act === 'toggle-point') {
@@ -504,49 +496,55 @@ function onClick(e) {
     else if (arr.length < 3) arr.push(id);
     render(); return;
   }
-  if (act === 'confirm-plan') {
+  if (act === 'quick-plan' || act === 'confirm-plan') {
+    if (act === 'quick-plan') draft.plan = L.recommendedPlan(state.generation);
     const res = L.finishPlan(state, draft.plan);
     if (!res.ok) toast(res.msg);
     else flash('企划决定！');
     persist(); render(); return;
   }
-  if (act === 'pick-supplier') {
-    L.pickSupplier(state, id);
-    draft.alloc = Object.fromEntries(SLOTS.map((s) => [s.id, 0]));
-    flash('供应商敲定');
+  if (act === 'quick-logistics') {
+    L.pickLogistics(state, 'balanced', 'normal');
+    draft.alloc = L.balancedAllocation(state);
+    flash('供应链 OK');
     persist(); render(); return;
   }
-  if (act === 'advance-month') {
+  if (act === 'confirm-logistics') {
+    L.pickLogistics(state, draft.supplierId, draft.stockId);
+    draft.alloc = L.balancedAllocation(state);
+    persist(); render(); return;
+  }
+  if (act === 'rebalance') {
+    draft.alloc = L.balancedAllocation(state);
+    toast('已重新均衡');
+    render(); return;
+  }
+  if (act === 'advance-balanced') {
+    draft.alloc = L.balancedAllocation(state);
     const res = L.advanceMonth(state, { ...draft.alloc });
     if (!res.ok) toast(res.msg);
     else flash('半个月过去了…');
-    draft.alloc = Object.fromEntries(SLOTS.map((s) => [s.id, 0]));
+    draft.alloc = null;
+    persist(); render(); return;
+  }
+  if (act === 'advance-custom') {
+    const res = L.advanceMonth(state, { ...ensureAlloc() });
+    if (!res.ok) toast(res.msg);
+    else flash('半个月过去了…');
+    draft.alloc = null;
+    persist(); render(); return;
+  }
+  if (act === 'event-auto') {
+    L.resolveEvent(state, L.recommendedEventChoice(state.pendingEvent));
     persist(); render(); return;
   }
   if (act === 'event-choice') {
     L.resolveEvent(state, i);
     persist(); render(); return;
   }
-  if (act === 'from-report') {
-    L.continueFromReport(state);
-    persist(); render(); return;
-  }
-  if (act === 'pick-stock') {
-    L.pickStock(state, id);
-    persist(); render(); return;
-  }
-  if (act === 'toggle-prep') {
-    const res = L.togglePrep(state, id);
-    if (res && !res.ok) toast(res.msg);
-    persist(); render(); return;
-  }
-  if (act === 'start-launch') {
-    L.startLaunch(state);
-    flash('发布会开始！');
-    persist(); render(); return;
-  }
-  if (act === 'launch-choice') {
-    L.pickLaunchBeat(state, i);
+  if (act === 'launch-style') {
+    L.resolveLaunchStyle(state, id);
+    flash('发布会结束！');
     persist(); render(); return;
   }
   if (act === 'to-sales') {
@@ -555,8 +553,10 @@ function onClick(e) {
   }
   if (act === 'next-gen') {
     L.goNextGen(state);
-    draft.plan = { positioningId: 'mainstream', pointIds: ['eco'], priceId: 'mid', bindEco: true };
-    flash(`第 ${state.generation} 代企划`);
+    // goNextGen sets plan phase - good
+    draft.plan = L.recommendedPlan(state.generation);
+    draft.alloc = null;
+    flash(`第 ${state.generation} 代`);
     persist(); render();
   }
 }
@@ -564,14 +564,21 @@ function onClick(e) {
 function onChange(e) {
   const t = e.target;
   const act = t.dataset.act;
+  if (act === 'toggle-motion-box') {
+    draft.reduceMotion = t.checked;
+    localStorage.setItem('epdg-reduce-motion', draft.reduceMotion ? '1' : '0');
+    document.body.classList.toggle('reduce-motion', draft.reduceMotion);
+    return;
+  }
   if (!act || !state) return;
   if (act === 'assign') {
     L.assignStaff(state, t.dataset.id, t.value);
     persist();
+    syncOffice(state);
     render();
   }
   if (act === 'alloc') {
-    draft.alloc[t.dataset.id] = Math.max(0, Number(t.value) || 0);
+    ensureAlloc()[t.dataset.id] = Math.max(0, Number(t.value) || 0);
   }
   if (act === 'plan-pos') {
     draft.plan.positioningId = t.dataset.id;
@@ -581,9 +588,9 @@ function onChange(e) {
     draft.plan.priceId = t.dataset.id;
     render();
   }
-  if (act === 'bind-eco') {
-    draft.plan.bindEco = t.checked;
-  }
+  if (act === 'bind-eco') draft.plan.bindEco = t.checked;
+  if (act === 'draft-sup') draft.supplierId = t.dataset.id;
+  if (act === 'draft-stk') draft.stockId = t.dataset.id;
 }
 
 export function boot() {
@@ -592,5 +599,6 @@ export function boot() {
     app().addEventListener('change', onChange);
     bound = true;
   }
+  // 有存档时标题页突出继续
   render();
 }
