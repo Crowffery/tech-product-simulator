@@ -39,6 +39,8 @@ let draft = {
 let flashText = '';
 let flashTimer = 0;
 let bound = false;
+/** @type {null|string} */
+let sheet = null;
 /** @type {{ label: string, act: string, id?: string } | null} */
 let dockAction = null;
 
@@ -56,6 +58,7 @@ function restart() {
   draft.plan = L.recommendedPlan(1);
   draft.alloc = null;
   dockAction = null;
+  sheet = null;
   render();
 }
 
@@ -141,15 +144,85 @@ function dockHtml() {
   return `<div class="dock"><button type="button" class="primary" data-act="${dockAction.act}" ${dockAction.id ? `data-id="${dockAction.id}"` : ''}>${dockAction.label}</button></div>`;
 }
 
+function sheetButton(label, sheetId) {
+  return `<button type="button" class="ghost-link" data-act="open-sheet" data-id="${sheetId}">${label}</button>`;
+}
+
+function renderSheet() {
+  if (!sheet || !state) return '';
+  let body = '';
+  if (sheet === 'hire-adv') {
+    body = `<h2 class="kbox-title">高级招聘 <span class="badge">弹窗</span></h2>
+      <div class="staff-grid">${ROLES.map((r) => {
+        const owned = L.hiredIds(state).has(r.id);
+        return `<article class="staff-card ${owned ? 'hired' : ''}">
+          <img class="face" src="${faceDataUrl(r.id)}" alt=""/>
+          <strong>${r.title}</strong>
+          <div class="quirk">${r.quirk}</div>
+          ${owned ? `<select data-act="assign" data-id="${r.id}">${[['idle','待命'],...SLOTS.map((x)=>[x.id,x.name]),['launch','发布会']].map(([v,n]) => `<option value="${v}" ${state.staff.find(s=>s.roleId===r.id)?.assigned===v?'selected':''}>${n}</option>`).join('')}</select>`
+            : `<button type="button" data-act="hire" data-id="${r.id}">招 ${r.cost}</button>`}
+        </article>`;
+      }).join('')}</div>
+      <button type="button" class="primary choice" data-act="close-sheet">完成</button>`;
+  } else if (sheet === 'plan-adv') {
+    const p = draft.plan;
+    body = `<h2 class="kbox-title">高级自定义企划</h2>
+      <div class="grid2">
+        <div><strong>定位</strong>${POSITIONING.map((x)=>`<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
+        <div><strong>售价</strong>${PRICE_BANDS.map((x)=>`<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
+      </div>
+      <p style="margin:8px 0 4px"><strong>卖点</strong></p>
+      <div class="row">${SELL_POINTS.map((x)=>`<button type="button" class="chip ${p.pointIds.includes(x.id)?'on':''}" data-act="toggle-point" data-id="${x.id}">${x.name}</button>`).join('')}</div>
+      <label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco?'checked':''} ${state.generation===1?'disabled':''}/> 绑上代生态</label>
+      <button type="button" class="primary choice" data-act="confirm-plan">用自定义锁定并关闭</button>
+      <button type="button" class="choice" data-act="close-sheet">取消</button>`;
+  } else if (sheet === 'logistics-adv') {
+    body = `<h2 class="kbox-title">高级自选供应链</h2>
+      <p><strong>供应商</strong></p>
+      ${SUPPLIERS.map((s)=>`<label class="radio"><input type="radio" name="sup" data-act="draft-sup" data-id="${s.id}" ${draft.supplierId===s.id?'checked':''}/> <img src="${supplierIconDataUrl(s.id)}" width="28" height="28" style="image-rendering:pixelated;vertical-align:middle"/> ${s.name}</label>`).join('')}
+      <p><strong>备货</strong></p>
+      ${STOCK_OPTS.map((s)=>`<label class="radio"><input type="radio" name="stk" data-act="draft-stk" data-id="${s.id}" ${draft.stockId===s.id?'checked':''}/> ${s.name} — ${s.note}</label>`).join('')}
+      <button type="button" class="primary choice" data-act="confirm-logistics">锁定自选并关闭</button>
+      <button type="button" class="choice" data-act="close-sheet">取消</button>`;
+  } else if (sheet === 'dev-adv') {
+    ensureAlloc();
+    body = `<h2 class="kbox-title">微调投入 / 分派</h2>
+      ${SLOTS.map((s) => {
+        const sl = state.slots[s.id];
+        return `<div class="slot-row">
+          <div class="top"><span style="display:flex;align-items:center;gap:6px"><img src="${partIconDataUrl(s.id, sl.progress)}" alt=""/>${s.name}</span><span>${sl.progress}%</span></div>
+          <div class="gauge-track"><div class="gauge-fill" style="width:${sl.progress}%"></div></div>
+          <div class="quirk">${sl.comment}</div>
+          <label>点 <input type="number" min="0" max="${L.manpowerCap(state)}" value="${draft.alloc[s.id]||0}" data-act="alloc" data-id="${s.id}"/></label>
+        </div>`;
+      }).join('')}
+      <div class="row">
+        <button type="button" data-act="rebalance">重新均衡</button>
+        <button type="button" class="primary" data-act="advance-custom">用微调推进</button>
+      </div>
+      <button type="button" class="choice" data-act="close-sheet" style="margin-top:8px">关闭</button>`;
+  } else if (sheet === 'event-manual') {
+    const ev = EVENTS.find((e) => e.id === state.pendingEvent);
+    const rec = L.recommendedEventChoice(state.pendingEvent);
+    body = `<h2 class="kbox-title">自己选处理方式</h2>
+      ${ev.choices.map((c,i)=>`<button type="button" class="choice" data-act="event-choice" data-i="${i}">${c.label}${i===rec?' · 推荐':''}</button>`).join('')}
+      <button type="button" class="choice" data-act="close-sheet">返回</button>`;
+  } else {
+    return '';
+  }
+  return `<div class="modal-backdrop sheet-backdrop" data-act="close-sheet-backdrop"><div class="modal kbox sheet-panel" data-stop="1">${body}</div></div>`;
+}
+
 function shellGame(cmdHtml, { modal = '', dock = null } = {}) {
   dockAction = dock;
+  const sheetModal = renderSheet();
   return `${topbar()}
   <div class="stage">
     ${showcaseBlock()}
     <aside class="cmd kbox">${cmdHtml}</aside>
   </div>
   ${dockHtml()}
-  ${modal}`;
+  ${sheetModal || modal}`;
 }
 
 function modalWrap(inner) {
@@ -207,18 +280,7 @@ function renderHire() {
       const r = L.getRole(s.roleId);
       return `<article class="staff-card hired"><img class="face" src="${faceDataUrl(s.roleId)}" alt=""/><strong>${r.title}</strong><div class="stars">${'★'.repeat(r.stars)}</div></article>`;
     }).join('')}</div>` : ''}
-    <details style="margin-top:10px"><summary>高级招聘</summary>
-      <div class="staff-grid" style="margin-top:8px">${ROLES.map((r) => {
-        const owned = L.hiredIds(state).has(r.id);
-        return `<article class="staff-card ${owned ? 'hired' : ''}">
-          <img class="face" src="${faceDataUrl(r.id)}" alt=""/>
-          <strong>${r.title}</strong>
-          <div class="quirk">${r.quirk}</div>
-          ${owned ? `<select data-act="assign" data-id="${r.id}">${[['idle','待命'],...SLOTS.map((x)=>[x.id,x.name]),['launch','发布会']].map(([v,n]) => `<option value="${v}" ${state.staff.find(s=>s.roleId===r.id)?.assigned===v?'selected':''}>${n}</option>`).join('')}</select>`
-            : `<button type="button" data-act="hire" data-id="${r.id}">招 ${r.cost}</button>`}
-        </article>`;
-      }).join('')}</div>
-    </details>
+    <p style="margin-top:10px">${sheetButton('⚙ 高级招聘 / 分派', 'hire-adv')}</p>
   `, { dock: { label: state.staff.length ? '下一步：企划 ▶' : '✓ 采用推荐班底 ▶', act: state.staff.length ? 'to-plan' : 'quick-team' } });
 }
 
@@ -230,14 +292,7 @@ function renderPlan() {
     <p class="tip">上方概念机随企划世代变化。推荐：主流 + 性能/轻薄 + 中端价。</p>
     ${gauge('体验预期', tri.experience)}
     ${gauge('成本压力', tri.costPressure, 'warn')}
-    <details><summary>高级自定义</summary>
-      <div class="grid2" style="margin-top:8px">
-        <div>${POSITIONING.map((x)=>`<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
-        <div>${PRICE_BANDS.map((x)=>`<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
-      </div>
-      <div class="row" style="margin:8px 0">${SELL_POINTS.map((x)=>`<button type="button" class="chip ${p.pointIds.includes(x.id)?'on':''}" data-act="toggle-point" data-id="${x.id}">${x.name}</button>`).join('')}</div>
-      <button type="button" data-act="confirm-plan">用自定义锁定</button>
-    </details>
+    <p>${sheetButton('⚙ 高级自定义企划', 'plan-adv')}</p>
   `, { dock: { label: '✓ 采用推荐企划 ▶', act: 'quick-plan' } });
 }
 
@@ -248,11 +303,7 @@ function renderLogistics() {
     <div class="sup-grid">
       ${SUPPLIERS.map((s) => `<div class="sup-card"><img src="${supplierIconDataUrl(s.id)}" alt=""/><div><strong>${s.name}</strong><div class="muted">${s.desc}</div></div></div>`).join('')}
     </div>
-    <details style="margin-top:10px"><summary>高级自选</summary>
-      ${SUPPLIERS.map((s)=>`<label class="radio"><input type="radio" name="sup" data-act="draft-sup" data-id="${s.id}" ${draft.supplierId===s.id?'checked':''}/> ${s.name}</label>`).join('')}
-      ${STOCK_OPTS.map((s)=>`<label class="radio"><input type="radio" name="stk" data-act="draft-stk" data-id="${s.id}" ${draft.stockId===s.id?'checked':''}/> ${s.name}</label>`).join('')}
-      <button type="button" data-act="confirm-logistics">锁定自选</button>
-    </details>
+    <p style="margin-top:10px">${sheetButton('⚙ 高级自选供应商 / 备货', 'logistics-adv')}</p>
   `, { dock: { label: '✓ 推荐供应链，开始研发 ▶', act: 'quick-logistics' } });
 }
 
@@ -267,19 +318,7 @@ function renderDev() {
     <h2 class="kbox-title">开发部屋 <span class="badge">看部件变强</span></h2>
     <p class="tip">上方五部件图标与手机画面会跟着进度变。连点底部推进即可。</p>
     ${gauge('综合完成度', L.avgSlotProgress(state))}
-    <details><summary>高级：微调投入 / 分派</summary>
-      ${SLOTS.map((s) => {
-        const sl = state.slots[s.id];
-        return `<div class="slot-row">
-          <div class="top"><span style="display:flex;align-items:center;gap:6px"><img src="${partIconDataUrl(s.id, sl.progress)}" alt=""/>${s.name}</span><span>${sl.progress}%</span></div>
-          <div class="gauge-track"><div class="gauge-fill" style="width:${sl.progress}%"></div></div>
-          <div class="quirk">${sl.comment}</div>
-          <label>点 <input type="number" min="0" max="${L.manpowerCap(state)}" value="${draft.alloc[s.id]||0}" data-act="alloc" data-id="${s.id}"/></label>
-        </div>`;
-      }).join('')}
-      <button type="button" data-act="rebalance">重新均衡</button>
-      <button type="button" data-act="advance-custom">用微调推进</button>
-    </details>
+    <p>${sheetButton('⚙ 微调投入 / 分派', 'dev-adv')}</p>
   `, { dock: { label: '⏱ 均衡推进半个月 ▶', act: 'advance-balanced' } });
 }
 
@@ -291,9 +330,7 @@ function renderEvent() {
     <h3 style="margin:0 0 6px">${ev.title}</h3>
     <p>${ev.body}</p>
     <button type="button" class="choice big primary" data-act="event-auto">✓ 一键稳妥：${ev.choices[rec].label}</button>
-    <details><summary>自己选</summary>
-      ${ev.choices.map((c,i)=>`<button type="button" class="choice" data-act="event-choice" data-i="${i}">${c.label}</button>`).join('')}
-    </details>
+    <button type="button" class="choice" data-act="open-sheet" data-id="event-manual">自己选（弹窗）</button>
   `);
   return shellGame(`<h2 class="kbox-title">办公室警报</h2><p class="lead">先处理弹窗。</p>`, { modal, dock: null });
 }
@@ -384,6 +421,17 @@ function onClick(e) {
   const id = btn.dataset.id;
   const i = Number(btn.dataset.i);
 
+  if (act === 'open-sheet') {
+    sheet = id;
+    render();
+    return;
+  }
+  if (act === 'close-sheet' || act === 'close-sheet-backdrop') {
+    if (act === 'close-sheet-backdrop' && e.target !== btn) return;
+    sheet = null;
+    render();
+    return;
+  }
   if (act === 'toggle-motion') {
     draft.reduceMotion = !draft.reduceMotion;
     localStorage.setItem('epdg-reduce-motion', draft.reduceMotion ? '1' : '0');
@@ -433,6 +481,7 @@ function onClick(e) {
     toast(L.quickHireTeam(state).msg);
     state.phase = 'plan';
     draft.plan = L.recommendedPlan(state.generation);
+    sheet = null;
     flash('班底集结');
     persist(); render(); return;
   }
@@ -451,7 +500,8 @@ function onClick(e) {
   if (act === 'quick-plan' || act === 'confirm-plan') {
     if (act === 'quick-plan') draft.plan = L.recommendedPlan(state.generation);
     const res = L.finishPlan(state, draft.plan);
-    if (!res.ok) toast(res.msg); else flash('企划决定');
+    if (!res.ok) toast(res.msg);
+    else { flash('企划决定'); sheet = null; }
     persist(); render(); return;
   }
   if (act === 'quick-logistics') {
@@ -463,6 +513,7 @@ function onClick(e) {
   if (act === 'confirm-logistics') {
     L.pickLogistics(state, draft.supplierId, draft.stockId);
     draft.alloc = L.balancedAllocation(state);
+    sheet = null;
     persist(); render(); return;
   }
   if (act === 'rebalance') {
@@ -479,7 +530,8 @@ function onClick(e) {
   }
   if (act === 'advance-custom') {
     const res = L.advanceMonth(state, { ...ensureAlloc() });
-    if (!res.ok) toast(res.msg); else flash('半个月过去了');
+    if (!res.ok) toast(res.msg);
+    else { flash('半个月过去了'); sheet = null; }
     draft.alloc = null;
     persist(); render(); return;
   }
@@ -489,6 +541,7 @@ function onClick(e) {
   }
   if (act === 'event-choice') {
     L.resolveEvent(state, i);
+    sheet = null;
     persist(); render(); return;
   }
   if (act === 'launch-style') {

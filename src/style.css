@@ -462,3 +462,24 @@ input[type="text"], input#cname, input[type="number"], select {
 body.reduce-motion .reveal-score,
 body.reduce-motion .blink,
 body.reduce-motion .month-flash span { animation: none !important; }
+
+button.ghost-link {
+  width: 100%;
+  background: #fff;
+  min-height: 44px;
+  font-weight: 700;
+  color: var(--muted);
+  border-style: dashed;
+}
+.sheet-panel {
+  max-height: min(78dvh, 640px);
+  overflow: auto;
+  width: min(460px, 100%);
+  padding-bottom: 18px;
+}
+.sheet-backdrop {
+  align-items: flex-end;
+}
+@media (min-width: 700px) {
+  .sheet-backdrop { align-items: center; }
+}
