@@ -159,7 +159,10 @@ function renderSheet() {
           <img class="face" src="${faceDataUrl(r.id)}" alt=""/>
           <strong>${r.title}</strong>
           <div class="quirk">${r.quirk}</div>
-          ${owned ? `<select data-act="assign" data-id="${r.id}">${[['idle','待命'],...SLOTS.map((x)=>[x.id,x.name]),['launch','发布会']].map(([v,n]) => `<option value="${v}" ${state.staff.find(s=>s.roleId===r.id)?.assigned===v?'selected':''}>${n}</option>`).join('')}</select>`
+          ${owned ? `<div class="assign-chips">${[['idle','待命'],...SLOTS.map((x)=>[x.id,x.name]),['launch','发布会']].map(([v,n]) => {
+                  const cur = state.staff.find(s=>s.roleId===r.id)?.assigned;
+                  return `<button type="button" class="chip ${cur===v?'on':''}" data-act="assign-chip" data-id="${r.id}" data-target="${v}">${n}</button>`;
+                }).join('')}</div>`
             : `<button type="button" data-act="hire" data-id="${r.id}">招 ${r.cost}</button>`}
         </article>`;
       }).join('')}</div>
@@ -185,20 +188,29 @@ function renderSheet() {
       <button type="button" class="primary choice" data-act="confirm-logistics">锁定自选并关闭</button>
       <button type="button" class="choice" data-act="close-sheet">取消</button>`;
   } else if (sheet === 'dev-adv') {
-    ensureAlloc();
-    body = `<h2 class="kbox-title">微调投入 / 分派</h2>
+    const alloc = ensureAlloc();
+    const cap = L.manpowerCap(state);
+    const used = Object.values(alloc).reduce((a, b) => a + (Number(b) || 0), 0);
+    const left = Math.max(0, cap - used);
+    body = `<h2 class="kbox-title">微调投入</h2>
+      <p class="tip">本月人力 <strong>${used}/${cap}</strong> · 剩余 <strong>${left}</strong> 点。左右加减即可。</p>
       ${SLOTS.map((s) => {
         const sl = state.slots[s.id];
+        const pts = alloc[s.id] || 0;
         return `<div class="slot-row">
           <div class="top"><span style="display:flex;align-items:center;gap:6px"><img src="${partIconDataUrl(s.id, sl.progress)}" alt=""/>${s.name}</span><span>${sl.progress}%</span></div>
           <div class="gauge-track"><div class="gauge-fill" style="width:${sl.progress}%"></div></div>
           <div class="quirk">${sl.comment}</div>
-          <label>点 <input type="number" min="0" max="${L.manpowerCap(state)}" value="${draft.alloc[s.id]||0}" data-act="alloc" data-id="${s.id}"/></label>
+          <div class="stepper">
+            <button type="button" class="stepper-btn" data-act="alloc-minus" data-id="${s.id}" ${pts<=0?'disabled':''} aria-label="减少">−</button>
+            <div class="stepper-val">${pts}</div>
+            <button type="button" class="stepper-btn" data-act="alloc-plus" data-id="${s.id}" ${left<=0?'disabled':''} aria-label="增加">+</button>
+          </div>
         </div>`;
       }).join('')}
       <div class="row">
-        <button type="button" data-act="rebalance">重新均衡</button>
-        <button type="button" class="primary" data-act="advance-custom">用微调推进</button>
+        <button type="button" data-act="rebalance">一键均衡</button>
+        <button type="button" class="primary" data-act="advance-custom" ${used<1?'disabled':''}>用当前分配推进</button>
       </div>
       <button type="button" class="choice" data-act="close-sheet" style="margin-top:8px">关闭</button>`;
   } else if (sheet === 'event-manual') {
@@ -426,6 +438,27 @@ function onClick(e) {
     render();
     return;
   }
+  if (act === 'assign-chip') {
+    L.assignStaff(state, id, btn.dataset.target);
+    persist();
+    render();
+    return;
+  }
+  if (act === 'alloc-plus' || act === 'alloc-minus') {
+    const alloc = ensureAlloc();
+    const cap = L.manpowerCap(state);
+    const used = Object.values(alloc).reduce((a, b) => a + (Number(b) || 0), 0);
+    const cur = alloc[id] || 0;
+    if (act === 'alloc-plus') {
+      if (used >= cap) { toast('没有剩余点数'); return; }
+      alloc[id] = cur + 1;
+    } else {
+      if (cur <= 0) return;
+      alloc[id] = cur - 1;
+    }
+    render();
+    return;
+  }
   if (act === 'close-sheet' || act === 'close-sheet-backdrop') {
     if (act === 'close-sheet-backdrop' && e.target !== btn) return;
     sheet = null;
@@ -576,7 +609,6 @@ function onChange(e) {
     L.assignStaff(state, t.dataset.id, t.value);
     persist(); render();
   }
-  if (act === 'alloc') ensureAlloc()[t.dataset.id] = Math.max(0, Number(t.value) || 0);
   if (act === 'plan-pos') { draft.plan.positioningId = t.dataset.id; render(); }
   if (act === 'plan-price') { draft.plan.priceId = t.dataset.id; render(); }
   if (act === 'bind-eco') draft.plan.bindEco = t.checked;

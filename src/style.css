@@ -483,3 +483,45 @@ button.ghost-link {
 @media (min-width: 700px) {
   .sheet-backdrop { align-items: center; }
 }
+
+.stepper {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.stepper-btn {
+  min-height: 48px;
+  min-width: 48px;
+  font-size: 1.4rem;
+  font-weight: 900;
+  padding: 0;
+  background: #ffe6a8;
+}
+.stepper-btn:disabled {
+  opacity: 0.35;
+}
+.stepper-val {
+  text-align: center;
+  font-size: 1.35rem;
+  font-weight: 900;
+  border: 3px solid var(--border);
+  background: #fff;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 2px 2px 0 #ddd0b0;
+}
+.assign-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.assign-chips .chip {
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+}
