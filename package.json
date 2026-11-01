@@ -1,0 +1,15 @@
+{
+  "name": "tech-product-simulator",
+  "private": true,
+  "version": "0.1.0",
+  "description": "电子产品发展国 — 浏览器可玩原型",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11"
+  }
+}

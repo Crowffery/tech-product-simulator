@@ -1,42 +1,58 @@
 # 电子产品发展国
 
 > **暂定名（已决议）**：《电子产品发展国》  
-> **仓库 / 工程名**：`tech-product-simulator`（仅作 GitHub 与工程标识，不对外主称呼）
+> **仓库 / 工程名**：`tech-product-simulator`（仅作 GitHub 与工程标识）
 
 > **一句话定位**：轻松开罗式月度经营——组有梗的团队、少数模块槽研发电子产品、用供应商档位+事件卡过供应链、办爽快发布会、看媒体分与月销量；把产品从概念做到货架，不是硬核 ERP。
 
-> 📝 **仓库沿革**：原「留学模拟器」方向已废弃；本仓库现为《电子产品发展国》设计文档（`tech-product-simulator`）。
+> 📝 **仓库沿革**：原「留学模拟器」方向已废弃；现为《电子产品发展国》设计文档 + **浏览器可玩原型**。
+
+## 如何本地运行（原型）
+
+```bash
+git clone https://github.com/Crowffery/tech-product-simulator.git
+cd tech-product-simulator
+npm install
+npm run dev
+```
+
+浏览器打开 Vite 提示的地址（默认 `http://localhost:5173/`）。
+
+```bash
+npm run build    # 输出到 dist/
+npm run preview  # 预览构建结果
+```
+
+**试玩路径：** 新开一局 → 公司名 → 招聘/分派 → 企划 → 供应商 → 按月研发（事件）→ 备货 → 发布会 → 媒体分与首月销量 → 下一代或重开。支持左上角区域旁的 **存档**（浏览器 `localStorage`）。
+
+实现边界见 [docs/PROTOTYPE.md](docs/PROTOTYPE.md)。
 
 ## 已锁定
 
 | 项 | 决议 |
 |----|------|
 | **暂定游戏名** | **《电子产品发展国》** |
-| **手感** | 轻松开罗风（对标《游戏发展国》短循环）；供应链 = 事件与简单选项 |
-
-详见 [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)、[docs/DISCUSSION.md](docs/DISCUSSION.md)（Q1、Q4 已拍板）。
+| **手感** | 轻松开罗风；供应链 = 事件与简单选项 |
 
 ## 文档索引
 
 | 文档 | 说明 |
 |------|------|
-| [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) | 《电子产品发展国》设计文档 |
-| [docs/MVP.md](docs/MVP.md) | **MVP 功能拆解草案**（成功标准 / Must / 切片 / 验收） |
-| [docs/DISCUSSION.md](docs/DISCUSSION.md) | 已决议 + 仍开放问题 |
+| [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) | 设计文档 |
+| [docs/MVP.md](docs/MVP.md) | MVP 功能拆解 |
+| [docs/PROTOTYPE.md](docs/PROTOTYPE.md) | 当前原型实现边界 |
+| [docs/DISCUSSION.md](docs/DISCUSSION.md) | 讨论与拍板记录 |
 
 ## MVP 成功标准（摘要）
 
-能在 **20～40 分钟**内完成：企划 → 研发 → 供应链选项 → 发布会 → 卖一个月 → 规划下一代。完整清单见 [docs/MVP.md](docs/MVP.md)。
+**20～40 分钟**内：企划 → 研发 → 供应链选项 → 发布会 → 卖一个月 → 规划下一代。
 
 ## 当前阶段
 
-- [x] 主题：电子产品研发经营
-- [x] 手感：轻松开罗风已锁定
-- [x] 暂定名：《电子产品发展国》
-- [x] MVP 功能列表草案（见 docs/MVP.md）
-- [ ] 其余讨论项（平台、品牌虚构、美术等）
-- [ ] MVP 原型技术选型 / V1 灰盒环
-- [ ] 可玩原型
+- [x] 设计与 MVP 草案
+- [x] 浏览器可玩原型（V1～V3 向灰盒环）
+- [ ] 其余讨论项（平台发行、美术等）
+- [ ] 内容与手感打磨
 
 ## 许可与贡献
 
