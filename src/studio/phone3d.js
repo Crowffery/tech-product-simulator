@@ -1510,7 +1510,24 @@ export class PhoneStage {
     this.dust.material.opacity = 0.55 + 0.35 * m;
   }
 
+  /** 释放 WebGL 资源（游戏切换阶段时卸载） */
+  dispose() {
+    this._dead = true;
+    this._ro?.disconnect();
+    if (this.phone) disposeObject(this.phone.root);
+    this.scene.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+    });
+    this.rt.dispose();
+    this.nrt.dispose();
+    this.scene.environment?.dispose();
+    this.renderer.dispose();
+    this.renderer.forceContextLoss?.();
+    this.renderer.domElement.remove();
+  }
+
   _loop(now) {
+    if (this._dead) return;
     const dt = Math.min(0.05, (now - (this._last || now)) / 1000);
     this._last = now;
     const idle = now - this.lastInteract > 2600;

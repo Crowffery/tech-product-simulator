@@ -1,5 +1,5 @@
 /* 外观台 Demo */
-#app { max-width: 1240px; }
+body.studio-page #app { max-width: 1240px; }
 
 .studio-head {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
@@ -289,7 +289,7 @@ button:disabled.chip, button:disabled.tier { opacity: .4; }
 .sub small { margin-left: auto; }
 .wow-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
 .gauge-fill.nov { background: repeating-linear-gradient(90deg, #a569bd 0 8px, #c39bd3 8px 10px); }
-.headline { margin: 4px 0 6px; font-weight: 800; font-size: .82rem; background: var(--ink); color: var(--cream2); padding: 4px 8px; }
+.wow-head { margin: 4px 0 6px; font-weight: 800; font-size: .82rem; background: var(--ink); color: var(--cream2); padding: 4px 8px; }
 .ap-items li.comp { color: var(--muted); }
 
 .skip { position: absolute; right: 12px; bottom: 12px; pointer-events: auto; padding: 4px 10px; font-size: .78rem; opacity: .85; }
@@ -300,3 +300,15 @@ button:disabled.chip, button:disabled.tier { opacity: .4; }
 .rc-firsts span { font-size: .72rem; font-weight: 900; background: #f9e79f; border: 2px solid var(--border); padding: 0 6px; }
 .efirst { font-size: .58rem; color: #f9e79f; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .exhibit { width: 116px; }
+
+/* ═════ v0.9 概念层级 / 解锁 ═════ */
+.tier-h { margin: 10px 0 4px; font-size: .82rem; display: flex; align-items: baseline; gap: 6px; border-bottom: 2px dashed var(--border2); padding-bottom: 2px; }
+.tier-h small { color: var(--muted); font-weight: 400; margin-left: auto; }
+.concept.locked { background: #e9e2cf; border: 3px dashed #9c8a6a; box-shadow: none; cursor: default; opacity: .9; }
+.concept.locked b { color: var(--muted); }
+.c-unlock { grid-column: 2; justify-self: start; padding: 2px 8px; font-size: .72rem; font-weight: 900; background: #f9e79f; }
+.c-tags { grid-column: 2; display: flex; gap: 4px; flex-wrap: wrap; }
+.c-tags .c-tag { grid-column: auto; }
+.t-buzz { background: #fadbd8; color: #922b21; }
+.buzz-line { margin: 0 0 6px; font-size: .8rem; font-weight: 800; color: #922b21; }
+.buzz-line small { color: var(--muted); font-weight: 400; }

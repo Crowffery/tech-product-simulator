@@ -281,18 +281,89 @@ export function danmaku(design, trend) {
 
 // ═════════════════════════ 创新层（v0.8）═════════════════════════
 
-/** 概念件：每代最多 2 个（大改款） */
-export const CONCEPTS = [
-  { id: 'clear', name: '透明后盖', icon: '🔍', desc: '让内部元件当装饰', cost: 4, thick: 0, weight: 2, caps: { design: -5 }, conflicts: ['eink'] },
-  { id: 'subscreen', name: '背部副屏', icon: '📟', desc: '背面一块小彩屏', cost: 5, thick: 0.3, weight: 8, caps: { battery: -5 }, conflicts: ['eink'] },
-  { id: 'eink', name: '墨水背屏', icon: '📜', desc: '整块墨水屏后盖', cost: 6, thick: 0.4, weight: 10, caps: {}, conflicts: ['clear', 'subscreen', 'fan'] },
-  { id: 'lights', name: '灯效后盖', icon: '💡', desc: '会呼吸的灯带', cost: 3, thick: 0.1, weight: 3, caps: { battery: -3 }, conflicts: [] },
-  { id: 'keyboard', name: '实体键盘', icon: '⌨️', desc: '正面下半是键盘', cost: 4, thick: 0.2, weight: 14, caps: { camera: -10, design: -5 }, conflicts: [] },
-  { id: 'shutter', name: '机械快门键', icon: '📸', desc: '侧边橙色快门', cost: 1, thick: 0, weight: 2, caps: { camera: 5 }, conflicts: [] },
-  { id: 'sat', name: '卫星天线', icon: '📡', desc: '顶部翻折小天线', cost: 5, thick: 0, weight: 6, caps: {}, conflicts: [] },
-  { id: 'fan', name: '主动散热风扇', icon: '🌀', desc: '背面会转的风扇', cost: 4, thick: 1.2, weight: 16, caps: {}, conflicts: ['eink'] },
+/**
+ * 概念件（v0.9）：5 个科技层级，研发点解锁；部分需要「先发布过某概念」才能解锁。
+ * group：同组互斥（back = 整块后盖，form = 形态）；buzz = 出圈度；risk = 首发完成度惩罚
+ */
+export const TIERS = [
+  { tier: 1, name: '车库脑洞', cost: 0 },
+  { tier: 2, name: '工程魔改', cost: 6 },
+  { tier: 3, name: '形态实验', cost: 12 },
+  { tier: 4, name: '未来原型', cost: 20 },
+  { tier: 5, name: '科幻彩蛋', cost: 30 },
 ];
-export const MAX_CONCEPTS = 2;
+
+export const CONCEPTS = [
+  // ── 1 车库脑洞 ──
+  { id: 'lights', tier: 1, name: '灯效后盖', icon: '💡', desc: '会呼吸的灯带', cost: 3, thick: 0.1, weight: 3, caps: { battery: -3 }, buzz: 3, risk: 6, conflicts: ['wrap', 'eink'] },
+  { id: 'shutter', tier: 1, name: '机械快门键', icon: '📸', desc: '侧边橙色快门', cost: 1, thick: 0, weight: 2, caps: { camera: 5 }, buzz: 2, risk: 4, conflicts: [] },
+  { id: 'keyboard', tier: 1, name: '实体键盘', icon: '⌨️', desc: '正面下半是键盘', cost: 4, thick: 0.2, weight: 14, caps: { camera: -10, design: -5 }, buzz: 6, risk: 8, conflicts: ['fold', 'trifold', 'rollable', 'swivel', 'wrap'] },
+  { id: 'clear', tier: 1, name: '透明后盖', icon: '🔍', desc: '让内部元件当装饰', group: 'back', cost: 4, thick: 0, weight: 2, caps: { design: -5 }, buzz: 6, risk: 8, conflicts: [] },
+  { id: 'subscreen', tier: 1, name: '背部副屏', icon: '📟', desc: '背面一块小彩屏', cost: 5, thick: 0.3, weight: 8, caps: { battery: -5 }, buzz: 5, risk: 8, conflicts: ['eink', 'wrap', 'crystal', 'solar', 'modular', 'pet', 'watch'] },
+  // ── 2 工程魔改 ──
+  { id: 'eink', tier: 2, name: '墨水背屏', icon: '📜', desc: '整块墨水屏后盖', group: 'back', cost: 6, thick: 0.4, weight: 10, caps: { battery: 5 }, buzz: 5, risk: 10, conflicts: ['fan', 'pet'] },
+  { id: 'fan', tier: 2, name: '主动散热风扇', icon: '🌀', desc: '背面会转的风扇', cost: 4, thick: 1.2, weight: 16, caps: {}, buzz: 5, risk: 8, conflicts: ['wrap', 'solar', 'modular', 'watch'] },
+  { id: 'sat', tier: 2, name: '卫星天线', icon: '📡', desc: '顶部翻折小天线', cost: 5, thick: 0, weight: 6, caps: {}, buzz: 5, risk: 10, conflicts: [] },
+  { id: 'popup', tier: 2, name: '升降镜头', icon: '🎚️', desc: '前摄藏在顶部，用时弹出', cost: 5, thick: 0.4, weight: 8, caps: { design: 5 }, buzz: 6, risk: 12, conflicts: [] },
+  { id: 'battswap', tier: 2, name: '可换电池', icon: '🔋', desc: '后盖一推，电池拔下来', cost: 3, thick: 0.6, weight: 10, caps: { battery: 6 }, buzz: 5, risk: 8, conflicts: ['crystal', 'wrap'] },
+  { id: 'stylus', tier: 2, name: '内置手写笔', icon: '🖊️', desc: '底部抽出一支笔', cost: 4, thick: 0.2, weight: 6, caps: { os: 5 }, buzz: 4, risk: 8, conflicts: [] },
+  // ── 3 形态实验 ──
+  { id: 'slider', tier: 3, name: '滑盖', icon: '↕️', desc: '屏幕整片上滑，露出第二层', group: 'form', cost: 10, thick: 2.5, weight: 30, caps: { design: 5 }, buzz: 8, risk: 14, conflicts: [] },
+  { id: 'swivel', tier: 3, name: '旋转屏', icon: '🔄', desc: '屏幕转 90° 变成 T 字', group: 'form', cost: 12, thick: 3, weight: 40, caps: { design: 8, battery: -5 }, buzz: 9, risk: 16, conflicts: [] },
+  { id: 'fold', tier: 3, name: '折叠屏', icon: '📖', desc: '一折变平板', group: 'form', cost: 18, thick: 3.5, weight: 60, caps: { design: 15, battery: -10 }, buzz: 10, risk: 16, conflicts: [] },
+  { id: 'modular', tier: 3, name: '模块化背板', icon: '🧩', desc: '磁吸模块随便换', group: 'back', cost: 8, thick: 1, weight: 20, caps: { battery: 5 }, buzz: 7, risk: 12, conflicts: [] },
+  { id: 'solar', tier: 3, name: '太阳能背板', icon: '☀️', desc: '晒一晒多活两小时', group: 'back', cost: 5, thick: 0.3, weight: 6, caps: { battery: 10 }, buzz: 7, risk: 10, conflicts: [] },
+  { id: 'chrome', tier: 3, name: '变色后盖', icon: '🦎', desc: '电致变色，一键换皮', group: 'back', cost: 6, thick: 0.2, weight: 4, caps: {}, buzz: 8, risk: 12, conflicts: [] },
+  // ── 4 未来原型 ──
+  { id: 'trifold', tier: 4, name: '三折叠', icon: '🪭', desc: 'Z 字两折，展开是平板', group: 'form', cost: 28, thick: 5, weight: 90, caps: { design: 25, battery: -15 }, buzz: 14, risk: 22, conflicts: [], prereq: ['fold'] },
+  { id: 'wrap', tier: 4, name: '环绕屏', icon: '🌐', desc: '正面、侧边、背面全是屏幕', group: 'back', cost: 20, thick: 0.4, weight: 12, caps: { design: 20, battery: -15 }, buzz: 14, risk: 20, conflicts: ['popup'], prereq: ['subscreen', 'fold'] },
+  { id: 'rollable', tier: 4, name: '卷轴屏', icon: '📜', desc: '屏幕从侧边卷出来', group: 'form', cost: 22, thick: 2, weight: 40, caps: { design: 15 }, buzz: 13, risk: 20, conflicts: [], prereq: ['fold', 'slider'] },
+  { id: 'crystal', tier: 4, name: '全透明机身', icon: '💎', desc: '中框、后盖全透明', group: 'back', cost: 15, thick: 0, weight: 6, caps: { design: -5 }, buzz: 13, risk: 18, conflicts: [], prereq: ['clear'] },
+  { id: 'watch', tier: 4, name: '机械表芯后盖', icon: '⚙️', desc: '后盖里有齿轮在走', cost: 8, thick: 0.5, weight: 10, caps: {}, buzz: 9, risk: 12, conflicts: ['eink', 'solar', 'modular', 'wrap', 'pet'] },
+  { id: 'projector', tier: 4, name: '投影仪', icon: '📽️', desc: '顶部投出 80 寸', cost: 12, thick: 1, weight: 14, caps: { battery: -10 }, buzz: 11, risk: 16, conflicts: [] },
+  // ── 5 科幻彩蛋 ──
+  { id: 'holo', tier: 5, name: '全息投影', icon: '🛸', desc: '屏幕上方浮出 3D 影像', cost: 30, thick: 1, weight: 20, caps: { battery: -15 }, buzz: 18, risk: 26, conflicts: [], prereq: ['projector'] },
+  { id: 'pet', tier: 5, name: '电子宠物背屏', icon: '🐣', desc: '背面养一只像素宠物', cost: 5, thick: 0.3, weight: 6, caps: {}, buzz: 12, risk: 10, conflicts: [], prereq: ['subscreen', 'eink'] },
+];
+export const MAX_CONCEPTS = 3;
+const CBYID = Object.fromEntries(CONCEPTS.map((c) => [c.id, c]));
+
+/** 两个概念是否互斥（同组或任一方声明冲突） */
+export function conceptsConflict(a, b) {
+  const A = CBYID[a];
+  const B = CBYID[b];
+  if (!A || !B || a === b) return false;
+  if (A.group && A.group === B.group) return true;
+  return A.conflicts.includes(b) || B.conflicts.includes(a);
+}
+
+/**
+ * 解锁状态。ctx = { unlocked: string[] | null, models: [], rp }；unlocked 为 null 表示沙盒（全解锁）
+ */
+export function unlockStatus(id, ctx) {
+  const c = CBYID[id];
+  const cost = TIERS[c.tier - 1].cost;
+  if (!ctx || ctx.unlocked == null || c.tier === 1 || ctx.unlocked.includes(id)) return { unlocked: true, cost, prereqOk: true, tier: c.tier };
+  const used = new Set((ctx.models || []).flatMap((m) => m.design.concepts || []));
+  const pre = c.prereq || [];
+  const prereqOk = !pre.length || pre.some((p) => used.has(p));
+  const prereqText = pre.length ? `需先发布过「${pre.map((p) => CBYID[p].name).join('」或「')}」` : '';
+  return { unlocked: false, cost, prereqOk, prereqText, tier: c.tier, affordable: (ctx.rp || 0) >= cost };
+}
+
+/** 出圈度：越夸张、越首发，越容易被自发传播 */
+export function buzzOf(design, museum) {
+  const mem = marketMemory(museum);
+  let b = 0;
+  for (const id of design.concepts || []) {
+    const c = CBYID[id];
+    if (!c) continue;
+    const m = mem[id];
+    b += c.buzz * (!m ? 1.6 : m.first >= 0 && m.rivals === 0 ? 1.1 : 0.6);
+  }
+  for (const c of COMBOS) if (c.test(design) && !mem[c.id]) b += 4;
+  return Math.round(b);
+}
 
 /** 品类创新：少见的组合（取舍层的创意） */
 export const COMBOS = [
@@ -302,7 +373,12 @@ export const COMBOS = [
   { id: 'twoweeks', name: '两周一充', test: (d) => d.parts.battery === 2 && hasC(d, 'eink') },
   { id: 'gamer', name: '电竞怪兽', test: (d) => d.parts.chip === 2 && hasC(d, 'fan') && hasC(d, 'lights') },
   { id: 'retro', name: '复古商务机', test: (d) => hasC(d, 'keyboard') && d.screenForm === 'bezel' },
-  { id: 'xray', name: '透视旗舰', test: (d) => hasC(d, 'clear') && d.parts.chip === 2 },
+  { id: 'xray', name: '透视旗舰', test: (d) => (hasC(d, 'clear') || hasC(d, 'crystal')) && d.parts.chip === 2 },
+  { id: 'slide-kb', name: '复古滑盖王', test: (d) => hasC(d, 'slider') && hasC(d, 'keyboard') },
+  { id: 'cinema', name: '口袋影院', test: (d) => hasC(d, 'projector') && (hasC(d, 'fold') || hasC(d, 'trifold')) },
+  { id: 'cyberpet', name: '赛博宠物', test: (d) => hasC(d, 'holo') && hasC(d, 'pet') },
+  { id: 'offgrid', name: '永不断电', test: (d) => hasC(d, 'solar') && hasC(d, 'battswap') },
+  { id: 'ultimate', name: '全面屏终极形态', test: (d) => hasC(d, 'wrap') && d.screenForm === 'full' },
 ];
 
 export function hasC(d, id) {
@@ -312,7 +388,7 @@ export function hasC(d, id) {
 /** 虚构竞品与其已发布的产品（市场记忆的初始值） */
 export const RIVALS = [
   { brand: '蓝莓科技', style: '挤牙膏冠军', latest: '蓝莓 14 Pro Max Plus', concepts: [], combos: [], crowd: ['大底三摄', '方形模组'] },
-  { brand: '方块数码', style: '电竞狂魔', latest: '方块 RedPlay 7', concepts: ['lights', 'fan'], combos: ['gamer'], crowd: ['灯效后盖'] },
+  { brand: '方块数码', style: '电竞狂魔', latest: '方块 RedPlay 7', concepts: ['lights', 'fan'], combos: ['gamer'], crowd: ['灯效后盖', '散热风扇'] },
   { brand: '极光移动', style: '户外硬汉', latest: '极光 Trek 3', concepts: ['sat', 'shutter'], combos: [], crowd: ['卫星天线'] },
 ];
 
@@ -365,7 +441,8 @@ export function novelty(design, museum) {
   for (const id of design.concepts || []) {
     const m = mem[id];
     const name = conceptName(id);
-    if (!m) items.push({ label: `首发「${name}」`, v: 30, first: true });
+    const tierV = [26, 30, 34, 40, 45][(CBYID[id]?.tier || 1) - 1];
+    if (!m) items.push({ label: `首发「${name}」`, v: tierV, first: true });
     else if (m.first >= 0 && m.rivals === 0) items.push({ label: `独家「${name}」`, v: 14 });
     else if (m.rivals === 1) items.push({ label: `「${name}」已有 1 家在做`, v: 10 });
     else items.push({ label: `「${name}」已经烂大街`, v: 3 });
@@ -404,14 +481,15 @@ export function completeness(design, museum) {
   const uses = (id) => museum.filter((e) => (e.design.concepts || []).includes(id)).length;
   for (const id of design.concepts || []) {
     const u = uses(id);
-    if (u === 0) items.push({ label: `「${conceptName(id)}」新工艺首发`, v: -10 });
+    if (u === 0) items.push({ label: `「${conceptName(id)}」新工艺首发`, v: -(CBYID[id]?.risk ?? 10) });
     else if (u === 1) items.push({ label: `「${conceptName(id)}」第二代打磨`, v: -5 });
     else items.push({ label: `「${conceptName(id)}」工艺成熟`, v: 0 });
   }
-  if ((design.concepts || []).length >= 2) items.push({ label: '两个概念件要一起调校', v: -4 });
+  const n = (design.concepts || []).length;
+  if (n >= 2) items.push({ label: `${n} 个概念件要一起调校`, v: -4 * (n - 1) });
   if (design.redesign === 'major' && museum.length) items.push({ label: '大改款新模具', v: -3 });
   if (hasC(design, 'fan') && design.parts.chip !== 2) items.push({ label: '风扇配小芯片：吹空气', v: -6 });
-  const score = Math.max(40, Math.min(100, 100 + items.reduce((a, b) => a + b.v, 0)));
+  const score = Math.max(30, Math.min(100, 100 + items.reduce((a, b) => a + b.v, 0)));
   return { score, items };
 }
 
@@ -420,7 +498,9 @@ export function wow(design, museum) {
   const c = completeness(design, museum);
   const score = Math.round((Math.min(100, n.score * 1.3) * c.score) / 100);
   let headline;
-  if (n.score >= 55 && c.score >= 85) headline = '「这才叫创新！」——科技媒体集体起立';
+  const bz = buzzOf(design, museum);
+  if (bz >= 40 && c.score < 65) headline = '「做工翻车，但全网都在讨论」';
+  else if (n.score >= 55 && c.score >= 85) headline = '「这才叫创新！」——科技媒体集体起立';
   else if (n.score >= 55) headline = '「概念满分，做工还差口气」';
   else if (n.score >= 30) headline = '「有新意，但不够炸」';
   else if (c.score >= 80) headline = '「稳，但又是挤牙膏的一年」';

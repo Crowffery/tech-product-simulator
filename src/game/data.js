@@ -1,6 +1,6 @@
 /** 静态配置与文案 — 《电子产品发展国》原型 */
 
-export const SAVE_KEY = 'epdg-prototype-v1';
+export const SAVE_KEY = 'epdg-prototype-v2';
 
 export const SLOTS = [
   { id: 'perf', name: '性能', blurb: '更流畅了' },
@@ -10,55 +10,12 @@ export const SLOTS = [
   { id: 'os', name: '系统与生态', blurb: '软硬一体有那么点意思' },
 ];
 
-export const ROLES = [
-  {
-    id: 'id',
-    title: '工业设计师',
-    quirk: '坚持圆角必须「刚好」',
-    stars: 3,
-    cost: 10,
-    boost: { design: 1.35 },
-  },
-  {
-    id: 'pm',
-    title: '硬件 PM',
-    quirk: '日程表比芯片还密',
-    stars: 3,
-    cost: 11,
-    boost: { perf: 1.15, battery: 1.15 },
-  },
-  {
-    id: 'cam',
-    title: '影像工程师',
-    quirk: '开会必提「夜景」',
-    stars: 2,
-    cost: 12,
-    boost: { camera: 1.4 },
-  },
-  {
-    id: 'osdev',
-    title: '系统体验',
-    quirk: '动画少一帧都难受',
-    stars: 3,
-    cost: 13,
-    boost: { os: 1.35 },
-  },
-  {
-    id: 'supply',
-    title: '供应链经理',
-    quirk: '供应商饭局 survivors',
-    stars: 2,
-    cost: 15,
-    boost: { eventLuck: 1 },
-  },
-  {
-    id: 'pr',
-    title: '公关 / 发布会',
-    quirk: '幻灯片有呼吸感',
-    stars: 2,
-    cost: 14,
-    boost: { launch: 1 },
-  },
+/** 部门：玩家只管大方向，升级部门而不是逐个招人 */
+export const DEPTS = [
+  { id: 'design', name: '设计部', icon: '🎨', desc: ['每代 1 个概念件', '每代 2 个概念件 · 外观研发 +15%', '每代 3 个概念件 · 外观研发 +30%'], costs: [30, 60] },
+  { id: 'rnd', name: '研发部', icon: '🔬', desc: ['人力 6 点/月', '人力 8 点/月 · 研发点 +1', '人力 10 点/月 · 研发点 +2'], costs: [35, 70] },
+  { id: 'supply', name: '供应链', icon: '🏭', desc: ['事故率 ×1', '事故率 ×0.8 · 量产更快', '事故率 ×0.6 · 成本 -5%'], costs: [25, 55] },
+  { id: 'pr', name: '公关部', icon: '📣', desc: ['发布会 +3', '发布会 +7 · 出圈 +20%', '发布会 +11 · 出圈 +40%'], costs: [25, 55] },
 ];
 
 export const POSITIONING = [
@@ -189,59 +146,28 @@ export const EVENTS = [
       },
     ],
   },
-];
-
-export const LAUNCH_PREP = [
   {
-    id: 'demo_stable',
-    label: '加稳 Demo',
-    desc: '少死机，少名场面',
-    cost: 15,
-    launch: 8,
-  },
-  {
-    id: 'easter',
-    label: '塞个彩蛋',
-    desc: '媒体爱写，翻车也戏剧',
-    cost: 10,
-    launch: 6,
-    risk: 0.15,
-  },
-  {
-    id: 'spec_sheet',
-    label: '堆参数稿',
-    desc: '务实派点头，梦想派打哈欠',
-    cost: 8,
-    launch: 4,
-  },
-];
-
-export const LAUNCH_BEATS = [
-  {
-    id: 'open',
-    prompt: '开场怎么讲？',
+    id: 'hinge',
+    type: '铰链',
+    when: (st) => (st.design?.concepts || []).some((c) => ['fold', 'trifold', 'rollable', 'slider', 'swivel'].includes(c)),
+    title: '铰链测试机折了第 8 万次……然后断了',
+    body: '可靠性实验室发来一段慢动作视频，配文：「它尽力了」。',
     choices: [
-      { label: '沉默走进来，只亮一灯', score: 6, risk: 0.1 },
-      { label: '先念营收再念梦想', score: 2, risk: 0 },
-      { label: '直接上真机上手环', score: 8, risk: 0.2 },
+      { label: '换航天级合金（烧钱）', effect: { cash: -35, months: 0, slotPenalty: {} } },
+      { label: '再磨一个月', effect: { cash: 0, months: 1, slotPenalty: {} } },
+      { label: '发布会上不演示折叠', effect: { cash: 0, months: 0, slotPenalty: { design: 8 }, gambleFail: true } },
     ],
   },
   {
-    id: 'demo',
-    prompt: '现场 Demo：',
+    id: 'spyshot',
+    type: '谍照',
+    when: (st) => (st.design?.concepts || []).length > 0,
+    title: '路人拍到工程机：「这是什么黑科技？」',
+    body: '模糊照片在社交网络疯传，评论区已经开始脑补发布会。',
     choices: [
-      { label: '安全预设流程', score: 5, risk: 0.05 },
-      { label: '即兴夜景连拍', score: 10, risk: 0.35 },
-      { label: '跳过 Demo 念 PPT', score: 1, risk: 0 },
-    ],
-  },
-  {
-    id: 'close',
-    prompt: '压轴：',
-    choices: [
-      { label: '价格惊喜', score: 9, risk: 0.1 },
-      { label: '「还有一件事」配件预告', score: 7, risk: 0.05 },
-      { label: '务实结束，去摸机', score: 4, risk: 0 },
+      { label: '官方阴阳一句「敬请期待」', effect: { cash: 0, hype: 14 } },
+      { label: '律师函警告', effect: { cash: -10, hype: 4, faith: 2 } },
+      { label: '干脆提前官宣', effect: { cash: 0, hype: 8, faith: 3 } },
     ],
   },
 ];
