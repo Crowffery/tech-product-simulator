@@ -275,6 +275,14 @@ export function danmaku(design, trend) {
   if (C.has('shutter')) out.push('快门键手感一定很好');
   if (C.has('sat')) out.push('天线好可爱');
   if (C.has('fan')) out.push(design.parts.chip === 2 ? '风扇转起来了！' : '风扇在吹空气吗');
+  const more = {
+    popup: '镜头弹出来那一下好帅', battswap: '可换电池！回到十年前', stylus: '笔！是笔！', slider: '滑盖回来了啊啊啊',
+    swivel: '转起来了？？？', fold: '一折变平板，钱包也折了', modular: '乐高手机', solar: '晒太阳就能充电？',
+    chrome: '会变色的后盖！', trifold: '三折叠！这是什么怪物', wrap: '全身都是屏幕，怎么拿？', rollable: '屏幕从侧面卷出来了！',
+    crystal: '全透明，像水晶', watch: '后盖里有表芯在走', projector: '直接投到墙上看电影', holo: '全息影像？？科幻成真',
+    pet: '背面养了只小鸡！',
+  };
+  for (const [k, v] of Object.entries(more)) if (C.has(k)) out.push(v, v);
   out.push('多少钱？', '等一个评测', '买了买了', '外观党狂喜', '再等等下一代');
   return out;
 }
@@ -287,7 +295,7 @@ export function danmaku(design, trend) {
  */
 export const TIERS = [
   { tier: 1, name: '车库脑洞', cost: 0 },
-  { tier: 2, name: '工程魔改', cost: 6 },
+  { tier: 2, name: '工程魔改', cost: 5 },
   { tier: 3, name: '形态实验', cost: 12 },
   { tier: 4, name: '未来原型', cost: 20 },
   { tier: 5, name: '科幻彩蛋', cost: 30 },

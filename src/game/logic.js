@@ -353,7 +353,7 @@ export function finalizeScores(state) {
   state.userScore = user;
   state.headline = W ? W.headline : '中规中矩';
   // 研发点
-  const gain = Math.round(media / 12 + (W ? W.score / 15 + W.firsts.length * 2 : 0) + (deptLevel(state, 'rnd') - 1));
+  const gain = Math.round(2 + media / 12 + (W ? W.score / 15 + W.firsts.length * 2 : 0) + (deptLevel(state, 'rnd') - 1));
   state.rp += gain;
   state.lastRp = gain;
 }

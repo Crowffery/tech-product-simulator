@@ -436,7 +436,22 @@ export function buildPhone(design) {
   const depth = t - 2 * b;
   const frameGeo = new THREE.ExtrudeGeometry(outer, { depth, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 4, curveSegments: 20 });
   frameGeo.translate(0, 0, -depth / 2);
-  layers.frame.add(new THREE.Mesh(frameGeo, frameMaterial(matId, frameHex)));
+  const crystal = (design.concepts || []).includes('crystal');
+  const wrapScr = (design.concepts || []).includes('wrap');
+  if (crystal) {
+    const fm = new THREE.Mesh(
+      frameGeo,
+      new THREE.MeshPhysicalMaterial({ color: shade(frameHex, 0.35), transparent: true, opacity: 0.32, roughness: 0.05, clearcoat: 1, depthWrite: false, envMapIntensity: 1.5 }),
+    );
+    fm.layers.set(FX);
+    fm.renderOrder = 2;
+    layers.frame.add(fm);
+  } else if (wrapScr) {
+    // 环绕屏：侧边也是发光的屏
+    layers.frame.add(new THREE.Mesh(frameGeo, [new THREE.MeshBasicMaterial({ color: 0x0b0d14 }), new THREE.MeshBasicMaterial({ color: shade(design.color, 0.1), toneMapped: false })]));
+  } else {
+    layers.frame.add(new THREE.Mesh(frameGeo, frameMaterial(matId, frameHex)));
+  }
   const mid = new THREE.Mesh(
     new THREE.ShapeGeometry(roundedRectShape(holeW - 0.5, holeH - 0.5, Math.max(0.6, corner.r - inset)), 16),
     new THREE.MeshStandardMaterial({ color: 0x8c9099, roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide }),
@@ -477,6 +492,8 @@ export function buildPhone(design) {
 
   // —— 前屏 ——
   const front = layers.front;
+  const fa = new THREE.Group(); // 前屏动画组（滑盖 / 旋转屏）
+  front.add(fa);
   const glassGeo = new THREE.ExtrudeGeometry(roundedRectShape(capW + 0.1, capH + 0.1, capR + 0.05), {
     depth: 0.4,
     bevelEnabled: true,
@@ -486,7 +503,7 @@ export function buildPhone(design) {
     curveSegments: 20,
   });
   glassGeo.translate(0, 0, -0.45);
-  front.add(new THREE.Mesh(glassGeo, new THREE.MeshPhysicalMaterial({ color: 0x08090d, roughness: 0.06, clearcoat: 1, envMapIntensity: 1.3 })));
+  fa.add(new THREE.Mesh(glassGeo, new THREE.MeshPhysicalMaterial({ color: 0x08090d, roughness: 0.06, clearcoat: 1, envMapIntensity: 1.3 })));
   const C = new Set(design.concepts || []);
   const anim = [];
   const bez = form.bezel;
@@ -500,7 +517,7 @@ export function buildPhone(design) {
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / dispW + 0.5, uv.getY(i) / dispH + 0.5);
   const display = new THREE.Mesh(dispGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture(design.color), toneMapped: false }));
   display.position.set(0, kbH / 2, 0.17);
-  front.add(display);
+  fa.add(display);
   if (kbH) {
     // 实体键盘：4 行 × 10 列
     const keyMat = new THREE.MeshStandardMaterial({ color: 0x2b2c33, roughness: 0.5 });
@@ -521,33 +538,33 @@ export function buildPhone(design) {
         ]);
         const cx = -dispW / 2 + pad + kw * (wide ? c + 2 : c + 0.5);
         k.position.set(cx, y0 - kh * (r + 0.5), 0.45);
-        front.add(k);
+        fa.add(k);
       }
     }
   }
   anchors.screen = new THREE.Object3D();
   anchors.screen.position.set(-dispW * 0.28, dispH * 0.2, 0.2);
-  front.add(anchors.screen);
+  fa.add(anchors.screen);
   const glare = new THREE.Mesh(
     new THREE.PlaneGeometry(dispW, dispH),
     new THREE.MeshBasicMaterial({ map: glareTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   glare.position.set(0, kbH / 2, 0.2);
   glare.layers.set(FX);
-  front.add(glare);
+  fa.add(glare);
   const holeMat = new THREE.MeshBasicMaterial({ color: 0x030304 });
-  if (form.id === 'punch' || form.id === 'center') {
+  if ((form.id === 'punch' || form.id === 'center') && !C.has('popup')) {
     const hc = new THREE.Mesh(new THREE.CircleGeometry(1.7, 16), holeMat);
     hc.position.set(form.id === 'punch' ? -dispW / 2 + 5.5 : 0, dispH / 2 + kbH / 2 - 5, 0.22);
-    front.add(hc);
+    fa.add(hc);
   }
   if (form.id === 'bezel') {
     const slot = new THREE.Mesh(new THREE.ShapeGeometry(roundedRectShape(12, 1.4, 0.7)), new THREE.MeshBasicMaterial({ color: 0x2a2a30 }));
     slot.position.set(0, capH / 2 - bez - topExtra, 0.22);
-    front.add(slot);
+    fa.add(slot);
     const cam = new THREE.Mesh(new THREE.CircleGeometry(1.4, 12), holeMat);
     cam.position.set(9, capH / 2 - bez - topExtra, 0.22);
-    front.add(cam);
+    fa.add(cam);
   }
 
   // —— 后盖（观看者坐标，整组翻转 180°）——
@@ -563,7 +580,13 @@ export function buildPhone(design) {
     curveSegments: 20,
   });
   plateGeo.translate(0, 0, -0.55);
-  if (C.has('clear')) {
+  let plateMat = null;
+  if (C.has('wrap')) {
+    const wp = new THREE.Mesh(plateGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture(shade(design.color, -0.1).getStyle()), toneMapped: false }));
+    const uvb = plateGeo.attributes.uv;
+    for (let i = 0; i < uvb.count; i++) uvb.setXY(i, uvb.getX(i) / capW + 0.5, uvb.getY(i) / capH + 0.5);
+    back.add(wp);
+  } else if (C.has('clear') || C.has('crystal')) {
     const clearMat = new THREE.MeshPhysicalMaterial({
       color: shade(backHex, 0.25),
       transparent: true,
@@ -578,7 +601,18 @@ export function buildPhone(design) {
     plate.renderOrder = 2;
     back.add(plate);
   } else {
-    back.add(new THREE.Mesh(plateGeo, bodyMaterial(matId, backHex)));
+    plateMat = bodyMaterial(matId, backHex);
+    back.add(new THREE.Mesh(plateGeo, plateMat));
+  }
+  if (C.has('chrome') && plateMat) {
+    // 电致变色：在主色和互补色之间缓慢渐变
+    const c0 = new THREE.Color(backHex);
+    const hsl = {};
+    c0.getHSL(hsl);
+    anim.push((now) => {
+      const k = (Math.sin(now * 0.0012) + 1) / 2;
+      plateMat.color.setHSL((hsl.h + k * 0.5) % 1, Math.max(0.45, hsl.s), 0.35 + k * 0.25);
+    });
   }
   anchors.back = new THREE.Object3D();
   anchors.back.position.set(-w * 0.2, -h * 0.2, 0.2);
@@ -801,6 +835,286 @@ export function buildPhone(design) {
     const tip = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 8), new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.4 }));
     tip.position.set(-w / 2 + 2.6, h / 2 + 17.5, -t * 0.1);
     layers.frame.add(stub, tip);
+  }
+
+  // —— v0.9 概念件 ——
+  const accentM = new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.35, metalness: 0.3 });
+  const darkM = new THREE.MeshStandardMaterial({ color: 0x1b1c21, roughness: 0.45 });
+  const cyc = (now, period, a, b) => {
+    // 0→1→0 的循环：停 a 秒，过渡 b 秒
+    const T = (now / 1000) % period;
+    const half = period / 2;
+    const k = T < half ? Math.min(1, Math.max(0, (T - a) / b)) : 1 - Math.min(1, Math.max(0, (T - half - a) / b));
+    return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+  };
+  const slab = (sw, sh, st, withScreen = true) => {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(roundedRectShape(sw - 1, sh - 1, Math.max(0.6, corner.r - 1)), { depth: st - 1, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5, bevelSegments: 2, curveSegments: 16 }),
+      [bodyMaterial(matId, backHex), frameMaterial(matId, frameHex)],
+    );
+    body.geometry.translate(0, 0, -(st - 1) / 2);
+    g.add(body);
+    if (withScreen) {
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(sw - 3, sh - 3), new THREE.MeshBasicMaterial({ map: wallpaperTexture(design.color), toneMapped: false }));
+      scr.position.z = st / 2 + 0.05;
+      g.add(scr);
+    }
+    return g;
+  };
+
+  if (C.has('fold') || C.has('trifold')) {
+    // 外折：左半屏绕背面铰链折到身后
+    const hingeL = new THREE.Group();
+    hingeL.position.set(-w / 2, 0, -t / 2);
+    const leafL = slab(w, h, t);
+    leafL.position.set(-w / 2, 0, t / 2);
+    hingeL.add(leafL);
+    root.add(hingeL);
+    const hinge = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, h - 6, 12), frameMaterial(2, '#9aa0ab'));
+    hinge.position.set(-w / 2, 0, -t / 2);
+    root.add(hinge);
+    let hingeR = null;
+    if (C.has('trifold')) {
+      // Z 字：右半屏绕正面铰链折到屏幕前
+      hingeR = new THREE.Group();
+      hingeR.position.set(w / 2, 0, t / 2);
+      const leafR = slab(w, h, t);
+      leafR.position.set(w / 2, 0, -t / 2);
+      hingeR.add(leafR);
+      root.add(hingeR);
+    }
+    anim.push((now) => {
+      const k = cyc(now, 9, 2.6, 1.4);
+      hingeL.rotation.y = -Math.PI * k * 0.98;
+      if (hingeR) hingeR.rotation.y = Math.PI * cyc(now + 450, 9, 2.6, 1.4) * 0.98;
+    });
+  }
+  if (C.has('rollable')) {
+    const ext = slab(w * 0.55, h - 6, Math.max(2, t * 0.45));
+    const roller = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.32, t * 0.32, h - 8, 16), frameMaterial(2, frameHex));
+    ext.add(roller);
+    roller.position.set(w * 0.275, 0, 0);
+    ext.position.set(w / 2 - w * 0.3, 0, t * 0.2);
+    root.add(ext);
+    anim.push((now) => (ext.position.x = w / 2 - w * 0.3 + cyc(now, 7, 1.8, 1.2) * w * 0.55));
+  }
+  if (C.has('slider')) {
+    // 滑盖：屏幕上滑，露出第二层（手柄面板）
+    const deck = new THREE.Mesh(
+      new THREE.PlaneGeometry(capW - 2, h * 0.36),
+      new THREE.MeshBasicMaterial({
+        map: canvasTex(96, 48, (g2, cw, ch) => {
+          g2.fillStyle = '#1b1c21';
+          g2.fillRect(0, 0, cw, ch);
+          g2.fillStyle = '#5d6d7e';
+          g2.fillRect(12, 18, 18, 6);
+          g2.fillRect(18, 12, 6, 18);
+          ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db'].forEach((c, i) => {
+            g2.fillStyle = c;
+            g2.beginPath();
+            g2.arc(70 + (i % 2 ? 8 : -8) * (i < 2 ? 1 : 0), 21 + (i === 2 ? -8 : i === 3 ? 8 : 0), 4, 0, Math.PI * 2);
+            g2.fill();
+          });
+        }, { nearest: true }),
+      }),
+    );
+    deck.position.set(0, -h / 2 + h * 0.18 + 2, t / 2 - 0.2);
+    front.add(deck);
+    anim.push((now) => (fa.position.y = cyc(now, 7, 2, 0.8) * h * 0.34));
+  }
+  if (C.has('swivel')) {
+    anim.push((now) => {
+      const k = cyc(now, 8, 2, 1.2);
+      fa.rotation.z = (-Math.PI / 2) * k;
+      fa.position.z = k * 2.5;
+    });
+  }
+  if (C.has('popup')) {
+    const pop = new THREE.Group();
+    const pb = new THREE.Mesh(new THREE.BoxGeometry(12, 9, Math.min(5, t - 1.5)), frameMaterial(matId, frameHex));
+    const pl = new THREE.Mesh(new THREE.CircleGeometry(2, 16), new THREE.MeshBasicMaterial({ color: 0x050507 }));
+    pl.position.set(0, 1, Math.min(5, t - 1.5) / 2 + 0.05);
+    pop.add(pb, pl);
+    layers.frame.add(pop);
+    anim.push((now) => pop.position.set(-w * 0.18, h / 2 - 5 + cyc(now, 6, 1.6, 0.4) * 8.5, 0));
+  }
+  if (C.has('stylus')) {
+    const pen = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 30, 10), darkM);
+    shaft.position.y = 15;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 3, 10), accentM);
+    cap.position.y = -1;
+    pen.add(shaft, cap);
+    layers.frame.add(pen);
+    anim.push((now) => pen.position.set(w / 2 - 8, -h / 2 - cyc(now, 7, 3, 0.6) * 22, 0));
+  }
+  if (C.has('battswap')) {
+    const seam = roundedRectShape(capW - 8, capH * 0.6, 4, 0, -capH * 0.15).getPoints(24);
+    seam.push(seam[0]);
+    const sl = new THREE.Line(new THREE.BufferGeometry().setFromPoints(seam), new THREE.LineBasicMaterial({ color: shade(backHex, -0.35) }));
+    sl.position.z = 0.15;
+    sl.layers.set(FX);
+    back.add(sl);
+    const latch = new THREE.Mesh(new THREE.BoxGeometry(10, 3, 0.6), accentM);
+    latch.position.set(0, capH * 0.15 + 3, 0.4);
+    back.add(latch);
+  }
+  if (C.has('modular')) {
+    const cols = ['#2c3e50', '#e67e22', '#16a085', '#8e44ad'];
+    const mods = [];
+    for (let i = 0; i < 4; i++) {
+      const mw = (capW - 12) / 2;
+      const mh = capH * 0.26;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(mw, mh, 1.2), new THREE.MeshStandardMaterial({ color: cols[i], roughness: 0.4, metalness: 0.2 }));
+      m.position.set((i % 2 ? 1 : -1) * (mw / 2 + 1.5), -capH * 0.08 - Math.floor(i / 2) * (mh + 3), 0.7);
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(3, 12), new THREE.MeshBasicMaterial({ color: 0xecf0f1 }));
+      dot.position.z = 0.65;
+      m.add(dot);
+      back.add(m);
+      mods.push(m);
+    }
+    anim.push((now) => {
+      const k = cyc(now, 6, 2, 0.4);
+      mods[1].position.z = 0.7 + k * 6;
+    });
+  }
+  if (C.has('solar')) {
+    const sp = new THREE.Mesh(
+      new THREE.PlaneGeometry(capW - 6, capH * 0.6),
+      new THREE.MeshStandardMaterial({
+        roughness: 0.25,
+        metalness: 0.4,
+        map: canvasTex(64, 96, (g2, cw, ch) => {
+          g2.fillStyle = '#1a2a5e';
+          g2.fillRect(0, 0, cw, ch);
+          g2.fillStyle = '#26408b';
+          for (let y = 1; y < ch; y += 12) for (let x = 1; x < cw; x += 16) g2.fillRect(x, y, 14, 10);
+          g2.fillStyle = '#c9ccd1';
+          for (let x = 8; x < cw; x += 16) g2.fillRect(x, 0, 1, ch);
+        }, { nearest: true }),
+      }),
+    );
+    sp.position.set(0, -capH * 0.15, 0.16);
+    back.add(sp);
+  }
+  if (C.has('watch')) {
+    const wy = -h * 0.12;
+    const win = new THREE.Mesh(new THREE.CircleGeometry(14, 32), new THREE.MeshBasicMaterial({ color: 0x15100a }));
+    win.position.set(0, wy, 0.2);
+    const bezelW = new THREE.Mesh(new THREE.RingGeometry(14, 15.5, 32), new THREE.MeshStandardMaterial({ color: 0xd4ac0d, metalness: 0.9, roughness: 0.25 }));
+    bezelW.position.set(0, wy, 0.25);
+    back.add(win, bezelW);
+    const gold = new THREE.MeshStandardMaterial({ color: 0xd4ac0d, metalness: 0.9, roughness: 0.3 });
+    const gear = (r, teeth) => {
+      const g2 = new THREE.Group();
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.6, 20), gold);
+      disc.rotation.x = Math.PI / 2;
+      g2.add(disc);
+      for (let i = 0; i < teeth; i++) {
+        const th = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.6), gold);
+        const a = (i / teeth) * Math.PI * 2;
+        th.position.set(Math.cos(a) * (r + 0.5), Math.sin(a) * (r + 0.5), 0);
+        th.rotation.z = a;
+        g2.add(th);
+      }
+      return g2;
+    };
+    const g1 = gear(6.5, 14);
+    g1.position.set(-3, wy + 2, 0.6);
+    const g2 = gear(4, 10);
+    g2.position.set(6.4, wy - 4, 0.9);
+    const ruby = new THREE.Mesh(new THREE.CircleGeometry(0.9, 8), new THREE.MeshBasicMaterial({ color: 0xc0392b }));
+    ruby.position.set(-3, wy + 2, 1);
+    back.add(g1, g2, ruby);
+    anim.push((now) => {
+      g1.rotation.z = now * 0.0015;
+      g2.rotation.z = -now * 0.0025;
+    });
+  }
+  if (C.has('projector')) {
+    const lensP = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 2, 16), darkM);
+    lensP.position.set(w * 0.22, h / 2 + 0.5, 0);
+    layers.frame.add(lensP);
+    const beam = new THREE.Mesh(
+      new THREE.ConeGeometry(22, 42, 24, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xfff2c8, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    beam.geometry.translate(0, -21, 0);
+    beam.rotation.z = Math.PI;
+    beam.position.set(w * 0.22, h / 2 + 1, 0);
+    beam.layers.set(FX);
+    layers.frame.add(beam);
+    const img = new THREE.Mesh(
+      new THREE.PlaneGeometry(46, 26),
+      new THREE.MeshBasicMaterial({ map: wallpaperTexture(design.color), transparent: true, opacity: 0.85, toneMapped: false, side: THREE.DoubleSide }),
+    );
+    img.position.set(w * 0.22, h / 2 + 44, 0);
+    img.layers.set(FX);
+    layers.frame.add(img);
+    anim.push((now) => {
+      beam.material.opacity = 0.1 + 0.04 * Math.sin(now * 0.02);
+      img.material.opacity = 0.75 + 0.15 * Math.sin(now * 0.017);
+    });
+  }
+  if (C.has('holo')) {
+    const holo = new THREE.Group();
+    const ico = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(14, 0)),
+      new THREE.LineBasicMaterial({ color: 0x5ffbf1, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(10, 16, 32),
+      new THREE.MeshBasicMaterial({ color: 0x5ffbf1, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = -20;
+    holo.add(ico, ring);
+    holo.traverse((o) => o.layers.set(FX));
+    holo.position.set(0, h * 0.05, t / 2 + 26);
+    root.add(holo);
+    anim.push((now) => {
+      ico.rotation.y = now * 0.0012;
+      ico.rotation.x = now * 0.0007;
+      holo.position.y = h * 0.05 + Math.sin(now * 0.002) * 3;
+      ico.material.opacity = 0.6 + 0.3 * Math.sin(now * 0.01);
+    });
+  }
+  if (C.has('pet')) {
+    const pc = document.createElement('canvas');
+    pc.width = 40;
+    pc.height = 28;
+    const pg = pc.getContext('2d');
+    const ptex = new THREE.CanvasTexture(pc);
+    ptex.magFilter = ptex.minFilter = THREE.NearestFilter;
+    ptex.colorSpace = THREE.SRGBColorSpace;
+    const pw = Math.min(34, w * 0.5);
+    const scrP = new THREE.Mesh(new THREE.PlaneGeometry(pw, pw * 0.7), new THREE.MeshBasicMaterial({ map: ptex, toneMapped: false }));
+    scrP.position.set(0, h / 2 - 58, 0.5);
+    const frameP = new THREE.Mesh(new THREE.PlaneGeometry(pw + 3, pw * 0.7 + 3), new THREE.MeshBasicMaterial({ color: 0x07080b }));
+    frameP.position.set(0, h / 2 - 58, 0.45);
+    back.add(frameP, scrP);
+    let last = 0;
+    anim.push((now) => {
+      if (now - last < 180) return;
+      last = now;
+      const f = Math.floor(now / 180);
+      pg.fillStyle = '#9bbc0f';
+      pg.fillRect(0, 0, 40, 28);
+      pg.fillStyle = '#306230';
+      const x = 6 + Math.abs(((f % 28) - 14)) * 2;
+      const y = 12 - (f % 4 === 0 ? 2 : 0);
+      pg.fillRect(x, y, 8, 7);
+      pg.fillRect(x + 1, y - 2, 2, 2);
+      pg.fillRect(x + 5, y - 2, 2, 2);
+      pg.fillStyle = '#9bbc0f';
+      pg.fillRect(x + 2, y + 2, 1, 1);
+      pg.fillRect(x + 5, y + 2, 1, 1);
+      pg.fillStyle = '#306230';
+      pg.fillRect(0, 22, 40, 1);
+      if (f % 20 < 10) pg.fillRect(30, 4, 3, 3);
+      ptex.needsUpdate = true;
+    });
   }
 
   // —— 内部元件（拆解时可见）——
