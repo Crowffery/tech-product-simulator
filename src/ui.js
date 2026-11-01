@@ -18,6 +18,13 @@ import {
 } from './game/state.js';
 import * as L from './game/logic.js';
 import { mountOffice, syncOffice } from './office.js';
+import {
+  faceDataUrl,
+  partIconDataUrl,
+  supplierIconDataUrl,
+  phoneShowcaseDataUrl,
+  partsRowHtml,
+} from './art.js';
 
 let state = null;
 let screen = 'title';
@@ -32,6 +39,8 @@ let draft = {
 let flashText = '';
 let flashTimer = 0;
 let bound = false;
+/** @type {{ label: string, act: string, id?: string } | null} */
+let dockAction = null;
 
 const app = () => document.getElementById('app');
 
@@ -46,6 +55,7 @@ function restart() {
   draft.companyName = randomCompanyName();
   draft.plan = L.recommendedPlan(1);
   draft.alloc = null;
+  dockAction = null;
   render();
 }
 
@@ -66,7 +76,6 @@ function flash(msg) {
     flashText = '';
     document.querySelector('.month-flash')?.remove();
   }, 650);
-  // re-show flash without full rerender if possible
   const host = document.getElementById('office-host');
   if (host && !host.querySelector('.month-flash')) {
     const d = document.createElement('div');
@@ -80,52 +89,17 @@ function escapeAttr(s) {
   return String(s).replace(/"/g, '&quot;');
 }
 
-function faceDataUrl(roleId) {
-  const c = document.createElement('canvas');
-  c.width = 40;
-  c.height = 40;
-  const g = c.getContext('2d');
-  g.imageSmoothingEnabled = false;
-  const colors = {
-    id: ['#f1c40f', '#e17055'],
-    pm: ['#2d3436', '#0984e3'],
-    cam: ['#6c5ce7', '#fd79a8'],
-    osdev: ['#00b894', '#55efc4'],
-    supply: ['#636e72', '#fdcb6e'],
-    pr: ['#d63031', '#ffffff'],
-  }[roleId] || ['#333', '#888'];
-  g.fillStyle = '#f5cba7';
-  g.fillRect(8, 12, 24, 22);
-  g.fillStyle = colors[0];
-  g.fillRect(6, 6, 28, 10);
-  g.fillRect(6, 12, 6, 10);
-  g.fillStyle = colors[1];
-  g.fillRect(8, 30, 24, 8);
-  g.fillStyle = '#2d3436';
-  g.fillRect(14, 18, 4, 4);
-  g.fillRect(24, 18, 4, 4);
-  return c.toDataURL();
-}
-
 function gauge(label, pct, cls = '') {
   const v = Math.max(0, Math.min(100, Math.round(pct)));
-  return `<div class="gauge">
-    <div class="gauge-label"><span>${label}</span><span>${v}</span></div>
-    <div class="gauge-track"><div class="gauge-fill ${cls}" style="width:${v}%"></div></div>
-  </div>`;
+  return `<div class="gauge"><div class="gauge-label"><span>${label}</span><span>${v}</span></div>
+    <div class="gauge-track"><div class="gauge-fill ${cls}" style="width:${v}%"></div></div></div>`;
 }
 
 function phaseLabel(phase) {
   return ({
-    hire: '组队',
-    plan: '企划',
-    logistics: '供应链',
-    dev: '开发中',
-    event: '突发！',
-    launch: '发布会',
-    score: '媒体分',
-    sales: '销量',
-    bust: '倒闭',
+    hire: '组队', plan: '企划', logistics: '供应链', supplier: '供应链', stock: '备货',
+    dev: '开发中', event: '突发', launch: '发布会', launchPrep: '发布会',
+    score: '评分', sales: '销量', bust: '倒闭', monthReport: '开发中',
   })[phase] || phase;
 }
 
@@ -134,31 +108,48 @@ function topbar() {
   return `<div class="topbar">
     <div class="brand-chip">${state.companyName}<small>电子产品发展国 · Gen${state.generation}</small></div>
     <div class="stat cash"><span class="lbl">资金</span><span class="val">${state.cash}</span></div>
-    <div class="stat"><span class="lbl">月份</span><span class="val">M${state.month}</span></div>
-    <div class="stat"><span class="lbl">工期残</span><span class="val">${state.monthsLeft ?? '-'}</span></div>
-    <div class="stat faith"><span class="lbl">信仰</span><span class="val">${state.faith}</span></div>
-    <div class="stat"><span class="lbl">口碑</span><span class="val">${state.reputation}</span></div>
+    <div class="stat"><span class="lbl">月</span><span class="val">M${state.month}</span></div>
+    <div class="stat"><span class="lbl">工期</span><span class="val">${state.monthsLeft ?? '-'}</span></div>
+    <div class="stat"><span class="lbl">信仰</span><span class="val">${state.faith}</span></div>
     <div class="hud-btns">
-      <button type="button" data-act="toggle-motion">${draft.reduceMotion ? '开动画' : '跳过动画'}</button>
+      <button type="button" data-act="toggle-motion">${draft.reduceMotion ? '动画' : '少动画'}</button>
       <button type="button" class="danger" data-act="restart">重开</button>
     </div>
   </div>`;
 }
 
-function officeBlock() {
+function showcaseBlock() {
+  const slots = state?.slots || {};
+  const phone = phoneShowcaseDataUrl(slots, state?.generation || 1);
   const caption = state?.product?.name
-    ? `在研：${state.product.name} · 均进度 ${Math.round(L.avgSlotProgress(state) || 0)}%`
-    : '办公室 · 小人走动 / 敲键盘';
-  return `<div class="office-panel" id="office-host">
+    ? `${state.product.name} · 完成度 ${Math.round(L.avgSlotProgress(state) || 0)}%`
+    : '概念机预览 · 研发后外观会变强';
+  return `<section class="showcase" id="office-host">
     <div class="phase-ribbon">${phaseLabel(state?.phase)}</div>
-    <div id="office-mount"></div>
+    <div class="showcase-grid">
+      <div class="phone-pane"><img src="${phone}" width="140" height="160" alt="产品预览"/></div>
+      <div class="office-mini"><div id="office-mount"></div></div>
+    </div>
+    ${partsRowHtml(slots)}
     <div class="office-caption">${caption}</div>
     ${flashText ? `<div class="month-flash"><span>${flashText}</span></div>` : ''}
-  </div>`;
+  </section>`;
 }
 
-function shellGame(cmdHtml, { modal = '' } = {}) {
-  return `${topbar()}<div class="stage">${officeBlock()}<aside class="cmd kbox">${cmdHtml}</aside></div>${modal}`;
+function dockHtml() {
+  if (!dockAction) return '';
+  return `<div class="dock"><button type="button" class="primary" data-act="${dockAction.act}" ${dockAction.id ? `data-id="${dockAction.id}"` : ''}>${dockAction.label}</button></div>`;
+}
+
+function shellGame(cmdHtml, { modal = '', dock = null } = {}) {
+  dockAction = dock;
+  return `${topbar()}
+  <div class="stage">
+    ${showcaseBlock()}
+    <aside class="cmd kbox">${cmdHtml}</aside>
+  </div>
+  ${dockHtml()}
+  ${modal}`;
 }
 
 function modalWrap(inner) {
@@ -166,19 +157,17 @@ function modalWrap(inner) {
 }
 
 function renderTitle() {
-  const saved = hasSave();
+  dockAction = hasSave()
+    ? { label: '▶ 继续游戏', act: 'continue' }
+    : { label: '▶ 新开一局', act: 'new' };
   return `<div class="kbox title-screen">
-    <canvas class="title-art" id="title-art" width="420" height="160"></canvas>
+    <canvas class="title-art" id="title-art" width="360" height="140"></canvas>
     <h1>电子产品发展国</h1>
-    <p style="margin:0;font-weight:800">开罗味像素办公室 · 少点击也能通关</p>
-    <p class="muted">推荐路线：下一步 → 下一步；策略藏在少数关键抉择里</p>
-    <p class="sfx-slot">♪ 音效静音占位</p>
-    <div class="row" style="justify-content:center;flex-direction:column;align-items:center;gap:10px">
-      ${saved ? '<button type="button" class="primary blink" data-act="continue" style="font-size:1.15rem;padding:14px 28px">▶ 继续游戏（自动存档）</button>' : ''}
-      <button type="button" class="${saved ? '' : 'primary blink'}" data-act="new">${saved ? '新开一局' : '▶ 新开一局'}</button>
-    </div>
-    <label class="eco" style="margin-top:8px"><input type="checkbox" data-act="toggle-motion-box" ${draft.reduceMotion ? 'checked' : ''}/> 减少动画</label>
-  </div>`;
+    <p style="margin:0;font-weight:800">竖屏开罗味 · 看着手机被做出来</p>
+    <p class="muted">推荐路线几乎全是底部大按钮</p>
+    ${hasSave() ? '<button type="button" data-act="new">新开一局</button>' : ''}
+    <label class="eco"><input type="checkbox" data-act="toggle-motion-box" ${draft.reduceMotion ? 'checked' : ''}/> 减少动画</label>
+  </div>${dockHtml()}`;
 }
 
 function paintTitleArt() {
@@ -186,69 +175,51 @@ function paintTitleArt() {
   if (!c) return;
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = false;
-  g.fillStyle = '#6b8cae';
-  g.fillRect(0, 0, 420, 160);
-  for (let y = 70; y < 160; y += 16) {
-    for (let x = 0; x < 420; x += 16) {
-      g.fillStyle = ((x + y) / 16) % 2 ? '#c4b59a' : '#b8a88a';
-      g.fillRect(x, y, 16, 16);
-    }
-  }
-  [[80, 100], [160, 100], [240, 100], [320, 100]].forEach(([x, y], i) => {
-    g.fillStyle = '#8b5a2b';
-    g.fillRect(x, y, 40, 14);
-    g.fillStyle = '#74b9ff';
-    g.fillRect(x + 10, y - 16, 20, 14);
-    g.fillStyle = '#f5cba7';
-    g.fillRect(x + 14, y - 2, 12, 12);
-    g.fillStyle = ['#e17055', '#0984e3', '#fd79a8', '#55efc4'][i];
-    g.fillRect(x + 14, y + 6, 12, 8);
-  });
+  g.fillStyle = '#5d7a96';
+  g.fillRect(0, 0, 360, 140);
+  // inline draw via showcase image
+  const img = new Image();
+  img.onload = () => g.drawImage(img, 110, 0);
+  img.src = phoneShowcaseDataUrl({
+    perf: { progress: 70 },
+    design: { progress: 80 },
+    camera: { progress: 60 },
+    battery: { progress: 55 },
+    os: { progress: 75 },
+  }, 1);
 }
 
 function renderCreate() {
-  return `<div class="kbox" style="max-width:520px;margin:40px auto;padding:20px">
+  dockAction = { label: '开门并组队 ▶', act: 'confirm-create' };
+  return `<div class="kbox" style="padding:16px;margin-top:24px">
     <h2 class="kbox-title">车库开门</h2>
-    <p class="tip">起个名就能开干。后面全程有「采用推荐」。</p>
-    <label style="display:block;margin:12px 0">公司名
-      <input id="cname" maxlength="16" value="${escapeAttr(draft.companyName)}" style="width:100%;margin-top:6px" />
-    </label>
-    <div class="row end">
-      <button type="button" data-act="rand-name">随机</button>
-      <button type="button" class="primary" data-act="confirm-create">开门并组队 ▶</button>
-    </div>
-  </div>`;
+    <p class="tip">起名后自动带推荐班底，看着概念机开干。</p>
+    <label>公司名<input id="cname" maxlength="16" value="${escapeAttr(draft.companyName)}"/></label>
+    <div class="row" style="margin-top:10px"><button type="button" data-act="rand-name">随机名</button></div>
+  </div>${dockHtml()}`;
 }
 
 function renderHire() {
-  const hired = [...L.hiredIds(state)];
   return shellGame(`
-    <h2 class="kbox-title">组队 <span class="badge">可一键</span></h2>
-    <p class="tip">推荐班底：硬件 PM + 工业设计 + 公关（已自动分派工位）。</p>
-    <button type="button" class="primary choice" data-act="quick-team" style="font-size:1.05rem">✓ 采用推荐班底，下一步</button>
-    ${hired.length ? `<p class="muted">已入职：${hired.map((id) => L.getRole(id).title).join('、')}</p>
-      <button type="button" class="primary" data-act="to-plan">下一步：企划 ▶</button>` : ''}
-    <details style="margin-top:12px">
-      <summary>高级：逐个招聘 / 改分派</summary>
-      <div class="staff-grid" style="margin-top:8px">
-        ${ROLES.map((r) => {
-          const owned = L.hiredIds(state).has(r.id);
-          return `<article class="staff-card ${owned ? 'hired' : ''}">
-            <img class="face" src="${faceDataUrl(r.id)}" alt="" width="40" height="40"/>
-            <strong>${r.title}</strong>
-            <div class="stars">${'★'.repeat(r.stars)}</div>
-            <div class="quirk">${r.quirk}</div>
-            ${owned
-              ? `<select data-act="assign" data-id="${r.id}">${[['idle','待命'],...SLOTS.map(s=>[s.id,s.name]),['launch','发布会']].map(([v,n])=>{
-                  const cur=state.staff.find(x=>x.roleId===r.id)?.assigned;
-                  return `<option value="${v}" ${cur===v?'selected':''}>${n}</option>`;
-                }).join('')}</select>`
-              : `<button type="button" data-act="hire" data-id="${r.id}">招（${r.cost}）</button>`}
-          </article>`;
-        }).join('')}
-      </div>
+    <h2 class="kbox-title">组队 <span class="badge">推荐一键</span></h2>
+    <p class="tip">底部大按钮采用推荐班底。想微操再展开。</p>
+    ${state.staff.length ? `<div class="staff-grid">${state.staff.map((s) => {
+      const r = L.getRole(s.roleId);
+      return `<article class="staff-card hired"><img class="face" src="${faceDataUrl(s.roleId)}" alt=""/><strong>${r.title}</strong><div class="stars">${'★'.repeat(r.stars)}</div></article>`;
+    }).join('')}</div>` : ''}
+    <details style="margin-top:10px"><summary>高级招聘</summary>
+      <div class="staff-grid" style="margin-top:8px">${ROLES.map((r) => {
+        const owned = L.hiredIds(state).has(r.id);
+        return `<article class="staff-card ${owned ? 'hired' : ''}">
+          <img class="face" src="${faceDataUrl(r.id)}" alt=""/>
+          <strong>${r.title}</strong>
+          <div class="quirk">${r.quirk}</div>
+          ${owned ? `<select data-act="assign" data-id="${r.id}">${[['idle','待命'],...SLOTS.map((x)=>[x.id,x.name]),['launch','发布会']].map(([v,n]) => `<option value="${v}" ${state.staff.find(s=>s.roleId===r.id)?.assigned===v?'selected':''}>${n}</option>`).join('')}</select>`
+            : `<button type="button" data-act="hire" data-id="${r.id}">招 ${r.cost}</button>`}
+        </article>`;
+      }).join('')}</div>
     </details>
-  `);
+  `, { dock: { label: state.staff.length ? '下一步：企划 ▶' : '✓ 采用推荐班底 ▶', act: state.staff.length ? 'to-plan' : 'quick-team' } });
 }
 
 function renderPlan() {
@@ -256,37 +227,33 @@ function renderPlan() {
   const tri = L.trianglePreview(p.positioningId, p.priceId);
   return shellGame(`
     <h2 class="kbox-title">企划 <span class="badge">Gen${state.generation}</span></h2>
-    <p class="tip">推荐：主流定位 · 性能+轻薄 · 中端价。</p>
-    <button type="button" class="primary choice" data-act="quick-plan" style="font-size:1.05rem">✓ 采用推荐企划，下一步</button>
+    <p class="tip">上方概念机随企划世代变化。推荐：主流 + 性能/轻薄 + 中端价。</p>
     ${gauge('体验预期', tri.experience)}
     ${gauge('成本压力', tri.costPressure, 'warn')}
-    <details style="margin-top:10px">
-      <summary>高级：自定义定位 / 卖点 / 售价</summary>
+    <details><summary>高级自定义</summary>
       <div class="grid2" style="margin-top:8px">
-        <div>${POSITIONING.map((x) => `<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
-        <div>${PRICE_BANDS.map((x) => `<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
+        <div>${POSITIONING.map((x)=>`<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
+        <div>${PRICE_BANDS.map((x)=>`<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
       </div>
-      <div class="chips" style="margin:8px 0">${SELL_POINTS.map((x)=>`<button type="button" class="chip ${p.pointIds.includes(x.id)?'on':''}" data-act="toggle-point" data-id="${x.id}">${x.name}</button>`).join('')}</div>
-      <label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco?'checked':''} ${state.generation===1?'disabled':''}/> 绑上代生态</label>
-      <button type="button" class="primary" data-act="confirm-plan">用当前自定义锁定</button>
+      <div class="row" style="margin:8px 0">${SELL_POINTS.map((x)=>`<button type="button" class="chip ${p.pointIds.includes(x.id)?'on':''}" data-act="toggle-point" data-id="${x.id}">${x.name}</button>`).join('')}</div>
+      <button type="button" data-act="confirm-plan">用自定义锁定</button>
     </details>
-  `);
+  `, { dock: { label: '✓ 采用推荐企划 ▶', act: 'quick-plan' } });
 }
 
 function renderLogistics() {
   return shellGame(`
-    <h2 class="kbox-title">供应链 + 备货 <span class="badge">一屏</span></h2>
-    <p class="tip">推荐：均衡供应商 + 正常备货。这是少数关键策略点之一。</p>
-    <button type="button" class="primary choice" data-act="quick-logistics" style="font-size:1.05rem">✓ 采用推荐组合，开始研发</button>
-    <details style="margin-top:12px">
-      <summary>高级：自选供应商 / 备货</summary>
-      <p style="margin:8px 0 4px"><strong>供应商</strong></p>
-      ${SUPPLIERS.map((s) => `<label class="radio"><input type="radio" name="sup" data-act="draft-sup" data-id="${s.id}" ${draft.supplierId===s.id?'checked':''}/> ${s.name}（${s.desc}）</label>`).join('')}
-      <p style="margin:8px 0 4px"><strong>备货</strong></p>
-      ${STOCK_OPTS.map((s) => `<label class="radio"><input type="radio" name="stk" data-act="draft-stk" data-id="${s.id}" ${draft.stockId===s.id?'checked':''}/> ${s.name} — ${s.note}</label>`).join('')}
-      <button type="button" class="primary" data-act="confirm-logistics" style="margin-top:8px">锁定并研发</button>
+    <h2 class="kbox-title">供应链 + 备货</h2>
+    <p class="tip">关键策略点：默认均衡+正常最省心。</p>
+    <div class="sup-grid">
+      ${SUPPLIERS.map((s) => `<div class="sup-card"><img src="${supplierIconDataUrl(s.id)}" alt=""/><div><strong>${s.name}</strong><div class="muted">${s.desc}</div></div></div>`).join('')}
+    </div>
+    <details style="margin-top:10px"><summary>高级自选</summary>
+      ${SUPPLIERS.map((s)=>`<label class="radio"><input type="radio" name="sup" data-act="draft-sup" data-id="${s.id}" ${draft.supplierId===s.id?'checked':''}/> ${s.name}</label>`).join('')}
+      ${STOCK_OPTS.map((s)=>`<label class="radio"><input type="radio" name="stk" data-act="draft-stk" data-id="${s.id}" ${draft.stockId===s.id?'checked':''}/> ${s.name}</label>`).join('')}
+      <button type="button" data-act="confirm-logistics">锁定自选</button>
     </details>
-  `);
+  `, { dock: { label: '✓ 推荐供应链，开始研发 ▶', act: 'quick-logistics' } });
 }
 
 function ensureAlloc() {
@@ -295,31 +262,25 @@ function ensureAlloc() {
 }
 
 function renderDev() {
-  const alloc = ensureAlloc();
-  const cap = L.manpowerCap(state);
-  const used = Object.values(alloc).reduce((a, b) => a + b, 0);
+  ensureAlloc();
   return shellGame(`
-    <h2 class="kbox-title">开发 <span class="badge">${used}/${cap} 点</span></h2>
-    <p class="tip">已自动「均衡分配」。连点推进即可；想偏科再展开微调。</p>
+    <h2 class="kbox-title">开发部屋 <span class="badge">看部件变强</span></h2>
+    <p class="tip">上方五部件图标与手机画面会跟着进度变。连点底部推进即可。</p>
     ${gauge('综合完成度', L.avgSlotProgress(state))}
-    <div class="row" style="margin:10px 0">
-      <button type="button" class="primary" data-act="advance-balanced" style="flex:1;font-size:1.05rem;padding:14px">⏱ 均衡推进半个月 ▶</button>
-    </div>
-    <button type="button" data-act="rebalance">重新一键均衡</button>
-    <details style="margin-top:10px">
-      <summary>高级：微调各槽投入</summary>
+    <details><summary>高级：微调投入 / 分派</summary>
       ${SLOTS.map((s) => {
         const sl = state.slots[s.id];
         return `<div class="slot-row">
-          <div class="top"><span>${s.name}</span><span>${sl.progress}%</span></div>
+          <div class="top"><span style="display:flex;align-items:center;gap:6px"><img src="${partIconDataUrl(s.id, sl.progress)}" alt=""/>${s.name}</span><span>${sl.progress}%</span></div>
           <div class="gauge-track"><div class="gauge-fill" style="width:${sl.progress}%"></div></div>
           <div class="quirk">${sl.comment}</div>
-          <label>点 <input type="number" min="0" max="${cap}" value="${alloc[s.id]||0}" data-act="alloc" data-id="${s.id}" style="width:64px"/></label>
+          <label>点 <input type="number" min="0" max="${L.manpowerCap(state)}" value="${draft.alloc[s.id]||0}" data-act="alloc" data-id="${s.id}"/></label>
         </div>`;
       }).join('')}
-      <button type="button" class="primary" data-act="advance-custom">用微调方案推进</button>
+      <button type="button" data-act="rebalance">重新均衡</button>
+      <button type="button" data-act="advance-custom">用微调推进</button>
     </details>
-  `);
+  `, { dock: { label: '⏱ 均衡推进半个月 ▶', act: 'advance-balanced' } });
 }
 
 function renderEvent() {
@@ -329,59 +290,55 @@ function renderEvent() {
     <h2 class="kbox-title">⚠ ${ev.type}</h2>
     <h3 style="margin:0 0 6px">${ev.title}</h3>
     <p>${ev.body}</p>
-    <button type="button" class="primary choice" data-act="event-auto" style="font-size:1.05rem">✓ 一键稳妥处理（${ev.choices[rec].label}）</button>
-    <details style="margin-top:10px">
-      <summary>自己选</summary>
-      ${ev.choices.map((c, i) => `<button type="button" class="choice" data-act="event-choice" data-i="${i}">${c.label}${i===rec?' · 推荐':''}</button>`).join('')}
+    <button type="button" class="choice big primary" data-act="event-auto">✓ 一键稳妥：${ev.choices[rec].label}</button>
+    <details><summary>自己选</summary>
+      ${ev.choices.map((c,i)=>`<button type="button" class="choice" data-act="event-choice" data-i="${i}">${c.label}</button>`).join('')}
     </details>
   `);
-  return shellGame(`<h2 class="kbox-title">办公室骚动中</h2><p class="lead">处理弹窗即可继续。</p>`, { modal });
+  return shellGame(`<h2 class="kbox-title">办公室警报</h2><p class="lead">先处理弹窗。</p>`, { modal, dock: null });
 }
 
 function renderLaunch() {
   const modal = modalWrap(`
-    <h2 class="kbox-title">发布会！ <span class="badge">三选一</span></h2>
-    <p class="sfx-slot">♪ 揭晓音效占位</p>
-    <p class="tip">关键抉择：稳妥 / 彩蛋 / 参数。点一下直接出媒体分。</p>
-    ${L.LAUNCH_STYLES.map((s) => `<button type="button" class="choice primary" data-act="launch-style" data-id="${s.id}" style="margin-bottom:8px;background:linear-gradient(180deg,#f5b041,#e67e22)">
-      <strong style="font-size:1.1rem">${s.label}</strong><br/><span>${s.desc}</span>
-    </button>`).join('')}
+    <h2 class="kbox-title">发布会 LIVE</h2>
+    <div style="text-align:center;margin:8px 0"><img src="${phoneShowcaseDataUrl(state.slots, state.generation)}" width="120" height="140" style="image-rendering:pixelated" alt="真机"/></div>
+    <p class="tip">看着成品登场——三选一策略直接出分。</p>
+    ${L.LAUNCH_STYLES.map((s) => `<button type="button" class="choice big primary" data-act="launch-style" data-id="${s.id}"><strong>${s.label}</strong><br/><span class="muted">${s.desc}</span></button>`).join('')}
   `);
-  return shellGame(`<h2 class="kbox-title">舞台灯光</h2><p class="lead">聚光灯已亮。</p>`, { modal });
+  return shellGame(`<h2 class="kbox-title">舞台准备中</h2>`, { modal, dock: null });
 }
 
 function renderScore() {
   const modal = modalWrap(`
-    <h2 class="kbox-title">媒体评分揭晓</h2>
+    <h2 class="kbox-title">媒体评分</h2>
+    <div style="text-align:center"><img src="${phoneShowcaseDataUrl(state.slots, state.generation)}" width="100" height="114" style="image-rendering:pixelated" alt=""/></div>
     <div class="reveal-score">${state.mediaScore}</div>
-    <p style="text-align:center">用户期待 <strong>${state.userScore}</strong></p>
+    <p style="text-align:center">用户期待 ${state.userScore}</p>
     <div class="headline">${state.headline}</div>
-    <button type="button" class="primary choice" data-act="to-sales">看首月销量 ▶</button>
   `);
-  return shellGame(`<h2 class="kbox-title">编辑部吵架中…</h2>`, { modal });
+  return shellGame(`<h2 class="kbox-title">等待打分</h2>`, {
+    modal,
+    dock: { label: '看首月销量 ▶', act: 'to-sales' },
+  });
 }
 
 function renderSales() {
   const r = state.salesResult;
   return shellGame(`
     <h2 class="kbox-title">首月战报</h2>
-    <div class="reveal-score" style="font-size:3rem">${r.sold}<span style="font-size:1rem"> 台</span></div>
+    <div style="text-align:center"><img src="${phoneShowcaseDataUrl(state.slots, state.generation)}" width="110" height="126" style="image-rendering:pixelated" alt=""/></div>
+    <div class="reveal-score" style="font-size:2.8rem">${r.sold}<span style="font-size:.9rem"> 台</span></div>
     ${gauge('备货消化', (r.sold / Math.max(1, r.stocked)) * 100)}
     <p>盈亏 <strong>${r.profit}</strong> · ${r.stockNote}</p>
-    <p>信仰 ${state.faith} · 口碑 ${state.reputation}</p>
-    <div class="row end">
-      <button type="button" data-act="restart">重开</button>
-      <button type="button" class="primary" data-act="next-gen">下一代 ▶</button>
-    </div>
-  `);
+    <button type="button" data-act="restart">重开</button>
+  `, { dock: { label: '规划下一代 ▶', act: 'next-gen' } });
 }
 
 function renderBust() {
   return shellGame(`
     <h2 class="kbox-title">倒闭了</h2>
     <p class="tip">${state.bustReason}</p>
-    <button type="button" class="primary" data-act="restart">再开一局</button>
-  `);
+  `, { dock: { label: '再开一局', act: 'restart' } });
 }
 
 export function render() {
@@ -431,7 +388,7 @@ function onClick(e) {
     draft.reduceMotion = !draft.reduceMotion;
     localStorage.setItem('epdg-reduce-motion', draft.reduceMotion ? '1' : '0');
     document.body.classList.toggle('reduce-motion', draft.reduceMotion);
-    toast(draft.reduceMotion ? '已减少动画' : '已开启短动画');
+    toast(draft.reduceMotion ? '已减少动画' : '短动画开');
     render();
     return;
   }
@@ -463,7 +420,6 @@ function onClick(e) {
     const name = (input?.value || draft.companyName).trim() || randomCompanyName();
     state = createNewGame(name);
     screen = 'game';
-    // 自动推荐班底，组队页仍可改
     L.quickHireTeam(state);
     persist();
     render();
@@ -472,16 +428,12 @@ function onClick(e) {
   }
   if (screen !== 'game' || !state) return;
 
-  if (act === 'hire') {
-    toast(L.hire(state, id).msg);
-    persist(); render(); return;
-  }
+  if (act === 'hire') { toast(L.hire(state, id).msg); persist(); render(); return; }
   if (act === 'quick-team') {
-    const r = L.quickHireTeam(state);
-    toast(r.msg);
+    toast(L.quickHireTeam(state).msg);
     state.phase = 'plan';
     draft.plan = L.recommendedPlan(state.generation);
-    flash('班底集结！');
+    flash('班底集结');
     persist(); render(); return;
   }
   if (act === 'to-plan') {
@@ -499,8 +451,7 @@ function onClick(e) {
   if (act === 'quick-plan' || act === 'confirm-plan') {
     if (act === 'quick-plan') draft.plan = L.recommendedPlan(state.generation);
     const res = L.finishPlan(state, draft.plan);
-    if (!res.ok) toast(res.msg);
-    else flash('企划决定！');
+    if (!res.ok) toast(res.msg); else flash('企划决定');
     persist(); render(); return;
   }
   if (act === 'quick-logistics') {
@@ -516,21 +467,19 @@ function onClick(e) {
   }
   if (act === 'rebalance') {
     draft.alloc = L.balancedAllocation(state);
-    toast('已重新均衡');
+    toast('已均衡');
     render(); return;
   }
   if (act === 'advance-balanced') {
     draft.alloc = L.balancedAllocation(state);
     const res = L.advanceMonth(state, { ...draft.alloc });
-    if (!res.ok) toast(res.msg);
-    else flash('半个月过去了…');
+    if (!res.ok) toast(res.msg); else flash('半个月过去了');
     draft.alloc = null;
     persist(); render(); return;
   }
   if (act === 'advance-custom') {
     const res = L.advanceMonth(state, { ...ensureAlloc() });
-    if (!res.ok) toast(res.msg);
-    else flash('半个月过去了…');
+    if (!res.ok) toast(res.msg); else flash('半个月过去了');
     draft.alloc = null;
     persist(); render(); return;
   }
@@ -544,7 +493,7 @@ function onClick(e) {
   }
   if (act === 'launch-style') {
     L.resolveLaunchStyle(state, id);
-    flash('发布会结束！');
+    flash('发布会结束');
     persist(); render(); return;
   }
   if (act === 'to-sales') {
@@ -553,7 +502,6 @@ function onClick(e) {
   }
   if (act === 'next-gen') {
     L.goNextGen(state);
-    // goNextGen sets plan phase - good
     draft.plan = L.recommendedPlan(state.generation);
     draft.alloc = null;
     flash(`第 ${state.generation} 代`);
@@ -573,21 +521,11 @@ function onChange(e) {
   if (!act || !state) return;
   if (act === 'assign') {
     L.assignStaff(state, t.dataset.id, t.value);
-    persist();
-    syncOffice(state);
-    render();
+    persist(); render();
   }
-  if (act === 'alloc') {
-    ensureAlloc()[t.dataset.id] = Math.max(0, Number(t.value) || 0);
-  }
-  if (act === 'plan-pos') {
-    draft.plan.positioningId = t.dataset.id;
-    render();
-  }
-  if (act === 'plan-price') {
-    draft.plan.priceId = t.dataset.id;
-    render();
-  }
+  if (act === 'alloc') ensureAlloc()[t.dataset.id] = Math.max(0, Number(t.value) || 0);
+  if (act === 'plan-pos') { draft.plan.positioningId = t.dataset.id; render(); }
+  if (act === 'plan-price') { draft.plan.priceId = t.dataset.id; render(); }
   if (act === 'bind-eco') draft.plan.bindEco = t.checked;
   if (act === 'draft-sup') draft.supplierId = t.dataset.id;
   if (act === 'draft-stk') draft.stockId = t.dataset.id;
@@ -599,6 +537,6 @@ export function boot() {
     app().addEventListener('change', onChange);
     bound = true;
   }
-  // 有存档时标题页突出继续
+  document.body.classList.toggle('reduce-motion', draft.reduceMotion);
   render();
 }
