@@ -15,10 +15,19 @@ import {
   slotCaps,
   sellPointChecks,
   appearanceScore,
-  randomTrend,
   paletteName,
   danmaku,
   tier,
+  CONCEPTS,
+  MAX_CONCEPTS,
+  COMBOS,
+  RIVALS,
+  wow,
+  wowGrade,
+  marketMemory,
+  marketNews,
+  conceptName,
+  hasC,
 } from './parts.js';
 import { sfx } from './sfx.js';
 
@@ -42,9 +51,10 @@ function writeJSON(key, v) {
   }
 }
 
-const trend = randomTrend();
 let design = { ...defaultDesign(), ...readJSON(DRAFT_KEY, {}) };
 design.parts = { ...defaultDesign().parts, ...(design.parts || {}) };
+design.concepts ||= [];
+design.redesign ||= 'major';
 let museum = readJSON(MUSEUM_KEY, []);
 let tab = 'config';
 let stage = null;
@@ -59,6 +69,19 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 function prevGen() {
   return museum.length ? museum[museum.length - 1].design : null;
 }
+const minor = () => design.redesign === 'minor' && !!prevGen();
+const lockAttr = () => (minor() ? 'disabled title="小改款不能改，切到大改款解锁"' : '');
+
+/** 小改款：形体与概念件锁定为上一代 */
+function applyMinorLock() {
+  const p = prevGen();
+  if (!p || design.redesign !== 'minor') return;
+  design.parts.size = p.parts.size;
+  design.corner = p.corner;
+  design.screenForm = p.screenForm;
+  design.layout = p.layout;
+  design.concepts = [...(p.concepts || [])];
+}
 
 // ═════════════════════════ 面板 ═════════════════════════
 
@@ -71,7 +94,7 @@ function configTab() {
     const btns = P.tiers
       .map(
         (t) =>
-          `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}">${esc(t.label)}</button>`,
+          `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}" ${key === 'size' ? lockAttr() : ''}>${esc(t.label)}</button>`,
       )
       .join('');
     return `<div class="part-row"><span class="part-name">${P.name}</span><div class="tiers">${btns}</div></div>
@@ -82,19 +105,17 @@ function configTab() {
 }
 
 function appearanceTab() {
-  const opt = (list, cur, attr) =>
-    list.map((o) => `<button type="button" class="chip ${cur === o.id ? 'on' : ''}" data-${attr}="${o.id}">${o.label}</button>`).join('');
+  const opt = (list, cur, attr, lock = false) =>
+    list.map((o) => `<button type="button" class="chip ${cur === o.id ? 'on' : ''}" data-${attr}="${o.id}" ${lock ? lockAttr() : ''}>${o.label}</button>`).join('');
   const swatches = (cur, attr) =>
     PALETTE.map(
-      (c) =>
-        `<button type="button" class="swatch ${cur.toLowerCase() === c.hex ? 'on' : ''} ${c.hex === trend.color ? 'trend' : ''}" style="--c:${c.hex}" data-${attr}="${c.hex}" title="${c.name}${c.hex === trend.color ? '（今年流行）' : ''}"></button>`,
+      (c) => `<button type="button" class="swatch ${cur.toLowerCase() === c.hex ? 'on' : ''}" style="--c:${c.hex}" data-${attr}="${c.hex}" title="${c.name}"></button>`,
     ).join('');
   return `
-    <div class="field"><span class="flabel">圆角</span><div class="chips">${opt(CORNERS, design.corner, 'corner')}</div></div>
-    <div class="field"><span class="flabel">屏幕</span><div class="chips">${opt(SCREEN_FORMS, design.screenForm, 'form')}</div></div>
-    <div class="field"><span class="flabel">镜头布局</span><div class="chips">${LAYOUTS.map(
-      (o) => `<button type="button" class="chip ${design.layout === o.id ? 'on' : ''} ${o.id === trend.layout ? 'trend' : ''}" data-layout="${o.id}">${o.label}${o.id === trend.layout ? ' 🔥' : ''}</button>`,
-    ).join('')}</div></div>
+    <p class="hint">🎨 配色、命名、布局样式<b>不计分</b>——想怎么表达就怎么表达</p>
+    <div class="field"><span class="flabel">圆角</span><div class="chips">${opt(CORNERS, design.corner, 'corner', true)}</div></div>
+    <div class="field"><span class="flabel">屏幕</span><div class="chips">${opt(SCREEN_FORMS, design.screenForm, 'form', true)}</div></div>
+    <div class="field"><span class="flabel">镜头布局</span><div class="chips">${opt(LAYOUTS, design.layout, 'layout', true)}</div></div>
     <div class="field"><span class="flabel">主色 · ${esc(paletteName(design.color))}</span>
       <div class="swatches">${swatches(design.color, 'color')}<label class="swatch custom" title="自定义主色"><input type="color" value="${design.color}" data-custom="color" />＋</label></div></div>
     <div class="field"><span class="flabel">拼色</span><div class="chips">${opt(TWO_TONE, design.twoTone, 'tone')}</div></div>
@@ -109,11 +130,62 @@ function appearanceTab() {
     </div>`;
 }
 
+function innovationTab() {
+  const mem = marketMemory(museum);
+  const sel = design.concepts;
+  const status = (id) => {
+    const m = mem[id];
+    if (!m) return ['first', '🏆 可首发'];
+    if (m.first >= 0 && m.rivals === 0) return ['mine', '你的独家'];
+    if (m.rivals === 1) return ['one', `${m.seed ? RIVALS.find((r) => r.concepts.includes(id))?.brand || '1 家' : m.copiedBy[0]} 在做`];
+    return ['crowd', '烂大街'];
+  };
+  const cards = CONCEPTS.map((c) => {
+    const on = sel.includes(c.id);
+    const conflict = !on && sel.some((x) => c.conflicts.includes(x) || CONCEPTS.find((y) => y.id === x)?.conflicts.includes(c.id));
+    const full = !on && sel.length >= MAX_CONCEPTS;
+    const why = minor() ? '小改款不能改概念件' : conflict ? `与「${conceptName(sel.find((x) => c.conflicts.includes(x) || CONCEPTS.find((y) => y.id === x)?.conflicts.includes(c.id)))}」互斥` : full ? `每代最多 ${MAX_CONCEPTS} 个` : '';
+    const [cls, label] = status(c.id);
+    const fx = [
+      c.thick ? `厚 +${c.thick}` : '',
+      c.weight ? `重 +${c.weight}g` : '',
+      `成本 +${c.cost * 70}`,
+      ...Object.entries(c.caps).map(([k, v]) => `${{ design: '外观', camera: '影像', battery: '续航' }[k]} ${v > 0 ? '+' : ''}${v}`),
+    ].filter(Boolean);
+    return `<button type="button" class="concept ${on ? 'on' : ''}" data-concept="${c.id}" ${minor() || conflict || full ? 'disabled' : ''} title="${esc(why)}">
+      <span class="c-icon">${c.icon}</span>
+      <span class="c-main"><b>${c.name}</b><small>${esc(c.desc)}</small><i>${fx.join(' · ')}</i></span>
+      <span class="c-tag t-${cls}">${label}</span>
+    </button>`;
+  }).join('');
+  const known = COMBOS.filter((c) => mem[c.id]);
+  return `<p class="hint">💡 新颖度看<b>市场有没有见过</b>：首发最值钱，被竞品跟进后就会贬值。每代最多 ${MAX_CONCEPTS} 个。</p>
+    <div class="concepts">${cards}</div>
+    <h3 class="sub">品类组合 <small>不寻常的配置组合也算创新 · 已知 ${known.length}/${COMBOS.length}</small></h3>
+    <div class="combos">${
+      known.map((c) => `<span class="combo ${mem[c.id].first >= 0 && mem[c.id].rivals === 0 ? 'mine' : ''}">${c.name}${mem[c.id].first >= 0 ? ' · 你首创' : ' · 竞品在做'}</span>`).join('') ||
+      '<span class="muted">还没人发现。试试小尺寸 + 旗舰芯片这类「不该这么配」的组合？</span>'
+    }${COMBOS.length - known.length ? `<span class="combo unknown">？×${COMBOS.length - known.length}</span>` : ''}</div>`;
+}
+
+function redesignBar() {
+  const p = prevGen();
+  const m = design.redesign === 'major' || !p;
+  return `<div class="redesign">
+    <span class="flabel">本代</span>
+    <button type="button" class="chip ${m ? 'on' : ''}" data-redesign="major">${p ? '大改款' : '新品首发'}</button>
+    <button type="button" class="chip ${!m ? 'on' : ''}" data-redesign="minor" ${p ? '' : 'disabled title="首代必须是新品"'}>小改款</button>
+    <small>${m ? (p ? '开放全部创作 · 模具费 ¥120 万 · 工期 +1 月' : '第一代：全部可改') : '只改配色和部件 · 快、稳、完成度高'}</small>
+  </div>`;
+}
+
 function readouts() {
   const p = physical(design);
   const caps = slotCaps(design);
   const checks = sellPointChecks(design);
-  const ap = appearanceScore(design, trend, prevGen());
+  const ap = appearanceScore(design, null, prevGen());
+  const W = wow(design, museum);
+  const g = wowGrade(W.score);
   const gauge = (c) => `<div class="gauge mini"><div class="gauge-label"><span>${c.name}</span><span>上限 <b data-num="cap-${c.id}" data-v="${c.cap}">${c.cap}</b></span></div>
     <div class="gauge-track"><div class="gauge-fill ${c.cap < 60 ? 'hot' : c.cap < 80 ? 'warn' : ''}" style="width:${c.cap}%"></div></div></div>`;
   return `
@@ -129,8 +201,16 @@ function readouts() {
     <div class="checks">${checks
       .map((c) => `<span class="check ${c.ok ? 'ok' : 'no'}" title="${esc(c.why)}">${c.ok ? '✓' : '✗'} ${c.name}</span>`)
       .join('')}</div>
-    <h3 class="sub">外观分 <b class="ap-score" data-num="ap" data-v="${ap.score}">${ap.score}</b></h3>
-    <ul class="ap-items">${ap.items.map((i) => `<li><span>${esc(i.label)}</span><b class="${i.v >= 0 ? 'pos' : 'neg'}">${i.v >= 0 ? '+' : ''}${i.v}</b></li>`).join('')}</ul>
+    <h3 class="sub">惊艳度 <b class="ap-score" data-num="wow" data-v="${W.score}">${W.score}</b><em class="grade-mini g-${g}">${g}</em><small>= 新颖度 × 完成度</small></h3>
+    <div class="wow-bars">
+      <div class="gauge mini"><div class="gauge-label"><span>新颖度</span><span><b data-num="nov" data-v="${W.novelty.score}">${W.novelty.score}</b></span></div>
+        <div class="gauge-track"><div class="gauge-fill nov" style="width:${W.novelty.score}%"></div></div></div>
+      <div class="gauge mini"><div class="gauge-label"><span>完成度（预估）</span><span><b data-num="comp" data-v="${W.completeness.score}">${W.completeness.score}</b>%</span></div>
+        <div class="gauge-track"><div class="gauge-fill ${W.completeness.score < 80 ? 'warn' : ''}" style="width:${W.completeness.score}%"></div></div></div>
+    </div>
+    <p class="headline">📰 ${esc(W.headline)}</p>
+    <ul class="ap-items">${W.novelty.items.map((i) => `<li><span>${i.first ? '🏆 ' : ''}${esc(i.label)}</span><b class="${i.v >= 0 ? 'pos' : 'neg'}">${i.v >= 0 ? '+' : ''}${i.v}</b></li>`).join('')}
+      ${W.completeness.items.filter((i) => i.v).map((i) => `<li class="comp"><span>🔧 ${esc(i.label)}</span><b class="neg">${i.v}%</b></li>`).join('')}</ul>
     ${ap.tags.length ? `<p class="tags">${ap.tags.map((t) => `<span>${esc(t)}</span>`).join('')}</p>` : ''}`;
 }
 
@@ -142,14 +222,30 @@ function museumStrip() {
         <span class="gen">Gen ${i + 1}</span>
         ${m.thumb ? `<img src="${m.thumb}" alt="${esc(m.design.modelName)}" />` : '<div class="noimg">📱</div>'}
         <span class="ename">${esc(m.design.modelName || '无名机')}</span>
-        <span class="escore">外观 ${m.score}</span>
+        <span class="escore">惊艳 ${m.wow ?? m.score} ${m.grade || ''} · ${m.design.redesign === 'minor' ? '小改' : '大改'}</span>
+        ${(m.firsts || []).map((f) => `<span class="efirst" title="首创">🏆${esc(f)}${copiedTxt(f)}</span>`).join('')}
       </button>`,
     )
     .join('');
 }
 
+function copiedTxt(name) {
+  const mem = marketMemory(museum);
+  const id = [...CONCEPTS, ...COMBOS].find((c) => c.name === name)?.id;
+  const n = id && mem[id] ? mem[id].copiedBy.length : 0;
+  return n ? ` ·被${n}家跟进` : '';
+}
+
+function renderNews() {
+  const n = marketNews(museum);
+  $('#news').innerHTML = `<span class="news-tag">行业快讯</span> 竞品扎堆：<b>${n.crowded.join(' · ')}</b>${
+    n.copied.length ? `<span class="news-copy">📣 ${esc(n.copied[n.copied.length - 1])}</span>` : ''
+  }`;
+}
+
 function renderPanel() {
-  $('#tab-body').innerHTML = tab === 'config' ? configTab() : appearanceTab();
+  $('#redesign').innerHTML = redesignBar();
+  $('#tab-body').innerHTML = tab === 'config' ? configTab() : tab === 'innov' ? innovationTab() : appearanceTab();
   document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   renderReadouts();
 }
@@ -323,6 +419,14 @@ function randomize() {
   design.corner = pick(CORNERS).id;
   design.screenForm = pick(SCREEN_FORMS).id;
   design.layout = pick(LAYOUTS).id;
+  design.concepts = [];
+  const want = Math.floor(Math.random() * 3);
+  for (const c of [...CONCEPTS].sort(() => Math.random() - 0.5)) {
+    if (design.concepts.length >= want) break;
+    if (design.concepts.some((x) => c.conflicts.includes(x) || CONCEPTS.find((y) => y.id === x).conflicts.includes(c.id))) continue;
+    design.concepts.push(c.id);
+  }
+  applyMinorLock();
   design.color = pick(PALETTE).hex;
   design.color2 = pick(PALETTE).hex;
   design.twoTone = Math.random() < 0.6 ? 'none' : pick(TWO_TONE).id;
@@ -341,7 +445,7 @@ function recommend() {
 function inherit() {
   const prev = prevGen();
   if (!prev) return;
-  design = { ...structuredClone(prev), modelName: bumpName(prev.modelName, museum.length + 1) };
+  design = { ...structuredClone(prev), redesign: 'minor', modelName: bumpName(prev.modelName, museum.length + 1) };
   sfx.keep();
   update({ panel: true });
   toast('已沿用上代设计，微调一下就能发');
@@ -355,12 +459,17 @@ function bumpName(name, n) {
 
 function addToMuseum() {
   const thumb = stage ? stage.snapshot(140) : '';
-  const score = appearanceScore(design, trend, prevGen()).score;
-  museum.push({ design: structuredClone(design), score, thumb, at: Date.now() });
+  const W = wow(design, museum);
+  museum.push({ design: structuredClone(design), wow: W.score, grade: wowGrade(W.score), firsts: W.firsts, thumb, at: Date.now() });
   if (museum.length > 12) museum = museum.slice(-12);
   writeJSON(MUSEUM_KEY, museum);
+  // 入馆后默认进入下一代的小改款
+  design = { ...structuredClone(design), redesign: 'minor', modelName: bumpName(design.modelName, museum.length + 1) };
+  writeJSON(DRAFT_KEY, design);
   renderMuseum();
-  renderReadouts();
+  renderNews();
+  renderPanel();
+  renderPlaque();
   sfx.keep();
   const last = $('#museum .exhibit:last-child');
   last?.classList.add('new');
@@ -383,11 +492,14 @@ function launch() {
   overlay.innerHTML = '';
   overlay.className = 'reveal on';
   document.body.classList.add('revealing');
-  const lines = danmaku(design, trend);
-  const ap = appearanceScore(design, trend, prevGen());
+  const lines = danmaku(design, null);
+  const W = wow(design, museum);
+  const quick = museum.length > 0 && !W.firsts.length && !['S', 'A'].includes(wowGrade(W.score));
+  overlay.innerHTML = '<button type="button" class="skip" data-act="skip">跳过 ▶▶</button>';
   stage.playReveal(design, {
+    quick,
     onBeat(beat) {
-      if (beat === 'drumroll') sfx.drumroll(3.0);
+      if (beat === 'drumroll') sfx.drumroll(quick ? 1.1 : 3.0);
       else if (beat === 'boom') {
         sfx.boom();
         sfx.fanfare(0.12);
@@ -398,22 +510,25 @@ function launch() {
         void vp.offsetWidth;
         vp.classList.add('shake');
       } else if (beat === 'shutter') sfx.shutter();
-      else if (beat === 'done') showCard(ap);
+      else if (beat === 'done') showCard(W);
     },
   });
 }
 
-function showCard(ap) {
+function showCard(W) {
   const overlay = $('#reveal');
   const p = physical(design);
-  const grade = ap.score >= 85 ? 'S' : ap.score >= 70 ? 'A' : ap.score >= 55 ? 'B' : 'C';
+  const grade = wowGrade(W.score);
   overlay.innerHTML = `<div class="reveal-card kbox">
-      <div class="rc-kicker">${esc(design.company)} 发布会</div>
+      <div class="rc-kicker">${esc(design.company)} 发布会 · ${design.redesign === 'minor' ? '小改款' : prevGen() ? '大改款' : '新品首发'}</div>
       <div class="rc-name">${esc(design.modelName || '无名机')}</div>
-      <div class="rc-score"><span>外观分</span><b id="rc-num">0</b><em class="grade g-${grade}">${grade}</em></div>
-      <div class="rc-sub">${esc(paletteName(design.color))} · ${esc(tier(design, 'material').label)} · ${p.thickness}mm · ${p.weight}g · 跑分 ${p.bench.toLocaleString('en-US')}</div>
-      <div class="row" style="justify-content:center;margin-top:10px">
-        <button type="button" class="primary" data-act="keep">🏛 放进机型馆</button>
+      <div class="rc-score"><span>惊艳度</span><b id="rc-num">0</b><em class="grade g-${grade}">${grade}</em></div>
+      <div class="rc-two"><span>新颖 <b>${W.novelty.score}</b></span><span>完成 <b>${W.completeness.score}%</b></span></div>
+      <div class="rc-head">${esc(W.headline)}</div>
+      ${W.firsts.length ? `<div class="rc-firsts">${W.firsts.map((f) => `<span>🏆 首发 ${esc(f)}</span>`).join('')}</div>` : ''}
+      <div class="rc-sub">${esc(tier(design, 'material').label)} · ${p.thickness}mm · ${p.weight}g · 跑分 ${p.bench.toLocaleString('en-US')}</div>
+      <div class="row" style="justify-content:center;margin-top:8px">
+        <button type="button" class="primary" data-act="keep">🏛 入馆，做下一代</button>
         <button type="button" data-act="close-reveal">再改改</button>
       </div>
     </div>`;
@@ -421,14 +536,14 @@ function showCard(ap) {
   const t0 = performance.now();
   const step = (now) => {
     const k = Math.min(1, (now - t0) / 700);
-    num.textContent = Math.round(ap.score * (1 - Math.pow(1 - k, 3)));
+    num.textContent = Math.round(W.score * (1 - Math.pow(1 - k, 3)));
     if (k < 1) {
       if (Math.random() < 0.3) sfx.click();
       requestAnimationFrame(step);
     }
   };
   requestAnimationFrame(step);
-  confetti(overlay);
+  if (W.firsts.length || grade === 'S') confetti(overlay);
   revealing = false;
 }
 
@@ -481,7 +596,7 @@ function shell() {
   <header class="studio-head kbox">
     <a class="back" href="${import.meta.env.VITE_GAME_HREF || './index.html'}">← 回游戏</a>
     <h1>外观台 <span class="badge">Demo</span></h1>
-    <div class="news"><span class="news-tag">年度新闻</span> 今年流行 <b class="news-dot" style="background:${trend.color}"></b><b>${trend.colorName}</b> · <b>${trend.layoutName}</b></div>
+    <div class="news" id="news"></div>
     <button type="button" class="mute" data-act="mute" title="音效">${sfx.muted ? '🔇' : '🔊'}</button>
   </header>
   <div class="studio">
@@ -503,9 +618,11 @@ function shell() {
       <div id="plaque" class="plaque"></div>
     </section>
     <aside class="panel kbox">
+      <div id="redesign"></div>
       <div class="tabs">
-        <button type="button" class="tab" data-tab="config">🔧 配置台</button>
-        <button type="button" class="tab" data-tab="look">🎨 外观台</button>
+        <button type="button" class="tab" data-tab="config">🔧 配置</button>
+        <button type="button" class="tab" data-tab="innov">💡 创新</button>
+        <button type="button" class="tab" data-tab="look">🎨 外观</button>
       </div>
       <div id="tab-body"></div>
       <div class="row actions">
@@ -531,7 +648,22 @@ function bind() {
     const t = e.target.closest('button');
     if (!t) return;
     const d = t.dataset;
-    if (d.tab) {
+    if (d.redesign) {
+      if (t.disabled) return;
+      sfx.part(d.redesign === 'major' ? 2 : 0);
+      design.redesign = d.redesign;
+      applyMinorLock();
+      update({ panel: true });
+      toast(d.redesign === 'major' ? '大改款：全部开放，新颖度窗口打开' : '小改款：形体和概念件锁定为上一代');
+    } else if (d.concept) {
+      const id = d.concept;
+      const i = design.concepts.indexOf(id);
+      if (i >= 0) design.concepts.splice(i, 1);
+      else design.concepts.push(id);
+      sfx.part(i >= 0 ? 0 : 2);
+      update({ panel: true });
+      if (!exploded) stage?.view(['keyboard'].includes(id) ? 'front' : ['shutter', 'sat'].includes(id) ? 'hero' : 'back');
+    } else if (d.tab) {
       sfx.click();
       tab = d.tab;
       renderPanel();
@@ -600,6 +732,7 @@ function bind() {
       else if (act === 'recommend') recommend();
       else if (act === 'inherit') inherit();
       else if (act === 'launch') launch();
+      else if (act === 'skip') stage?.skipReveal();
       else if (act === 'explode') setExploded(!exploded);
       else if (act === 'mute') {
         sfx.setMuted(!sfx.muted);
@@ -629,8 +762,10 @@ function bind() {
         }
         museum = [];
         writeJSON(MUSEUM_KEY, museum);
+        design.redesign = 'major';
         renderMuseum();
-        renderReadouts();
+        renderNews();
+        renderPanel();
         t.dataset.armed = '';
         t.textContent = '清空';
       }
@@ -668,8 +803,10 @@ async function boot() {
   if (!readJSON(DRAFT_KEY, null)) design.company = COMPANIES[Math.floor(Math.random() * COMPANIES.length)];
   shell();
   bind();
+  applyMinorLock();
   renderPanel();
   renderMuseum();
+  renderNews();
   renderPlaque();
   try {
     const { PhoneStage } = await import('./phone3d.js'); // three.js 按需加载

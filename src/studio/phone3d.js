@@ -487,16 +487,44 @@ export function buildPhone(design) {
   });
   glassGeo.translate(0, 0, -0.45);
   front.add(new THREE.Mesh(glassGeo, new THREE.MeshPhysicalMaterial({ color: 0x08090d, roughness: 0.06, clearcoat: 1, envMapIntensity: 1.3 })));
+  const C = new Set(design.concepts || []);
+  const anim = [];
   const bez = form.bezel;
   const topExtra = form.id === 'bezel' ? 6 : 0;
   const dispW = capW - 2 * bez;
-  const dispH = capH - 2 * bez - topExtra * 2;
+  const fullH = capH - 2 * bez - topExtra * 2;
+  const kbH = C.has('keyboard') ? fullH * 0.4 : 0;
+  const dispH = fullH - kbH;
   const dispGeo = new THREE.ShapeGeometry(roundedRectShape(dispW, dispH, Math.max(0.5, capR - bez)), 24);
   const uv = dispGeo.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / dispW + 0.5, uv.getY(i) / dispH + 0.5);
   const display = new THREE.Mesh(dispGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture(design.color), toneMapped: false }));
-  display.position.z = 0.17;
+  display.position.set(0, kbH / 2, 0.17);
   front.add(display);
+  if (kbH) {
+    // 实体键盘：4 行 × 10 列
+    const keyMat = new THREE.MeshStandardMaterial({ color: 0x2b2c33, roughness: 0.5 });
+    const keyTop = new THREE.MeshStandardMaterial({ color: 0x3a3c45, roughness: 0.4 });
+    const accent = new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.4 });
+    const rows = 4;
+    const cols = 10;
+    const pad = 1.2;
+    const kw = (dispW - pad * 2) / cols;
+    const kh = (kbH - pad * 3) / rows;
+    const y0 = -fullH / 2 + kbH - pad;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const wide = r === 3 && c >= 3 && c <= 6;
+        if (r === 3 && c > 3 && c <= 6) continue;
+        const k = new THREE.Mesh(new THREE.BoxGeometry(wide ? kw * 4 - 0.8 : kw - 0.8, kh - 0.8, 0.7), [
+          keyMat, keyMat, keyMat, keyMat, (r === 2 && c === 9) ? accent : keyTop, keyMat,
+        ]);
+        const cx = -dispW / 2 + pad + kw * (wide ? c + 2 : c + 0.5);
+        k.position.set(cx, y0 - kh * (r + 0.5), 0.45);
+        front.add(k);
+      }
+    }
+  }
   anchors.screen = new THREE.Object3D();
   anchors.screen.position.set(-dispW * 0.28, dispH * 0.2, 0.2);
   front.add(anchors.screen);
@@ -504,13 +532,13 @@ export function buildPhone(design) {
     new THREE.PlaneGeometry(dispW, dispH),
     new THREE.MeshBasicMaterial({ map: glareTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
-  glare.position.z = 0.2;
+  glare.position.set(0, kbH / 2, 0.2);
   glare.layers.set(FX);
   front.add(glare);
   const holeMat = new THREE.MeshBasicMaterial({ color: 0x030304 });
   if (form.id === 'punch' || form.id === 'center') {
     const hc = new THREE.Mesh(new THREE.CircleGeometry(1.7, 16), holeMat);
-    hc.position.set(form.id === 'punch' ? -dispW / 2 + 5.5 : 0, dispH / 2 - 5, 0.22);
+    hc.position.set(form.id === 'punch' ? -dispW / 2 + 5.5 : 0, dispH / 2 + kbH / 2 - 5, 0.22);
     front.add(hc);
   }
   if (form.id === 'bezel') {
@@ -535,7 +563,23 @@ export function buildPhone(design) {
     curveSegments: 20,
   });
   plateGeo.translate(0, 0, -0.55);
-  back.add(new THREE.Mesh(plateGeo, bodyMaterial(matId, backHex)));
+  if (C.has('clear')) {
+    const clearMat = new THREE.MeshPhysicalMaterial({
+      color: shade(backHex, 0.25),
+      transparent: true,
+      opacity: 0.3,
+      roughness: 0.05,
+      clearcoat: 1,
+      depthWrite: false,
+      envMapIntensity: 1.4,
+    });
+    const plate = new THREE.Mesh(plateGeo, clearMat);
+    plate.layers.set(FX);
+    plate.renderOrder = 2;
+    back.add(plate);
+  } else {
+    back.add(new THREE.Mesh(plateGeo, bodyMaterial(matId, backHex)));
+  }
   anchors.back = new THREE.Object3D();
   anchors.back.position.set(-w * 0.2, -h * 0.2, 0.2);
   back.add(anchors.back);
@@ -644,6 +688,121 @@ export function buildPhone(design) {
     back.add(fl);
   }
 
+  // —— 背面概念件 ——
+  if (C.has('subscreen')) {
+    const sw = Math.min(36, w * 0.52);
+    const sh = 22;
+    const sy = h / 2 - 58;
+    const glassS = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(roundedRectShape(sw + 2, sh + 2, 3), { depth: 0.3, bevelEnabled: true, bevelThickness: 0.15, bevelSize: 0.15, bevelSegments: 1 }),
+      new THREE.MeshPhysicalMaterial({ color: 0x07080b, roughness: 0.05, clearcoat: 1 }),
+    );
+    glassS.position.set(0, sy, 0.05);
+    back.add(glassS);
+    const scr = new THREE.Mesh(
+      new THREE.PlaneGeometry(sw, sh),
+      new THREE.MeshBasicMaterial({
+        map: canvasTex(72, 44, (g, cw, ch) => {
+          g.fillStyle = '#0b1020';
+          g.fillRect(0, 0, cw, ch);
+          g.fillStyle = shade(design.color, 0.2).getStyle();
+          g.fillRect(0, 0, cw, 4);
+          g.fillStyle = '#fff';
+          g.font = 'bold 15px monospace';
+          g.textAlign = 'center';
+          g.fillText('10:24', cw / 2, 24);
+          g.fillStyle = '#ff7675';
+          g.fillText('♥', 12, 38);
+          g.fillStyle = '#9aa0ab';
+          g.font = '8px monospace';
+          g.fillText('3 条新消息', cw / 2 + 6, 37);
+        }, { nearest: true }),
+        toneMapped: false,
+      }),
+    );
+    scr.position.set(0, sy, 0.5);
+    back.add(scr);
+  }
+  if (C.has('eink')) {
+    const ew = capW - 8;
+    const eh = capH * 0.56;
+    const ey = -capH / 2 + eh / 2 + 6;
+    const panel = new THREE.Mesh(
+      new THREE.PlaneGeometry(ew, eh),
+      new THREE.MeshStandardMaterial({
+        roughness: 0.9,
+        map: canvasTex(96, 128, (g, cw, ch) => {
+          g.fillStyle = '#d9d7cc';
+          g.fillRect(0, 0, cw, ch);
+          g.fillStyle = '#2b2b2b';
+          g.font = 'bold 40px "ZCOOL KuaiLe",sans-serif';
+          g.textAlign = 'center';
+          g.fillText((design.company || '?').slice(0, 1), cw / 2, 56);
+          g.font = 'bold 11px monospace';
+          g.fillText('今日 23° 晴', cw / 2, 82);
+          for (let y = 92; y < ch - 8; y += 4) {
+            for (let x = 8 + ((y / 4) % 2) * 2; x < cw - 8; x += 4) if (Math.random() < 0.35) g.fillRect(x, y, 2, 2);
+          }
+        }, { nearest: true }),
+      }),
+    );
+    panel.position.set(0, ey, 0.16);
+    back.add(panel);
+  }
+  if (C.has('lights')) {
+    const ring = roundedRectShape(capW - 5, capH - 5, Math.max(1, capR - 2.5));
+    ring.holes.push(new THREE.Path(roundedRectShape(capW - 7.4, capH - 7.4, Math.max(1, capR - 3.7)).getPoints(20).reverse()));
+    const lm = new THREE.MeshBasicMaterial({ color: 0x33e0d0, toneMapped: false });
+    const lightRing = new THREE.Mesh(new THREE.ShapeGeometry(ring, 20), lm);
+    lightRing.position.z = 0.2;
+    back.add(lightRing);
+    const bar = new THREE.Mesh(new THREE.PlaneGeometry(2.2, capH * 0.32), lm);
+    bar.position.set(w * 0.22, -h * 0.12, 0.2);
+    back.add(bar);
+    anim.push((now) => lm.color.setHSL((now * 0.00012) % 1, 0.85, 0.6));
+  }
+  if (C.has('fan')) {
+    const fy = -h * 0.14;
+    const R = Math.min(13, w * 0.18);
+    const grill = new THREE.Mesh(new THREE.RingGeometry(R - 1.8, R, 32), new THREE.MeshStandardMaterial({ color: 0x2a2c33, metalness: 0.6, roughness: 0.35 }));
+    grill.position.set(0, fy, 0.25);
+    const well = new THREE.Mesh(new THREE.CircleGeometry(R - 1.8, 32), new THREE.MeshBasicMaterial({ color: 0x0b0b0e }));
+    well.position.set(0, fy, 0.2);
+    back.add(grill, well);
+    const rotor = new THREE.Group();
+    rotor.position.set(0, fy, 0.35);
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0x9aa0ab, metalness: 0.5, roughness: 0.4 });
+    for (let i = 0; i < 7; i++) {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(R * 0.72, 2.4, 0.3), bladeMat);
+      blade.position.x = R * 0.42;
+      const holder = new THREE.Group();
+      holder.rotation.z = (i / 7) * Math.PI * 2;
+      blade.rotation.x = 0.4;
+      holder.add(blade);
+      rotor.add(holder);
+    }
+    const hub = new THREE.Mesh(new THREE.CircleGeometry(R * 0.28, 20), new THREE.MeshBasicMaterial({ color: 0xe67e22 }));
+    hub.position.z = 0.3;
+    rotor.add(hub);
+    back.add(rotor);
+    const spin = design.parts.chip === 2 ? 0.02 : 0.004;
+    anim.push((now) => (rotor.rotation.z = now * spin));
+  }
+  if (C.has('shutter')) {
+    const sb = new THREE.Mesh(new THREE.BoxGeometry(1.6, 9, Math.min(3.2, t * 0.42)), new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.35, metalness: 0.3 }));
+    sb.position.set(w / 2 + 0.45, -h * 0.28, 0);
+    layers.frame.add(sb);
+  }
+  if (C.has('sat')) {
+    const antMat2 = new THREE.MeshStandardMaterial({ color: 0x3a3d46, metalness: 0.5, roughness: 0.4 });
+    const stub = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 20, 12), antMat2);
+    stub.position.set(-w / 2 + 6, h / 2 + 8, -t * 0.1);
+    stub.rotation.z = 0.35;
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 8), new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.4 }));
+    tip.position.set(-w / 2 + 2.6, h / 2 + 17.5, -t * 0.1);
+    layers.frame.add(stub, tip);
+  }
+
   // —— 内部元件（拆解时可见）——
   const inner = layers.inner;
   const iw = holeW - 2 * b - 1.5;
@@ -734,7 +893,7 @@ export function buildPhone(design) {
   root.traverse((o) => {
     if (o.isMesh) o.castShadow = true;
   });
-  return { root, layers, anchors, dims: { w, h, t } };
+  return { root, layers, anchors, anim, dims: { w, h, t } };
 }
 
 export function disposeObject(obj) {
@@ -1226,14 +1385,22 @@ export class PhoneStage {
   }
 
   /** 发布会时间线（约 5 秒） */
-  playReveal(design, { onBeat } = {}) {
+  playReveal(design, { onBeat, quick = false } = {}) {
     this.explodeTarget = 0;
     this.explode = 0;
     this._applyExplode();
-    this.reveal = { t0: performance.now(), design, onBeat, fired: {}, startRot: this.rotY, done: false };
+    this.reveal = { t0: performance.now(), design, onBeat, fired: {}, startRot: this.rotY, done: false, speed: quick ? 2.6 : 1 };
     this.targetRot = null;
     this.stageSet.visible = true;
     this._drawWall('tease', design, 0);
+  }
+
+  /** 跳过前戏，直接到揭幕瞬间 */
+  skipReveal() {
+    const r = this.reveal;
+    if (!r || r.fired.boom) return;
+    r.t0 = performance.now() - (3.55 / r.speed) * 1000;
+    r.fired.drum = true;
   }
 
   endReveal() {
@@ -1358,7 +1525,7 @@ export class PhoneStage {
 
     if (this.reveal) {
       const r = this.reveal;
-      const t = (now - r.t0) / 1000;
+      const t = ((now - r.t0) / 1000) * r.speed;
       const fire = (key, at, fn) => {
         if (t >= at && !r.fired[key]) {
           r.fired[key] = true;
@@ -1431,6 +1598,7 @@ export class PhoneStage {
       this.pivot.position.y = Math.sin(now * 0.0015) * 2.5 + 4;
     }
 
+    if (this.phone) for (const f of this.phone.anim) f(now);
     if (this.phone && this.morph) {
       const k = Math.min(1, (now - this.morph.t0) / 460);
       const e = easeOutBack(k);

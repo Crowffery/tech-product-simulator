@@ -144,6 +144,8 @@ export function defaultDesign() {
     twoTone: 'none',
     modelName: '回路 1',
     company: '回路工作室',
+    concepts: [],
+    redesign: 'major',
   };
 }
 
@@ -160,10 +162,14 @@ export function physical(design) {
   const chip = tier(design, 'chip');
   const scr = tier(design, 'screen');
   const form = SCREEN_FORMS.find((f) => f.id === design.screenForm) || SCREEN_FORMS[0];
-  const thickness = +(6.6 + bat.thick + mat.thick + chip.heat * 0.15).toFixed(1);
-  const volume = (size.w * size.h * thickness) / 1000; // cm³
-  const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight);
-  const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost;
+  const cs = (design.concepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter(Boolean);
+  const cThick = cs.reduce((a, c) => a + c.thick, 0);
+  const cWeight = cs.reduce((a, c) => a + c.weight, 0);
+  const cCost = cs.reduce((a, c) => a + c.cost, 0);
+  const thickness = +(6.6 + bat.thick + mat.thick + chip.heat * 0.15 + cThick).toFixed(1);
+  const volume = (size.w * size.h * (thickness - cThick)) / 1000; // cm³
+  const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight);
+  const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost;
   const unitCost = costPts * 70;
   const band = unitCost < 1800 ? '亲民带 ¥1999' : unitCost < 3000 ? '主流带 ¥3999' : '旗舰带 ¥6999';
   return { w: size.w, h: size.h, thickness, weight, bench: chip.bench, unitCost, band, bump: cam.bump };
@@ -178,11 +184,14 @@ export function slotCaps(design) {
   const mat = tier(design, 'material');
   const sz = design.parts.size;
   const c = (v) => Math.max(20, Math.min(100, Math.round(v)));
+  const cs = (design.concepts || []).map((id) => CONCEPTS.find((x) => x.id === id)).filter(Boolean);
+  const add = (k) => cs.reduce((a, x) => a + (x.caps[k] || 0), 0);
+  const fan = cs.some((x) => x.id === 'fan');
   return [
     { id: 'perf', name: '性能', cap: c(chip.cap) },
-    { id: 'design', name: '屏幕与外观', cap: c(mat.cap + scr.design - 10) },
-    { id: 'camera', name: '影像', cap: c(cam.cap + (sz === 2 ? 5 : 0)) },
-    { id: 'battery', name: '续航与稳定', cap: c(bat.cap - chip.heat * 5 + (sz === 2 ? 5 : sz === 0 ? -5 : 0)) },
+    { id: 'design', name: '屏幕与外观', cap: c(mat.cap + scr.design - 10 + add('design')) },
+    { id: 'camera', name: '影像', cap: c(cam.cap + (sz === 2 ? 5 : 0) + add('camera')) },
+    { id: 'battery', name: '续航与稳定', cap: c(bat.cap - (fan ? 0 : chip.heat * 5) + (sz === 2 ? 5 : sz === 0 ? -5 : 0) + add('battery')) },
     { id: 'os', name: '系统与生态', cap: c(scr.os) },
   ];
 }
@@ -257,6 +266,179 @@ export function danmaku(design, trend) {
   if (design.screenForm === 'bezel') out.push('边框能放下我的工资条');
   if (design.parts.chip === 2) out.push('跑分破百万了！');
   if (design.twoTone !== 'none') out.push('撞色好看诶');
+  const C = new Set(design.concepts || []);
+  if (C.has('clear')) out.push('透明后盖！能看见电池！');
+  if (C.has('subscreen')) out.push('后置副屏自拍神器');
+  if (C.has('eink')) out.push('墨水背屏可以看小说吗');
+  if (C.has('lights')) out.push('灯效闪瞎我');
+  if (C.has('keyboard')) out.push('键盘回来了！爷青回');
+  if (C.has('shutter')) out.push('快门键手感一定很好');
+  if (C.has('sat')) out.push('天线好可爱');
+  if (C.has('fan')) out.push(design.parts.chip === 2 ? '风扇转起来了！' : '风扇在吹空气吗');
   out.push('多少钱？', '等一个评测', '买了买了', '外观党狂喜', '再等等下一代');
   return out;
+}
+
+// ═════════════════════════ 创新层（v0.8）═════════════════════════
+
+/** 概念件：每代最多 2 个（大改款） */
+export const CONCEPTS = [
+  { id: 'clear', name: '透明后盖', icon: '🔍', desc: '让内部元件当装饰', cost: 4, thick: 0, weight: 2, caps: { design: -5 }, conflicts: ['eink'] },
+  { id: 'subscreen', name: '背部副屏', icon: '📟', desc: '背面一块小彩屏', cost: 5, thick: 0.3, weight: 8, caps: { battery: -5 }, conflicts: ['eink'] },
+  { id: 'eink', name: '墨水背屏', icon: '📜', desc: '整块墨水屏后盖', cost: 6, thick: 0.4, weight: 10, caps: {}, conflicts: ['clear', 'subscreen', 'fan'] },
+  { id: 'lights', name: '灯效后盖', icon: '💡', desc: '会呼吸的灯带', cost: 3, thick: 0.1, weight: 3, caps: { battery: -3 }, conflicts: [] },
+  { id: 'keyboard', name: '实体键盘', icon: '⌨️', desc: '正面下半是键盘', cost: 4, thick: 0.2, weight: 14, caps: { camera: -10, design: -5 }, conflicts: [] },
+  { id: 'shutter', name: '机械快门键', icon: '📸', desc: '侧边橙色快门', cost: 1, thick: 0, weight: 2, caps: { camera: 5 }, conflicts: [] },
+  { id: 'sat', name: '卫星天线', icon: '📡', desc: '顶部翻折小天线', cost: 5, thick: 0, weight: 6, caps: {}, conflicts: [] },
+  { id: 'fan', name: '主动散热风扇', icon: '🌀', desc: '背面会转的风扇', cost: 4, thick: 1.2, weight: 16, caps: {}, conflicts: ['eink'] },
+];
+export const MAX_CONCEPTS = 2;
+
+/** 品类创新：少见的组合（取舍层的创意） */
+export const COMBOS = [
+  { id: 'mini-flag', name: '小屏旗舰', test: (d) => d.parts.size === 0 && d.parts.chip === 2 },
+  { id: 'mini-cam', name: '影像小钢炮', test: (d) => d.parts.size === 0 && d.parts.camera === 2 },
+  { id: 'plastic-beast', name: '塑料性能刺客', test: (d) => d.parts.chip === 2 && d.parts.material === 0 },
+  { id: 'twoweeks', name: '两周一充', test: (d) => d.parts.battery === 2 && hasC(d, 'eink') },
+  { id: 'gamer', name: '电竞怪兽', test: (d) => d.parts.chip === 2 && hasC(d, 'fan') && hasC(d, 'lights') },
+  { id: 'retro', name: '复古商务机', test: (d) => hasC(d, 'keyboard') && d.screenForm === 'bezel' },
+  { id: 'xray', name: '透视旗舰', test: (d) => hasC(d, 'clear') && d.parts.chip === 2 },
+];
+
+export function hasC(d, id) {
+  return (d.concepts || []).includes(id);
+}
+
+/** 虚构竞品与其已发布的产品（市场记忆的初始值） */
+export const RIVALS = [
+  { brand: '蓝莓科技', style: '挤牙膏冠军', latest: '蓝莓 14 Pro Max Plus', concepts: [], combos: [], crowd: ['大底三摄', '方形模组'] },
+  { brand: '方块数码', style: '电竞狂魔', latest: '方块 RedPlay 7', concepts: ['lights', 'fan'], combos: ['gamer'], crowd: ['灯效后盖'] },
+  { brand: '极光移动', style: '户外硬汉', latest: '极光 Trek 3', concepts: ['sat', 'shutter'], combos: [], crowd: ['卫星天线'] },
+];
+
+export function conceptName(id) {
+  return CONCEPTS.find((c) => c.id === id)?.name || COMBOS.find((c) => c.id === id)?.name || id;
+}
+
+/**
+ * 市场记忆：每个概念 / 组合 → { mine: 我首发过的代数下标或 -1, myUses: 我用过几代, rivals: 已跟进的竞品数 }
+ * 抄袭规则：我首发后，每过 1 代多 1 家竞品跟进（最多 2 家）
+ */
+export function marketMemory(museum) {
+  const mem = {};
+  const get = (id) => (mem[id] ||= { first: -1, myUses: 0, rivals: 0, copiedBy: [] });
+  for (const r of RIVALS) {
+    for (const id of [...r.concepts, ...r.combos]) {
+      const m = get(id);
+      m.rivals += 1;
+      m.seed = true;
+    }
+  }
+  museum.forEach((entry, i) => {
+    const d = entry.design;
+    const ids = [...(d.concepts || []), ...COMBOS.filter((c) => c.test(d)).map((c) => c.id)];
+    for (const id of ids) {
+      const m = get(id);
+      if (m.first < 0 && m.rivals === 0) m.first = i;
+      m.myUses += 1;
+    }
+  });
+  const copycats = RIVALS.map((r) => r.brand);
+  for (const [, m] of Object.entries(mem)) {
+    if (m.first >= 0) {
+      const elapsed = museum.length - m.first;
+      const n = Math.min(2, Math.max(0, elapsed - 1)); // 下一代仍独家，再往后被跟进
+      m.copiedBy = copycats.slice(0, n);
+      m.rivals += n;
+    }
+  }
+  return mem;
+}
+
+/** 新颖度：只问「新不新」，不问「好不好看」 */
+export function novelty(design, museum) {
+  const mem = marketMemory(museum);
+  const items = [];
+  const prev = museum.length ? museum[museum.length - 1].design : null;
+  if (design.redesign === 'major') items.push({ label: prev ? '大改款：新模具、新设计' : '新品首发', v: prev ? 10 : 12 });
+  else items.push({ label: '小改款', v: 3 });
+  for (const id of design.concepts || []) {
+    const m = mem[id];
+    const name = conceptName(id);
+    if (!m) items.push({ label: `首发「${name}」`, v: 30, first: true });
+    else if (m.first >= 0 && m.rivals === 0) items.push({ label: `独家「${name}」`, v: 14 });
+    else if (m.rivals === 1) items.push({ label: `「${name}」已有 1 家在做`, v: 10 });
+    else items.push({ label: `「${name}」已经烂大街`, v: 3 });
+  }
+  for (const c of COMBOS) {
+    if (!c.test(design)) continue;
+    const m = mem[c.id];
+    if (!m) items.push({ label: `品类首创「${c.name}」`, v: 15, first: true });
+    else if (m.first >= 0 && m.rivals === 0) items.push({ label: `独家组合「${c.name}」`, v: 6 });
+    else items.push({ label: `组合「${c.name}」已有人做`, v: m.rivals >= 2 ? 1 : 4 });
+  }
+  if (prev && isSqueeze(design, prev)) items.push({ label: '和上一代几乎一样', v: -10 });
+  const minors = trailingMinors(museum) + (design.redesign === 'minor' ? 1 : 0);
+  if (minors >= 3) items.push({ label: `连续 ${minors} 代小改`, v: -10 });
+  const score = Math.max(0, Math.min(100, items.reduce((a, b) => a + b.v, 0)));
+  return { score, items };
+}
+
+function isSqueeze(d, p) {
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  return same(d.parts, p.parts) && same((d.concepts || []).slice().sort(), (p.concepts || []).slice().sort()) && d.layout === p.layout;
+}
+
+function trailingMinors(museum) {
+  let n = 0;
+  for (let i = museum.length - 1; i >= 0; i--) {
+    if (museum[i].design.redesign === 'minor') n++;
+    else break;
+  }
+  return n;
+}
+
+/** 完成度预估（正式游戏中由研发进度决定；Demo 里按工艺成熟度估算） */
+export function completeness(design, museum) {
+  const items = [];
+  const uses = (id) => museum.filter((e) => (e.design.concepts || []).includes(id)).length;
+  for (const id of design.concepts || []) {
+    const u = uses(id);
+    if (u === 0) items.push({ label: `「${conceptName(id)}」新工艺首发`, v: -10 });
+    else if (u === 1) items.push({ label: `「${conceptName(id)}」第二代打磨`, v: -5 });
+    else items.push({ label: `「${conceptName(id)}」工艺成熟`, v: 0 });
+  }
+  if ((design.concepts || []).length >= 2) items.push({ label: '两个概念件要一起调校', v: -4 });
+  if (design.redesign === 'major' && museum.length) items.push({ label: '大改款新模具', v: -3 });
+  if (hasC(design, 'fan') && design.parts.chip !== 2) items.push({ label: '风扇配小芯片：吹空气', v: -6 });
+  const score = Math.max(40, Math.min(100, 100 + items.reduce((a, b) => a + b.v, 0)));
+  return { score, items };
+}
+
+export function wow(design, museum) {
+  const n = novelty(design, museum);
+  const c = completeness(design, museum);
+  const score = Math.round((Math.min(100, n.score * 1.3) * c.score) / 100);
+  let headline;
+  if (n.score >= 55 && c.score >= 85) headline = '「这才叫创新！」——科技媒体集体起立';
+  else if (n.score >= 55) headline = '「概念满分，做工还差口气」';
+  else if (n.score >= 30) headline = '「有新意，但不够炸」';
+  else if (c.score >= 80) headline = '「稳，但又是挤牙膏的一年」';
+  else headline = '「既不新，也不稳」——评论区沉默了';
+  const firsts = n.items.filter((i) => i.first).map((i) => i.label.replace(/^.*「|」$/g, ''));
+  return { score, novelty: n, completeness: c, headline, firsts };
+}
+
+/** 年度新闻：告诉玩家哪里已是红海 */
+export function marketNews(museum) {
+  const mem = marketMemory(museum);
+  const crowded = RIVALS.flatMap((r) => r.crowd);
+  const copied = Object.entries(mem)
+    .filter(([, m]) => m.first >= 0 && m.copiedBy.length)
+    .map(([id, m]) => `${m.copiedBy[m.copiedBy.length - 1]} 跟进了你的「${conceptName(id)}」`);
+  return { crowded: [...new Set(crowded)].slice(0, 3), copied };
+}
+
+export function wowGrade(score) {
+  return score >= 70 ? 'S' : score >= 55 ? 'A' : score >= 40 ? 'B' : 'C';
 }
