@@ -100,9 +100,9 @@ function gauge(label, pct, cls = '') {
 
 function phaseLabel(phase) {
   return ({
-    hire: '组队', plan: '企划', logistics: '供应链', supplier: '供应链', stock: '备货',
-    dev: '开发中', event: '突发', launch: '发布会', launchPrep: '发布会',
-    score: '评分', sales: '销量', bust: '倒闭', monthReport: '开发中',
+    hire: '招人', plan: '定方向', logistics: '进货备货', supplier: '进货备货', stock: '备货',
+    dev: '加班赶工', event: '突发状况', launch: '开发布会', launchPrep: '开发布会',
+    score: '媒体打分', sales: '卖得怎样', bust: '公司倒闭了', monthReport: '加班赶工',
   })[phase] || phase;
 }
 
@@ -110,10 +110,10 @@ function topbar() {
   if (!state) return '';
   return `<div class="topbar">
     <div class="brand-chip">${state.companyName}<small>电子产品发展国 · Gen${state.generation}</small></div>
-    <div class="stat cash"><span class="lbl">资金</span><span class="val">${state.cash}</span></div>
+    <div class="stat cash"><span class="lbl">钞票</span><span class="val">${state.cash}</span></div>
     <div class="stat"><span class="lbl">月</span><span class="val">M${state.month}</span></div>
-    <div class="stat"><span class="lbl">工期</span><span class="val">${state.monthsLeft ?? '-'}</span></div>
-    <div class="stat"><span class="lbl">信仰</span><span class="val">${state.faith}</span></div>
+    <div class="stat"><span class="lbl">还剩几月</span><span class="val">${state.monthsLeft ?? '-'}</span></div>
+    <div class="stat"><span class="lbl">粉丝缘</span><span class="val">${state.faith}</span></div>
     <div class="hud-btns">
       <button type="button" data-act="toggle-motion">${draft.reduceMotion ? '动画' : '少动画'}</button>
       <button type="button" class="danger" data-act="restart">重开</button>
@@ -152,7 +152,7 @@ function renderSheet() {
   if (!sheet || !state) return '';
   let body = '';
   if (sheet === 'hire-adv') {
-    body = `<h2 class="kbox-title">高级招聘 <span class="badge">弹窗</span></h2>
+    body = `<h2 class="kbox-title">自己招人 <span class="badge">弹窗</span></h2>
       <div class="staff-grid">${ROLES.map((r) => {
         const owned = L.hiredIds(state).has(r.id);
         return `<article class="staff-card ${owned ? 'hired' : ''}">
@@ -169,7 +169,7 @@ function renderSheet() {
       <button type="button" class="primary choice" data-act="close-sheet">完成</button>`;
   } else if (sheet === 'plan-adv') {
     const p = draft.plan;
-    body = `<h2 class="kbox-title">高级自定义企划</h2>
+    body = `<h2 class="kbox-title">自己定方向</h2>
       <div class="grid2">
         <div><strong>定位</strong>${POSITIONING.map((x)=>`<label class="radio"><input type="radio" name="pos" data-act="plan-pos" data-id="${x.id}" ${p.positioningId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
         <div><strong>售价</strong>${PRICE_BANDS.map((x)=>`<label class="radio"><input type="radio" name="price" data-act="plan-price" data-id="${x.id}" ${p.priceId===x.id?'checked':''}/> ${x.name}</label>`).join('')}</div>
@@ -180,7 +180,7 @@ function renderSheet() {
       <button type="button" class="primary choice" data-act="confirm-plan">用自定义锁定并关闭</button>
       <button type="button" class="choice" data-act="close-sheet">取消</button>`;
   } else if (sheet === 'logistics-adv') {
-    body = `<h2 class="kbox-title">高级自选供应链</h2>
+    body = `<h2 class="kbox-title">自己选工厂和备货</h2>
       <p><strong>供应商</strong></p>
       ${SUPPLIERS.map((s)=>`<label class="radio"><input type="radio" name="sup" data-act="draft-sup" data-id="${s.id}" ${draft.supplierId===s.id?'checked':''}/> <img src="${supplierIconDataUrl(s.id)}" width="28" height="28" style="image-rendering:pixelated;vertical-align:middle"/> ${s.name}</label>`).join('')}
       <p><strong>备货</strong></p>
@@ -192,8 +192,8 @@ function renderSheet() {
     const cap = L.manpowerCap(state);
     const used = Object.values(alloc).reduce((a, b) => a + (Number(b) || 0), 0);
     const left = Math.max(0, cap - used);
-    body = `<h2 class="kbox-title">微调投入</h2>
-      <p class="tip">本月人力 <strong>${used}/${cap}</strong> · 剩余 <strong>${left}</strong> 点。左右加减即可。</p>
+    body = `<h2 class="kbox-title">自己分配精力点</h2>
+      <p class="tip">这个月精力 <strong>${used}/${cap}</strong>，还剩 <strong>${left}</strong> 点。按左右加减就行。</p>
       ${SLOTS.map((s) => {
         const sl = state.slots[s.id];
         const pts = alloc[s.id] || 0;
@@ -209,14 +209,14 @@ function renderSheet() {
         </div>`;
       }).join('')}
       <div class="row">
-        <button type="button" data-act="rebalance">一键均衡</button>
-        <button type="button" class="primary" data-act="advance-custom" ${used<1?'disabled':''}>用当前分配推进</button>
+        <button type="button" data-act="rebalance">一键平均分配</button>
+        <button type="button" class="primary" data-act="advance-custom" ${used<1?'disabled':''}>按这个分配过半个月</button>
       </div>
       <button type="button" class="choice" data-act="close-sheet" style="margin-top:8px">关闭</button>`;
   } else if (sheet === 'event-manual') {
     const ev = EVENTS.find((e) => e.id === state.pendingEvent);
     const rec = L.recommendedEventChoice(state.pendingEvent);
-    body = `<h2 class="kbox-title">自己选处理方式</h2>
+    body = `<h2 class="kbox-title">我来选怎么处理</h2>
       ${ev.choices.map((c,i)=>`<button type="button" class="choice" data-act="event-choice" data-i="${i}">${c.label}${i===rec?' · 推荐':''}</button>`).join('')}
       <button type="button" class="choice" data-act="close-sheet">返回</button>`;
   } else {
@@ -248,8 +248,8 @@ function renderTitle() {
   return `<div class="kbox title-screen">
     <canvas class="title-art" id="title-art" width="360" height="140"></canvas>
     <h1>电子产品发展国</h1>
-    <p style="margin:0;font-weight:800">竖屏开罗味 · 看着手机被做出来</p>
-    <p class="muted">推荐路线几乎全是底部大按钮</p>
+    <p style="margin:0;font-weight:800">休闲开罗味 · 看着手机一点点被做出来</p>
+    <p class="muted">几乎只用点底部大按钮就能玩完</p>
     ${hasSave() ? '<button type="button" data-act="new">新开一局</button>' : ''}
     <label class="eco"><input type="checkbox" data-act="toggle-motion-box" ${draft.reduceMotion ? 'checked' : ''}/> 减少动画</label>
   </div>${dockHtml()}`;
@@ -278,7 +278,7 @@ function renderCreate() {
   dockAction = { label: '开门并组队 ▶', act: 'confirm-create' };
   return `<div class="kbox" style="padding:16px;margin-top:24px">
     <h2 class="kbox-title">车库开门</h2>
-    <p class="tip">起名后自动带推荐班底，看着概念机开干。</p>
+    <p class="tip">起个名字就开工。系统会先帮你配好一组人。</p>
     <label>公司名<input id="cname" maxlength="16" value="${escapeAttr(draft.companyName)}"/></label>
     <div class="row" style="margin-top:10px"><button type="button" data-act="rand-name">随机名</button></div>
   </div>${dockHtml()}`;
@@ -292,8 +292,8 @@ function renderHire() {
       const r = L.getRole(s.roleId);
       return `<article class="staff-card hired"><img class="face" src="${faceDataUrl(s.roleId)}" alt=""/><strong>${r.title}</strong><div class="stars">${'★'.repeat(r.stars)}</div></article>`;
     }).join('')}</div>` : ''}
-    <p style="margin-top:10px">${sheetButton('⚙ 高级招聘 / 分派', 'hire-adv')}</p>
-  `, { dock: { label: state.staff.length ? '下一步：企划 ▶' : '✓ 采用推荐班底 ▶', act: state.staff.length ? 'to-plan' : 'quick-team' } });
+    <p style="margin-top:10px">${sheetButton('⚙ 自己招人 / 改岗位', 'hire-adv')}</p>
+  `, { dock: { label: state.staff.length ? '下一步：定方向 ▶' : '✓ 用推荐小队，继续 ▶', act: state.staff.length ? 'to-plan' : 'quick-team' } });
 }
 
 function renderPlan() {
@@ -301,22 +301,22 @@ function renderPlan() {
   const tri = L.trianglePreview(p.positioningId, p.priceId);
   return shellGame(`
     <h2 class="kbox-title">企划 <span class="badge">Gen${state.generation}</span></h2>
-    <p class="tip">上方概念机随企划世代变化。推荐：主流 + 性能/轻薄 + 中端价。</p>
-    ${gauge('体验预期', tri.experience)}
-    ${gauge('成本压力', tri.costPressure, 'warn')}
-    <p>${sheetButton('⚙ 高级自定义企划', 'plan-adv')}</p>
-  `, { dock: { label: '✓ 采用推荐企划 ▶', act: 'quick-plan' } });
+    <p class="tip">上面那台手机会跟着你的选择变。推荐：大众款 + 又快又薄 + 正常价。</p>
+    ${gauge('好不好用（预期）', tri.experience)}
+    ${gauge('贵不贵（压力）', tri.costPressure, 'warn')}
+    <p>${sheetButton('⚙ 自己定方向', 'plan-adv')}</p>
+  `, { dock: { label: '✓ 用推荐方案，继续 ▶', act: 'quick-plan' } });
 }
 
 function renderLogistics() {
   return shellGame(`
-    <h2 class="kbox-title">供应链 + 备货</h2>
-    <p class="tip">关键策略点：默认均衡+正常最省心。</p>
+    <h2 class="kbox-title">找谁进货 + 备多少货</h2>
+    <p class="tip">关键抉择：默认「稳妥厂 + 正常备货」最省心。</p>
     <div class="sup-grid">
       ${SUPPLIERS.map((s) => `<div class="sup-card"><img src="${supplierIconDataUrl(s.id)}" alt=""/><div><strong>${s.name}</strong><div class="muted">${s.desc}</div></div></div>`).join('')}
     </div>
-    <p style="margin-top:10px">${sheetButton('⚙ 高级自选供应商 / 备货', 'logistics-adv')}</p>
-  `, { dock: { label: '✓ 推荐供应链，开始研发 ▶', act: 'quick-logistics' } });
+    <p style="margin-top:10px">${sheetButton('⚙ 自己选工厂 / 备货量', 'logistics-adv')}</p>
+  `, { dock: { label: '✓ 用推荐进货方案，开工 ▶', act: 'quick-logistics' } });
 }
 
 function ensureAlloc() {
@@ -327,11 +327,11 @@ function ensureAlloc() {
 function renderDev() {
   ensureAlloc();
   return shellGame(`
-    <h2 class="kbox-title">开发部屋 <span class="badge">看部件变强</span></h2>
-    <p class="tip">上方五部件图标与手机画面会跟着进度变。连点底部推进即可。</p>
-    ${gauge('综合完成度', L.avgSlotProgress(state))}
-    <p>${sheetButton('⚙ 微调投入 / 分派', 'dev-adv')}</p>
-  `, { dock: { label: '⏱ 均衡推进半个月 ▶', act: 'advance-balanced' } });
+    <h2 class="kbox-title">赶工车间 <span class="badge">看着手机变强</span></h2>
+    <p class="tip">上面五个小格和手机画面会跟着变强。连点底部就能过半个月。</p>
+    ${gauge('整体完成度', L.avgSlotProgress(state))}
+    <p>${sheetButton('⚙ 自己加点（+/-）', 'dev-adv')}</p>
+  `, { dock: { label: '⏱ 平均加点，过半个月 ▶', act: 'advance-balanced' } });
 }
 
 function renderEvent() {
@@ -341,53 +341,53 @@ function renderEvent() {
     <h2 class="kbox-title">⚠ ${ev.type}</h2>
     <h3 style="margin:0 0 6px">${ev.title}</h3>
     <p>${ev.body}</p>
-    <button type="button" class="choice big primary" data-act="event-auto">✓ 一键稳妥：${ev.choices[rec].label}</button>
-    <button type="button" class="choice" data-act="open-sheet" data-id="event-manual">自己选（弹窗）</button>
+    <button type="button" class="choice big primary" data-act="event-auto">✓ 省心处理：${ev.choices[rec].label}</button>
+    <button type="button" class="choice" data-act="open-sheet" data-id="event-manual">我自己选（弹窗）</button>
   `);
-  return shellGame(`<h2 class="kbox-title">办公室警报</h2><p class="lead">先处理弹窗。</p>`, { modal, dock: null });
+  return shellGame(`<h2 class="kbox-title">办公室出事了</h2><p class="lead">先把弹窗处理掉。</p>`, { modal, dock: null });
 }
 
 function renderLaunch() {
   const modal = modalWrap(`
-    <h2 class="kbox-title">发布会 LIVE</h2>
+    <h2 class="kbox-title">发布会开始！</h2>
     <div style="text-align:center;margin:8px 0"><img src="${phoneShowcaseDataUrl(state.slots, state.generation)}" width="120" height="140" style="image-rendering:pixelated" alt="真机"/></div>
-    <p class="tip">看着成品登场——三选一策略直接出分。</p>
+    <p class="tip">成品登场了——点一个风格，马上出媒体分。</p>
     ${L.LAUNCH_STYLES.map((s) => `<button type="button" class="choice big primary" data-act="launch-style" data-id="${s.id}"><strong>${s.label}</strong><br/><span class="muted">${s.desc}</span></button>`).join('')}
   `);
-  return shellGame(`<h2 class="kbox-title">舞台准备中</h2>`, { modal, dock: null });
+  return shellGame(`<h2 class="kbox-title">舞台准备中…</h2>`, { modal, dock: null });
 }
 
 function renderScore() {
   const modal = modalWrap(`
-    <h2 class="kbox-title">媒体评分</h2>
+    <h2 class="kbox-title">媒体打分</h2>
     <div style="text-align:center"><img src="${phoneShowcaseDataUrl(state.slots, state.generation)}" width="100" height="114" style="image-rendering:pixelated" alt=""/></div>
     <div class="reveal-score">${state.mediaScore}</div>
     <p style="text-align:center">用户期待 ${state.userScore}</p>
     <div class="headline">${state.headline}</div>
   `);
-  return shellGame(`<h2 class="kbox-title">等待打分</h2>`, {
+  return shellGame(`<h2 class="kbox-title">编辑部还在吵…</h2>`, {
     modal,
-    dock: { label: '看首月销量 ▶', act: 'to-sales' },
+    dock: { label: '看看第一个月卖得怎样 ▶', act: 'to-sales' },
   });
 }
 
 function renderSales() {
   const r = state.salesResult;
   return shellGame(`
-    <h2 class="kbox-title">首月战报</h2>
+    <h2 class="kbox-title">第一个月战报</h2>
     <div style="text-align:center"><img src="${phoneShowcaseDataUrl(state.slots, state.generation)}" width="110" height="126" style="image-rendering:pixelated" alt=""/></div>
     <div class="reveal-score" style="font-size:2.8rem">${r.sold}<span style="font-size:.9rem"> 台</span></div>
-    ${gauge('备货消化', (r.sold / Math.max(1, r.stocked)) * 100)}
+    ${gauge('货卖完了吗', (r.sold / Math.max(1, r.stocked)) * 100)}
     <p>盈亏 <strong>${r.profit}</strong> · ${r.stockNote}</p>
     <button type="button" data-act="restart">重开</button>
-  `, { dock: { label: '规划下一代 ▶', act: 'next-gen' } });
+  `, { dock: { label: '开下一款手机 ▶', act: 'next-gen' } });
 }
 
 function renderBust() {
   return shellGame(`
-    <h2 class="kbox-title">倒闭了</h2>
+    <h2 class="kbox-title">公司倒闭了</h2>
     <p class="tip">${state.bustReason}</p>
-  `, { dock: { label: '再开一局', act: 'restart' } });
+  `, { dock: { label: '再开一局吧', act: 'restart' } });
 }
 
 export function render() {
@@ -450,7 +450,7 @@ function onClick(e) {
     const used = Object.values(alloc).reduce((a, b) => a + (Number(b) || 0), 0);
     const cur = alloc[id] || 0;
     if (act === 'alloc-plus') {
-      if (used >= cap) { toast('没有剩余点数'); return; }
+      if (used >= cap) { toast('点数用光啦'); return; }
       alloc[id] = cur + 1;
     } else {
       if (cur <= 0) return;
@@ -504,7 +504,7 @@ function onClick(e) {
     L.quickHireTeam(state);
     persist();
     render();
-    toast('推荐班底已就位');
+    toast('推荐小队已就位');
     return;
   }
   if (screen !== 'game' || !state) return;
@@ -515,7 +515,7 @@ function onClick(e) {
     state.phase = 'plan';
     draft.plan = L.recommendedPlan(state.generation);
     sheet = null;
-    flash('班底集结');
+    flash('小队集结！');
     persist(); render(); return;
   }
   if (act === 'to-plan') {
@@ -534,13 +534,13 @@ function onClick(e) {
     if (act === 'quick-plan') draft.plan = L.recommendedPlan(state.generation);
     const res = L.finishPlan(state, draft.plan);
     if (!res.ok) toast(res.msg);
-    else { flash('企划决定'); sheet = null; }
+    else { flash('方向定了！'); sheet = null; }
     persist(); render(); return;
   }
   if (act === 'quick-logistics') {
     L.pickLogistics(state, 'balanced', 'normal');
     draft.alloc = L.balancedAllocation(state);
-    flash('供应链 OK');
+    flash('进货方案 OK');
     persist(); render(); return;
   }
   if (act === 'confirm-logistics') {
@@ -551,20 +551,20 @@ function onClick(e) {
   }
   if (act === 'rebalance') {
     draft.alloc = L.balancedAllocation(state);
-    toast('已均衡');
+    toast('已平均分配');
     render(); return;
   }
   if (act === 'advance-balanced') {
     draft.alloc = L.balancedAllocation(state);
     const res = L.advanceMonth(state, { ...draft.alloc });
-    if (!res.ok) toast(res.msg); else flash('半个月过去了');
+    if (!res.ok) toast(res.msg); else flash('半个月过去了…');
     draft.alloc = null;
     persist(); render(); return;
   }
   if (act === 'advance-custom') {
     const res = L.advanceMonth(state, { ...ensureAlloc() });
     if (!res.ok) toast(res.msg);
-    else { flash('半个月过去了'); sheet = null; }
+    else { flash('半个月过去了…'); sheet = null; }
     draft.alloc = null;
     persist(); render(); return;
   }
@@ -579,7 +579,7 @@ function onClick(e) {
   }
   if (act === 'launch-style') {
     L.resolveLaunchStyle(state, id);
-    flash('发布会结束');
+    flash('发布会结束！');
     persist(); render(); return;
   }
   if (act === 'to-sales') {

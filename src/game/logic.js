@@ -180,9 +180,9 @@ export function recommendedEventChoice(eventId) {
 }
 
 export const LAUNCH_STYLES = [
-  { id: 'safe', label: '稳妥发布', desc: '少翻车，分数中上', score: 22, risk: 0.08 },
-  { id: 'wow', label: '惊喜彩蛋', desc: '高打满也易翻车', score: 34, risk: 0.32 },
-  { id: 'specs', label: '参数轰炸', desc: '务实党点头', score: 26, risk: 0.12 },
+  { id: 'safe', label: '稳稳发布', desc: '少翻车，分数中上', score: 22, risk: 0.08 },
+  { id: 'wow', label: '整点惊喜', desc: '可能爆火也可能翻车', score: 34, risk: 0.32 },
+  { id: 'specs', label: '把卖点讲清楚', desc: '务实玩家会点头', score: 26, risk: 0.12 },
 ];
 
 /** 一键发布会：2～3 个大策略直接出分 */
@@ -222,11 +222,11 @@ export function experienceScore(state) {
 }
 
 const COMMENTS = {
-  perf: ['晶体管在加班', '发热还行', '更流畅了', '跑分党会点头', '性能位面展开'],
-  design: ['直角爱好者吵起来了', '手感过关', '外形有点信仰', '灯厂预备役', '拿出去不丢人'],
-  camera: ['白天能看', '夜景还在修炼', '样张能发朋友圈了', '影像叙事成型', '媒体专场有了'],
-  battery: ['午后掉电警告', '能撑一天', '半夜不用趴着充电', '续航稳了', '省电圣体'],
-  os: ['卡顿偶发', '动画顺了', '软硬一体有那么点意思', '生态钩子挂上', '系统味对了'],
+  perf: ['有点卡', '还行吧', '顺多了', '用着真爽', '快到飞起'],
+  design: ['有点土', '凑合能看', '有点好看', '挺有面子', '回头率不错'],
+  camera: ['白天凑合', '夜景一般', '能发朋友圈', '拍得挺好看', '出片了'],
+  battery: ['下午就慌', '能撑一天', '晚上也不慌', '很耐用', '一天两天随便'],
+  os: ['偶尔卡一下', '顺一点了', '用着舒服', '越用越顺', '手感拉满'],
 };
 
 export function commentFor(slotId, progress) {
@@ -297,7 +297,7 @@ export function resolveEvent(state, choiceIndex) {
   }
   if (eff.gambleFail && Math.random() < 0.45) {
     state.monthsLeft += 1;
-    state.eventLog.push(`${ev.type}：赌输了，又拖一个月`);
+    state.eventLog.push(`${ev.type}：赌输了，又晚一个月`);
   } else {
     state.eventLog.push(`${ev.type}：${choice.label}`);
   }
@@ -310,7 +310,7 @@ export function resolveEvent(state, choiceIndex) {
 export function afterDevCheck(state) {
   if (state.cash < 0) {
     state.phase = 'bust';
-    state.bustReason = '现金烧穿了。三角没权衡好，或事件砸太狠。';
+    state.bustReason = '钱花光了。要么太贵太慢，要么突发状况砸太狠。';
     return { ok: true, bust: true };
   }
   const ready = avgSlotProgress(state) >= 55 && state.monthsLeft <= 1;
@@ -394,10 +394,10 @@ export function finalizeScores(state) {
   );
   state.mediaScore = media;
   state.userScore = user;
-  if (media >= 85) state.headline = '「这代有点东西」——科技小报集体复读';
-  else if (media >= 70) state.headline = '稳中有进，论坛战况温和';
-  else if (media >= 55) state.headline = '中规中矩，像开了安全车';
-  else state.headline = '发布会翻车合集已出炉（你不想点开）';
+  if (media >= 85) state.headline = '「这代有点东西」——小报集体复读';
+  else if (media >= 70) state.headline = '稳稳当当，论坛没大战';
+  else if (media >= 55) state.headline = '中规中矩，中规中矩';
+  else state.headline = '发布会翻车合集出来了（别点开）';
 }
 
 export function runSales(state) {
@@ -418,15 +418,15 @@ export function runSales(state) {
   let inventoryFee = 0;
   let stockNote = '';
   if (sold >= stocked && baseUnits > stocked * 1.05) {
-    stockNote = '缺货！黄牛微笑，口碑微损。';
+    stockNote = '卖断货了！有人开心，有人骂街。';
     state.reputation = Math.max(0, state.reputation - 4);
     state.faith = Math.max(0, state.faith - 2);
   } else if (stocked > sold * 1.25) {
     inventoryFee = Math.round((stocked - sold) * 0.6);
-    stockNote = '仓库有点吃灰，现金被压住了。';
+    stockNote = '货压在仓库里，钱周转不动。';
     state.cash -= inventoryFee;
   } else {
-    stockNote = '备货大致合适，供应链经理松了口气。';
+    stockNote = '备货刚刚好，进货高手松了口气。';
   }
   const profit = revenue - cogs - inventoryFee;
   state.cash += revenue - cogs;
@@ -448,7 +448,7 @@ export function runSales(state) {
   state.phase = 'sales';
   if (state.cash < 0) {
     state.phase = 'bust';
-    state.bustReason = '首月结算后现金为负。售价、成本与备货没谈拢。';
+    state.bustReason = '卖完一个月还是欠钱。价格、成本和备货没算明白。';
   }
 }
 

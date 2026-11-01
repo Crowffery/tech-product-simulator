@@ -34,7 +34,7 @@ export function createNewGame(companyName) {
     headline: '',
     salesResult: null,
     monthDelta: 0,
-    tip: '点「推荐」一路下一步即可通关一环；想折腾再展开高级选项。',
+    tip: '底部大按钮一路点下去就能发售；想微操再点高级。',
     bustReason: '',
   };
 }

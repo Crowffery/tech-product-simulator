@@ -1,11 +1,11 @@
 /** 像素产品 / 部件 / 供应商 / 职员小图 */
 
 const SLOT_META = {
-  perf: { label: '芯片', color: '#3498db' },
-  design: { label: '外观屏', color: '#9b59b6' },
-  camera: { label: '影像', color: '#e67e22' },
-  battery: { label: '续航', color: '#27ae60' },
-  os: { label: '系统', color: '#e74c3c' },
+  perf: { label: '好不好用', color: '#3498db' },
+  design: { label: '漂不漂亮', color: '#9b59b6' },
+  camera: { label: '拍得好看', color: '#e67e22' },
+  battery: { label: '耐不耐用', color: '#27ae60' },
+  os: { label: '顺不顺手', color: '#e74c3c' },
 };
 
 export function slotMeta(id) {

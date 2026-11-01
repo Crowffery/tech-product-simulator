@@ -1,60 +1,60 @@
-/** 静态配置与文案 — 《电子产品发展国》原型 */
+/** 静态配置与文案 — 《电子产品发展国》原型（休闲口语） */
 
 export const SAVE_KEY = 'epdg-prototype-v1';
 
 export const SLOTS = [
-  { id: 'perf', name: '性能', blurb: '更流畅了' },
-  { id: 'design', name: '屏幕与外观', blurb: '外形有点信仰' },
-  { id: 'camera', name: '影像', blurb: '样张能发朋友圈了' },
-  { id: 'battery', name: '续航与稳定', blurb: '半夜不用趴着充电' },
-  { id: 'os', name: '系统与生态', blurb: '软硬一体有那么点意思' },
+  { id: 'perf', name: '好不好用', blurb: '点开 App 更顺了' },
+  { id: 'design', name: '漂不漂亮', blurb: '拿出去有点面儿' },
+  { id: 'camera', name: '拍不拍得好看', blurb: '朋友圈能发了' },
+  { id: 'battery', name: '耐不耐用', blurb: '晚上不用到处找插座' },
+  { id: 'os', name: '顺不顺手', blurb: '用着越来越顺' },
 ];
 
 export const ROLES = [
   {
     id: 'id',
-    title: '工业设计师',
-    quirk: '坚持圆角必须「刚好」',
+    title: '外观达人',
+    quirk: '圆角差一毫米都要重来',
     stars: 3,
     cost: 10,
     boost: { design: 1.35 },
   },
   {
     id: 'pm',
-    title: '硬件 PM',
-    quirk: '日程表比芯片还密',
+    title: '进度队长',
+    quirk: '日历比人还忙',
     stars: 3,
     cost: 11,
     boost: { perf: 1.15, battery: 1.15 },
   },
   {
     id: 'cam',
-    title: '影像工程师',
-    quirk: '开会必提「夜景」',
+    title: '拍照狂魔',
+    quirk: '开会必提夜景',
     stars: 2,
     cost: 12,
     boost: { camera: 1.4 },
   },
   {
     id: 'osdev',
-    title: '系统体验',
-    quirk: '动画少一帧都难受',
+    title: '手感调教师',
+    quirk: '动画卡一下就难受',
     stars: 3,
     cost: 13,
     boost: { os: 1.35 },
   },
   {
     id: 'supply',
-    title: '供应链经理',
-    quirk: '供应商饭局 survivors',
+    title: '进货高手',
+    quirk: '专治零件迟到',
     stars: 2,
     cost: 15,
     boost: { eventLuck: 1 },
   },
   {
     id: 'pr',
-    title: '公关 / 发布会',
-    quirk: '幻灯片有呼吸感',
+    title: '发布会主持',
+    quirk: '幻灯片自带气氛组',
     stars: 2,
     cost: 14,
     boost: { launch: 1 },
@@ -62,48 +62,48 @@ export const ROLES = [
 ];
 
 export const POSITIONING = [
-  { id: 'flagship', name: '旗舰', exp: 1.2, cost: 1.25, months: 5 },
-  { id: 'mainstream', name: '主流', exp: 1.0, cost: 1.0, months: 4 },
-  { id: 'minimal', name: '极简', exp: 0.95, cost: 0.9, months: 4 },
-  { id: 'pro', name: '专业', exp: 1.15, cost: 1.15, months: 5 },
+  { id: 'flagship', name: '高高在上款', exp: 1.2, cost: 1.25, months: 5 },
+  { id: 'mainstream', name: '大众都买款', exp: 1.0, cost: 1.0, months: 4 },
+  { id: 'minimal', name: '极简干净款', exp: 0.95, cost: 0.9, months: 4 },
+  { id: 'pro', name: '专业干活款', exp: 1.15, cost: 1.15, months: 5 },
 ];
 
 export const SELL_POINTS = [
-  { id: 'thin', name: '极致轻薄' },
-  { id: 'fast', name: '性能猛兽' },
-  { id: 'photo', name: '影像叙事' },
-  { id: 'battery', name: '续航焦虑终结者' },
-  { id: 'eco', name: '生态闭环' },
-  { id: 'price', name: '性价比刺客' },
+  { id: 'thin', name: '薄到离谱' },
+  { id: 'fast', name: '快到飞起' },
+  { id: 'photo', name: '拍照好看' },
+  { id: 'battery', name: '特别耐用' },
+  { id: 'eco', name: '全家桶联动' },
+  { id: 'price', name: '价格真香' },
 ];
 
 export const PRICE_BANDS = [
-  { id: 'low', name: '亲民带', price: 1999, demand: 1.25 },
-  { id: 'mid', name: '主流带', price: 3999, demand: 1.0 },
-  { id: 'high', name: '旗舰带', price: 6999, demand: 0.75 },
+  { id: 'low', name: '便宜点卖', price: 1999, demand: 1.25 },
+  { id: 'mid', name: '正常价', price: 3999, demand: 1.0 },
+  { id: 'high', name: '贵一点卖', price: 6999, demand: 0.75 },
 ];
 
 export const SUPPLIERS = [
   {
     id: 'cheap',
-    name: '便宜不稳',
-    desc: '报价香，但事故多',
+    name: '便宜厂',
+    desc: '省钱，但爱出幺蛾子',
     costMul: 0.85,
     eventChance: 0.55,
     quality: 0.9,
   },
   {
     id: 'balanced',
-    name: '均衡之选',
-    desc: '中庸即正义',
+    name: '稳妥厂',
+    desc: '不翻车也不最贵',
     costMul: 1.0,
     eventChance: 0.35,
     quality: 1.0,
   },
   {
     id: 'premium',
-    name: '贵但稳',
-    desc: '钱包瘦了，良率胖了',
+    name: '贵贵厂',
+    desc: '贵，但省心',
     costMul: 1.2,
     eventChance: 0.18,
     quality: 1.12,
@@ -111,109 +111,63 @@ export const SUPPLIERS = [
 ];
 
 export const STOCK_OPTS = [
-  { id: 'safe', name: '保守', mul: 0.7, note: '宁缺毋滥' },
-  { id: 'normal', name: '正常', mul: 1.0, note: '按直觉备' },
-  { id: 'aggressive', name: '激进', mul: 1.4, note: '仓库赌徒' },
+  { id: 'safe', name: '少备一点', mul: 0.7, note: '怕压货' },
+  { id: 'normal', name: '正常备货', mul: 1.0, note: '跟着感觉走' },
+  { id: 'aggressive', name: '多备猛卖', mul: 1.4, note: '赌会爆单' },
 ];
 
 export const COMPANY_NAME_SEEDS = [
-  '键程实验室',
-  '像素工坊',
-  '北桥电子',
-  '清河智造',
+  '键程小作坊',
+  '像素玩具屋',
+  '北桥小厂',
+  '清河电电',
   '蜂鸟硬件社',
   '回路工作室',
   '星轨终端',
   '青瓷数码',
 ];
 
-/** 事件卡：缺芯 / 良率 / 泄露 */
+/** 事件卡：零件迟到 / 做好做坏 / 提前漏光 */
 export const EVENTS = [
   {
     id: 'chip_short',
-    type: '缺芯',
-    title: '晶圆厂说「下个月一定有」',
-    body: '主芯片交期跳票。论坛已经开始复读「又跳票」。',
+    type: '零件迟到',
+    title: '关键零件又鸽了',
+    body: '说好这周到的零件没影了。论坛开始复读「又延期」。',
     choices: [
-      {
-        label: '加钱插队',
-        effect: { cash: -40, months: 0, slotPenalty: {} },
-      },
-      {
-        label: '延期一个月',
-        effect: { cash: 0, months: 1, slotPenalty: {} },
-      },
-      {
-        label: '降规格换芯片',
-        effect: { cash: -10, months: 0, slotPenalty: { perf: 8 } },
-      },
+      { label: '加钱插队', effect: { cash: -40, months: 0, slotPenalty: {} } },
+      { label: '认栽，晚发一个月', effect: { cash: 0, months: 1, slotPenalty: {} } },
+      { label: '换差一点的先顶上', effect: { cash: -10, months: 0, slotPenalty: { perf: 8 } } },
     ],
   },
   {
     id: 'yield',
-    type: '良率',
-    title: '良率曲线画成了滑雪道',
-    body: '试产线良率扑街。供应链经理的咖啡因超标了。',
+    type: '做好做坏',
+    title: '试产机合格的太少了',
+    body: '流水线抽检一片惨淡。进货高手的咖啡续上了第三杯。',
     choices: [
-      {
-        label: '加急治具（烧钱）',
-        effect: { cash: -35, months: 0, slotPenalty: {} },
-      },
-      {
-        label: '接受延期',
-        effect: { cash: 0, months: 1, slotPenalty: {} },
-      },
-      {
-        label: '赌一把继续',
-        effect: { cash: 0, months: 0, slotPenalty: { battery: 6, design: 4 }, gambleFail: true },
-      },
+      { label: '砸钱抢修产线', effect: { cash: -35, months: 0, slotPenalty: {} } },
+      { label: '接受晚点发布', effect: { cash: 0, months: 1, slotPenalty: {} } },
+      { label: '赌一把继续冲', effect: { cash: 0, months: 0, slotPenalty: { battery: 6, design: 4 }, gambleFail: true } },
     ],
   },
   {
     id: 'leak',
-    type: '泄露',
-    title: '工程机出现在二手群',
-    body: '模糊真机图配上「内部人士」——热度来了，惊喜没了。',
+    type: '提前漏光',
+    title: '真机照片跑进群里了',
+    body: '糊成马赛克的真机图配「内部消息」——热度有了，惊喜没了。',
     choices: [
-      {
-        label: '公关降温',
-        effect: { cash: -20, hype: -5, leak: 1 },
-      },
-      {
-        label: '顺势预热',
-        effect: { cash: 0, hype: 12, leak: 1 },
-      },
-      {
-        label: '装作没看见',
-        effect: { cash: 0, hype: 4, faith: -4, leak: 1 },
-      },
+      { label: '花钱降温', effect: { cash: -20, hype: -5, leak: 1 } },
+      { label: '顺势炒热', effect: { cash: 0, hype: 12, leak: 1 } },
+      { label: '装作没看见', effect: { cash: 0, hype: 4, faith: -4, leak: 1 } },
     ],
   },
 ];
 
 export const LAUNCH_PREP = [
-  {
-    id: 'demo_stable',
-    label: '加稳 Demo',
-    desc: '少死机，少名场面',
-    cost: 15,
-    launch: 8,
-  },
-  {
-    id: 'easter',
-    label: '塞个彩蛋',
-    desc: '媒体爱写，翻车也戏剧',
-    cost: 10,
-    launch: 6,
-    risk: 0.15,
-  },
-  {
-    id: 'spec_sheet',
-    label: '堆参数稿',
-    desc: '务实派点头，梦想派打哈欠',
-    cost: 8,
-    launch: 4,
-  },
+  { id: 'demo_stable', label: '彩排稳一点', desc: '少死机', cost: 15, launch: 8 },
+  { id: 'easter', label: '塞个小惊喜', desc: '媒体爱写', cost: 10, launch: 6, risk: 0.15 },
+  { id: 'spec_sheet', label: '把卖点念清楚', desc: '务实派点头', cost: 8, launch: 4 },
 ];
 
 export const LAUNCH_BEATS = [
@@ -221,27 +175,27 @@ export const LAUNCH_BEATS = [
     id: 'open',
     prompt: '开场怎么讲？',
     choices: [
-      { label: '沉默走进来，只亮一灯', score: 6, risk: 0.1 },
-      { label: '先念营收再念梦想', score: 2, risk: 0 },
-      { label: '直接上真机上手环', score: 8, risk: 0.2 },
+      { label: '安静上场，只开一盏灯', score: 6, risk: 0.1 },
+      { label: '先吹牛再上真机', score: 2, risk: 0 },
+      { label: '直接上手给大家看', score: 8, risk: 0.2 },
     ],
   },
   {
     id: 'demo',
-    prompt: '现场 Demo：',
+    prompt: '现场演示：',
     choices: [
-      { label: '安全预设流程', score: 5, risk: 0.05 },
-      { label: '即兴夜景连拍', score: 10, risk: 0.35 },
-      { label: '跳过 Demo 念 PPT', score: 1, risk: 0 },
+      { label: '走一遍安全流程', score: 5, risk: 0.05 },
+      { label: '现场即兴连拍', score: 10, risk: 0.35 },
+      { label: '跳过演示念稿', score: 1, risk: 0 },
     ],
   },
   {
     id: 'close',
     prompt: '压轴：',
     choices: [
-      { label: '价格惊喜', score: 9, risk: 0.1 },
-      { label: '「还有一件事」配件预告', score: 7, risk: 0.05 },
-      { label: '务实结束，去摸机', score: 4, risk: 0 },
+      { label: '价格给个惊喜', score: 9, risk: 0.1 },
+      { label: '预告还有配件', score: 7, risk: 0.05 },
+      { label: '收工，去摸机', score: 4, risk: 0 },
     ],
   },
 ];
