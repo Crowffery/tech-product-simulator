@@ -176,6 +176,7 @@ function renderTitle() {
     <div class="row" style="justify-content:center;flex-direction:column;align-items:center;gap:10px">
       ${saved ? '<button type="button" class="primary blink" data-act="continue" style="font-size:1.15rem;padding:14px 28px">▶ 继续游戏（自动存档）</button>' : ''}
       <button type="button" class="${saved ? '' : 'primary blink'}" data-act="new">${saved ? '新开一局' : '▶ 新开一局'}</button>
+      <a class="studio-link" href="./studio.html">🎨 外观台 Demo（3D 配机型）</a>
     </div>
     <label class="eco" style="margin-top:8px"><input type="checkbox" data-act="toggle-motion-box" ${draft.reduceMotion ? 'checked' : ''}/> 减少动画</label>
   </div>`;

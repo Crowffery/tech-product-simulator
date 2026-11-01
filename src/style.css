@@ -382,3 +382,8 @@ body.reduce-motion .reveal-score,
 body.reduce-motion .month-flash span,
 body.reduce-motion .blink,
 body.reduce-motion .title-screen h1 { animation: none !important; }
+
+.studio-link {
+  display: inline-block; font-weight: 800; color: var(--ink); text-decoration: none;
+  border: 3px solid var(--border); background: #d6eaf8; padding: 6px 14px; box-shadow: 2px 2px 0 var(--shadow);
+}
