@@ -58,6 +58,8 @@ npm run preview  # 预览构建结果
 | [docs/DISCUSSION.md](docs/DISCUSSION.md) | 讨论与拍板记录 |
 | [docs/AUDIO_NOTES.md](docs/AUDIO_NOTES.md) | 音频手感与映射 |
 | [docs/AUDIO_SOURCES.md](docs/AUDIO_SOURCES.md) | 音频资产来源与许可 |
+| [docs/PLAYTEST_2.md](docs/PLAYTEST_2.md) | 第二轮试玩复盘与核对 |
+| [docs/QUALITY_BAR.md](docs/QUALITY_BAR.md) | 质量标准与五轮反馈全量核验 |
 
 ## MVP 成功标准（摘要）
 
@@ -75,6 +77,7 @@ npm run preview  # 预览构建结果
 - [x] V4 数值、销售长尾、办公室扩建、分享卡（v1.1）
 - [x] 新手引导、自研芯片线、发布会加戏、评论区、3D 只保留高清（v1.2）
 - [x] v1.3 打磨：正式标题画面、发布会逐卖点演出（运镜 / 大屏动画 / 主打卖点）、工程机跑分、结算逐条揭晓、研发月报、量产流水线、新手期难度与一次破产兜底
+- [x] v1.4：真实经济（¥万/亿、BOM、账本）、产品生命周期、审美疲劳、行业大事件、规模效应、战略投资、出货量排名、生成式音乐（详见 docs/QUALITY_BAR.md）
 - [ ] 其余讨论项（平台发行等）
 - [ ] 内容与手感打磨
 

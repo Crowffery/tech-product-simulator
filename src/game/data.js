@@ -320,3 +320,25 @@ export const AFTERMATH_EVENTS = [
     ],
   },
 ];
+
+/**
+ * 战略投资：后期的大钱花在哪里
+ *   demand 销量倍率 · cost 单台成本倍率 · cap 产能倍率 · upkeep 每月运营费（¥100 万）
+ *   need(state) 解锁条件，needText 条件说明
+ */
+export const EXPANSIONS = [
+  { id: 'stores', icon: '🏬', name: '开线下体验店', cost: 400, upkeep: 4, demand: 1.08, faith: 5, desc: '销量 +8%，信仰 +5。用户能摸到真机。' },
+  { id: 'sea', icon: '🌏', name: '进军东南亚', cost: 350, upkeep: 3, demand: 1.12, desc: '销量 +12%。性价比机型在那里很吃香。', need: (st) => st.generation >= 2, needText: '第 2 代起' },
+  { id: 'fab', icon: '🏭', name: '自建工厂', cost: 1200, upkeep: 6, costMul: 0.93, cap: 1.5, desc: '单台成本 -7%，产能 +50%（爆款不再断货）。', need: (st) => (st.cumSold || 0) >= 80, needText: '累计卖出 80 万台' },
+  { id: 'eu', icon: '🇪🇺', name: '进军欧洲', cost: 800, upkeep: 6, demand: 1.18, desc: '销量 +18%。欧洲用户看重口碑和环保。', need: (st) => st.reputation >= 55, needText: '口碑 ≥ 55' },
+  { id: 'chiplab', icon: '🧬', name: '芯片设计中心', cost: 900, upkeep: 5, desc: '流片费用 -35%，流片时间 -1 个月。自研路线的护城河。', need: (st) => (st.chip?.gen || 1) >= 2, needText: '自研芯片到第 2 代' },
+  { id: 'na', icon: '🗽', name: '进军北美', cost: 1600, upkeep: 10, demand: 1.25, desc: '销量 +25%，全球最赚钱的市场；但有被制裁的风险。', need: (st) => st.reputation >= 65 && (st.brand || 1) >= 1.05, needText: '口碑 ≥ 65 且品牌溢价 ≥ 1.05' },
+];
+
+/** 同期竞品的月出货量（万台），用来算市场份额 */
+export const RIVAL_SHARE = [
+  { brand: '青橙', base: 19, grow: 0.015, color: '#f39c12' },
+  { brand: '极光', base: 17, grow: 0.014, color: '#27ae60' },
+  { brand: '蓝莓', base: 14, grow: 0.018, color: '#5dade2' },
+  { brand: '方块', base: 9, grow: 0.012, color: '#8e44ad' },
+];

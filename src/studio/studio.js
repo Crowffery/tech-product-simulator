@@ -43,6 +43,8 @@ import {
   PRACTICAL,
   innovCount,
   similarity,
+  layoutOf,
+  moduleFit,
 } from './parts.js';
 import { sfx } from './sfx.js';
 import { term, installGlossary } from '../glossary.js';
@@ -129,12 +131,16 @@ export function createStudio(root, opts = {}) {
         <div class="part-note" id="note-${key}">${esc(sub ? sub.note : tier(design, key).note)}</div>`;
     }).join('');
     const forms = SCREEN_FORMS.map((f) => `<button type="button" class="tier ${design.screenForm === f.id ? 'on' : ''}" data-form="${f.id}" ${lockAttr()}>${f.label}${f.cost ? `<small>+¥${f.cost * 70}</small>` : ''}</button>`).join('');
+    const lays = LAYOUTS.map((l) => `<button type="button" class="tier ${design.layout === l.id ? 'on' : ''}" data-layout="${l.id}" ${lockAttr()}>${l.label}${l.cost ? `<small>+¥${l.cost * 70}</small>` : ''}</button>`).join('');
+    const misfit = moduleFit(design);
+    const layRow = `<div class="part-row"><span class="part-name">镜头模组</span><div class="tiers">${lays}</div></div>
+      <div class="part-note ${misfit.length ? 'warn' : ''}">${esc(layoutOf(design).note)}${misfit.length ? `　⚠ ${misfit.map(conceptName).join('、')}塞不进这个模组，影像加成减半` : ''}</div>`;
     const formRow = `<div class="part-row"><span class="part-name">前摄开孔</span><div class="tiers">${forms}</div></div>
       <div class="part-note">${esc(FORM_COST_NOTE[design.screenForm] || '')}</div>`;
     const posField = opts.lockPosition
       ? `<div class="field"><span class="flabel">定位</span><b>${POSITIONS.find((p) => p.id === design.position)?.name || ''}</b> <small class="muted">（企划已定）</small></div>`
       : `<div class="field"><span class="flabel">定位</span><div class="chips">${pos}</div></div>`;
-    return `${posField}${parts}${formRow}
+    return `${posField}${parts}${layRow}${formRow}
       ${chipChart()}
 `;
   }
@@ -160,7 +166,7 @@ export function createStudio(root, opts = {}) {
       ).join('');
     return `
       <div class="field"><span class="flabel">圆角</span><div class="chips">${opt(CORNERS, design.corner, 'corner', true)}</div></div>
-      <div class="field"><span class="flabel">镜头模组造型 <small class="muted">只改样子，不影响成本；镜头数量由「配置」里的主摄决定</small></span><div class="chips">${opt(LAYOUTS, design.layout, 'layout', true)}</div></div>
+
       <div class="field"><span class="flabel">主色 · ${esc(paletteName(design.color))}</span>
         <div class="swatches">${swatches(design.color, 'color')}<label class="swatch custom" title="自定义主色"><input type="color" value="${design.color}" data-custom="color" />＋</label></div></div>
       <div class="field"><span class="flabel">拼色</span><div class="chips">${opt(TWO_TONE, design.twoTone, 'tone')}</div></div>
@@ -755,6 +761,7 @@ export function createStudio(root, opts = {}) {
         else design.concepts.push(id);
         sfx.part(i >= 0 ? 0 : 2);
         update({ panel: true });
+        if (i < 0 && moduleFit(design).includes(id)) toast(`${conceptName(id)}需要更大的镜头模组：去「配置」换成方形或圆形模组`);
         if (!exploded && i < 0) {
           const c = CONCEPTS.find((x) => x.id === id);
           // 等新机身建好再指给玩家看

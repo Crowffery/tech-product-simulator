@@ -3,7 +3,7 @@
  * 布局：HUD → 阶段进度条 → 像素场景 → 操作面板 → 吸底主按钮
  * 设计阶段换成 3D 工作台；发布会换成全屏 3D 演出。
  */
-import { SLOTS, POSITIONING, SELL_POINTS, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, randomCompanyName } from './game/data.js';
+import { SLOTS, POSITIONING, SELL_POINTS, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, EXPANSIONS, randomCompanyName } from './game/data.js';
 import { createNewGame, saveGame, loadGame, clearSave, hasSave } from './game/state.js';
 import * as L from './game/logic.js';
 import { lsGet, lsSet } from './game/storage.js';
@@ -103,7 +103,7 @@ function rail() {
 
 const P = {};
 
-const VERSION = 'v1.3';
+const VERSION = 'v1.4';
 function saveSummary() {
   const s = hasSave() ? loadGame() : null;
   if (!s) return '';
@@ -492,7 +492,7 @@ function pricingPanel() {
     </div>
     <div class="price-ref pp-dyn" data-k="ref">
       <div><small>💭 用户心理价位</small><b>≈ ¥${fair.toLocaleString('en-US')}</b><i>体验 · 新颖 · 品牌 ×${(state.brand || 1).toFixed(2)}${lag > 0 ? ` · 芯片落后 ${lag} 代` : ''}</i></div>
-      <div><small>🔩 单台成本</small><b>¥${cost.toLocaleString('en-US')}</b><i>低于它就是卖一台亏一台</i></div>
+      <div><small>🔩 单台成本</small><b>¥${cost.toLocaleString('en-US')}</b><i>${L.scaleDiscount(state) > 0.005 ? `规模效应已省 ${Math.round(L.scaleDiscount(state) * 100)}%` : '低于它就是卖一台亏一台'}</i></div>
       <div><small>⚔ 同档竞品</small><b>${same ? `${esc(same.model)} ¥${same.price}` : '—'}</b><i>${rivals.filter((r) => r !== same).slice(0, 2).map((r) => `${esc(r.brand)} ¥${r.price}`).join(' · ')}</i></div>
       <div><small>📜 上一代同定位</small><b>${last ? `¥${last}` : '首次定价'}</b><i>${last ? '涨太多老用户会不满' : '这次的价格会成为以后的锚'}</i></div>
     </div>
@@ -618,7 +618,9 @@ P.next = () => {
       : ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut })) }],
     imgs: draft.showHQ ? [] : wallImgs(),
     caption: draft.showHQ ? `新家：${L.office(state).name}` : '年会：这一代进了机型墙',
-    sheet: `<h2 class="sheet-h">🏛 规划下一代</h2>
+    sheet: `<h2 class="sheet-h">🏛 年终会</h2>
+      <div class="ntabs"><button type="button" class="${draft.nextTab !== 'invest' ? 'on' : ''}" data-act="next-tab" data-id="review">📊 年终复盘</button><button type="button" class="${draft.nextTab === 'invest' ? 'on' : ''}" data-act="next-tab" data-id="invest">🏗 投资与升级 <small>${money(state.cash)}</small></button></div>
+      ${draft.nextTab === 'invest' ? investTab() : `
       ${last ? `<div class="model-card">${last.thumb ? `<img src="${last.thumb}" alt="" />` : ''}<div><b>${esc(last.design.modelName)}</b>
         <small>惊艳 ${last.wow} ${last.grade} · 首月 ${last.sold} 万台 · 媒体 ${last.media}</small>
         ${(last.firsts || []).map((f) => `<span class="mini-first">🏆${esc(f)}</span>`).join('')}</div></div>` : ''}
@@ -631,15 +633,24 @@ P.next = () => {
           ${sums.map(([k, v]) => `<div class="rp-row"><span>${esc(k)}</span><i><u class="${v < 0 ? 'neg' : 'pos'}" style="width:${Math.round((Math.abs(v) / max) * 100)}%"></u></i><b class="${v < 0 ? 'neg' : 'pos'}">${money(v, { sign: true })}</b></div>`).join('')}
           <small class="muted">点顶部 💰 随时查看账本流水</small></div>`;
       })()}
-      ${(() => {
+      ${shareBlock()}
+      ${onSaleBlock(true)}
+      <button type="button" class="go-invest" data-act="next-tab" data-id="invest">下一步：花钱让公司变强 ▶</button>`}`,
+    cta: `<button type="button" class="primary big" data-act="next-gen">开新企划 ▶</button>`,
+  };
+};
+
+/** 年终会第二页：扩建、芯片、战略投资、部门 */
+function investTab() {
+  return `${(() => {
         const o = L.office(state);
         const n = L.nextOffice(state);
         return `<div class="office-card"><span class="o-icon">${o.icon}</span><div><b>${o.name}</b><small>${o.desc}</small>
           ${n ? `<small class="next">扩建到 ${n.icon} ${n.name}：${n.desc}</small>` : '<small class="next">已经是最大的园区了</small>'}</div>
           ${n ? `<button type="button" data-act="office" ${state.cash < n.cost ? 'disabled' : ''}>扩建 ${money(n.cost)}</button>` : ''}</div>`;
       })()}
-      ${onSaleBlock(true)}
       ${chipLab()}
+      ${expansionBlock()}
       <h3 class="sub-h">部门升级 <small>💰 ${money(state.cash)}</small></h3>
       <div class="depts">${DEPTS.map((d) => {
         const lv = L.deptLevel(state, d.id);
@@ -648,10 +659,8 @@ P.next = () => {
           ${cost != null ? `<small class="next">下一级：${d.desc[lv]}</small>` : ''}</div>
           ${cost != null ? `<button type="button" data-act="upgrade" data-id="${d.id}" ${state.cash < cost ? 'disabled' : ''}>升级 ${money(cost)}</button>` : '<span class="maxed">满级</span>'}</div>`;
       }).join('')}</div>
-      <p class="muted">🔬 研发点 ${state.rp}：在设计阶段的「💡 创新」页解锁新概念件。</p>`,
-    cta: `<button type="button" class="primary big" data-act="next-gen">开新企划 ▶</button>`,
-  };
-};
+      <p class="muted">🔬 研发点 ${state.rp}：在设计阶段的「💡 创新」页解锁新概念件。</p>`;
+}
 
 P.ending = () => {
   const E = endingTitles(state);
@@ -665,11 +674,35 @@ P.ending = () => {
         <div><b>${E.stats.gens}</b><span>代产品</span></div><div><b>${E.stats.firsts}</b><span>项首创</span></div>
         <div><b>${E.stats.avgWow}</b><span>平均惊艳</span></div><div><b>${E.stats.sold}</b><span>总销量(万台)</span></div>
       </div>
+      ${shareBlock(true)}
       <div class="ending-wall">${state.models.map((m) => `<span title="${esc(m.design.modelName)}">${m.thumb ? `<img src="${m.thumb}" alt="" />` : '📱'}<i>${m.grade || ''}</i></span>`).join('')}</div>`,
     cta: `<button type="button" class="primary big" data-act="hard-restart">再来一局</button>
       <button type="button" data-act="share-ending">📤 分享结局</button>`,
   };
 };
+
+/** 市场份额：你和四家竞品最近三个月的出货量 */
+function shareBlock(final = false) {
+  const t = L.shareTable(state);
+  if (!t) return '';
+  const move = state.lastRank && state.rank ? state.lastRank - state.rank : 0;
+  return `<div class="share"><div class="sh-h"><b>📊 国内手机出货量排名</b><small>最近三个月</small>
+      <span class="sh-rank">第 <b>${t.rank}</b> 名${move > 0 ? `<em class="up">▲${move}</em>` : move < 0 ? `<em class="down">▼${-move}</em>` : ''}</span></div>
+    ${t.rows.map((r, i) => `<div class="sh-row ${r.me ? 'me' : ''}"><span>${i + 1}</span><b>${r.me ? esc(state.companyName) : esc(r.name)}</b><i><u style="width:${Math.max(2, r.pct)}%;background:${r.color}"></u></i><em>${r.pct.toFixed(1)}%</em></div>`).join('')}
+    ${final ? '' : `<small class="muted">${t.rank === 1 ? '你已经是第一了！' : `离第 ${t.rank - 1} 名还差 ${Math.round(t.rows[t.rank - 2].v - t.rows[t.rank - 1].v)} 万台。爆款、出海、多款同时在售都能把份额拉上去。`}</small>`}</div>`;
+}
+
+/** 战略投资：后期的钱往哪花 */
+function expansionBlock() {
+  return `<h3 class="sub-h">🌐 战略投资 <small>一次投入 + 每月运营费，长期收益</small></h3>
+    <div class="expand">${EXPANSIONS.map((e) => {
+      const own = L.hasAsset(state, e.id);
+      const ok = !e.need || e.need(state);
+      return `<div class="ex ${own ? 'own' : ok ? '' : 'lock'}"><span class="ex-i">${e.icon}</span><div><b>${e.name}</b><small>${e.desc}</small>
+        <small class="muted">${own ? `已拥有 · 每月运营 ${money(e.upkeep)}` : ok ? `每月运营 ${money(e.upkeep)}` : `🔒 ${e.needText}`}</small></div>
+        ${own ? '<span class="maxed">✓</span>' : `<button type="button" data-act="expand" data-id="${e.id}" ${!ok || state.cash < e.cost ? 'disabled' : ''}>${money(e.cost)}</button>`}</div>`;
+    }).join('')}</div>`;
+}
 
 /** 芯片实验室：流片升级 + 跑分走势 */
 function chipLab() {
@@ -1848,6 +1881,19 @@ function onClick(e) {
       if (r.ok) play('keep');
       break;
     }
+    case 'expand': {
+      const r = L.buyExpansion(state, id);
+      toast(r.msg);
+      if (r.ok) {
+        play('level-up');
+        scene.pulse('confetti');
+      }
+      break;
+    }
+    case 'next-tab':
+      draft.nextTab = id;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      break;
     case 'cut-price': {
       const r = L.cutPrice(state, i);
       toast(r.msg);
@@ -1876,6 +1922,7 @@ function onClick(e) {
     }
     case 'next-gen':
       draft.showHQ = false;
+      draft.nextTab = 'review';
       L.goNextGen(state);
       draft.plan = { ...L.recommendedPlan(), positioningId: state.designDraft?.position || 'mainstream' };
       flash(`第 ${state.generation} 代`);

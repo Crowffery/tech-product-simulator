@@ -352,3 +352,4 @@ button:disabled.chip, button:disabled.tier { opacity: .4; }
 .simbar.mid i b { background: #f39c12; } .simbar.bad i b { background: #e74c3c; }
 .simbar small { grid-column: 1 / -1; font-weight: 400; color: #6d5c4d; }
 .simbar.bad small { color: #c0392b; font-weight: 800; }
+.part-note.warn { color: #c0392b; font-weight: 800; }

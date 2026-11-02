@@ -1,6 +1,7 @@
 /** Game + studio audio: file SFX/BGM/VO + WebAudio synth fallback. */
 
 import { lsGet, lsSet } from '../game/storage.js';
+import { createMusic, MOOD_OF_PHASE } from './music.js';
 
 const MUTE_KEY = 'epdg-studio-mute';
 const BASE = `${import.meta.env.BASE_URL}audio`;
@@ -169,8 +170,12 @@ const BGM_VOL = 0.14;
 let musicOff = lsGet(MUSIC_KEY) === '1';
 let bgmRest = null;
 
+// 生成式背景音乐：按阶段换情绪，旋律和弦每 8 小节重新生成
+const music = createMusic(() => ac());
+
 function setBgmVolume(v) {
   if (bgmEl) bgmEl.volume = muted || musicOff ? 0 : v;
+  music.setEnabled(!(muted || musicOff));
 }
 
 /** 放完一遍歇 20～45 秒再放，避免同一段旋律一直循环 */
@@ -377,15 +382,27 @@ export const sfx = {
     if (p && typeof p.catch === 'function') p.catch(() => {});
   },
 
-  /** Map game phase → bed. */
+  /** 阶段 → 音乐情绪（生成式，不再循环同一段音频） */
   syncBgm(phase) {
-    if (!phase || phase === 'title' || phase === 'create' || phase === 'bust') {
-      // soft office bed on title; silence on bust after stinger
-      if (phase === 'bust') return;
-      return sfx.setBgm('office');
+    unlock();
+    if (bgmEl) {
+      bgmEl.pause();
+      bgmEl = null;
     }
-    if (phase === 'launch' || phase === 'score' || phase === 'launchPrep') return sfx.setBgm('press');
-    return sfx.setBgm('office');
+    const mood = MOOD_OF_PHASE[phase] || 'office';
+    music.setMood(mood);
+    music.setEnabled(!(muted || musicOff));
+  },
+
+  /** 测试 / 可视化：音乐的频谱分析节点 */
+  musicAnalyser() {
+    return music.analyser();
+  },
+
+  /** 发布会等场合临时指定情绪 */
+  setMood(mood) {
+    music.setMood(mood);
+    music.setEnabled(!(muted || musicOff));
   },
 
   voStart() {

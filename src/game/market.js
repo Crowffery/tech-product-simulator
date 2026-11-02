@@ -136,6 +136,9 @@ export function endingTitles(state) {
   if (state.overstocks >= 2) titles.push({ t: '仓库传说', d: `积压了 ${state.overstocks} 次` });
   if (state.cash >= 3000) titles.push({ t: '印钞机', d: `账上躺着 ¥${(state.cash / 100).toFixed(1)} 亿` });
   if (minors >= Math.max(3, ms.length - 1)) titles.push({ t: '挤牙膏之王', d: `${minors} 代小改款` });
+  if (state.bestRank === 1) titles.unshift({ t: '市场第一', d: '从车库做到了国内出货量第一' });
+  else if (state.bestRank && state.bestRank <= 3) titles.push({ t: '一线品牌', d: `出货量最高冲到第 ${state.bestRank}` });
+  if ((state.assets || []).length >= 4) titles.push({ t: '全球化', d: `布局了 ${(state.assets || []).length} 项战略投资` });
   if ((state.chipLeads || 0) >= 2) titles.push({ t: '遥遥领先', d: `${state.chipLeads} 代产品的芯片领先行业` });
   if ((state.brand || 1) >= 1.2) titles.push({ t: 'Pro Max 定价大师', d: `品牌溢价 ×${state.brand.toFixed(2)}，卖得贵还有人排队` });
   if ((state.brand || 1) <= 0.85) titles.push({ t: '交个朋友', d: '价格屠夫，用户心中的「厚道」代名词' });

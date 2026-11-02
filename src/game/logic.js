@@ -3,7 +3,7 @@
  * 企划 → 设计 → 供应链 → 研发（月度 + 事件）→ 量产 → 发布会 → 销售 → 规划下一代
  * 玩家只管大方向：部门升级代替逐个招人；研发点解锁概念件。
  */
-import { SLOTS, POSITIONING, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, MARKET_EVENTS, AFTERMATH_EVENTS } from './data.js';
+import { SLOTS, POSITIONING, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, MARKET_EVENTS, AFTERMATH_EVENTS, EXPANSIONS, RIVAL_SHARE } from './data.js';
 import { emptySlots } from './state.js';
 import { IDEAL, matchOf, promiseCheck, priceFit, windowAt, clashAt, expectationBar, RUN_MONTHS, POS_BASE_PRICE, roundPrice, marketSize, marketChipGen, rivalPriceList, bandOf, rivalLaunches } from './market.js';
 import {
@@ -40,6 +40,61 @@ export function ledgerOf(state, gen = state.generation) {
   const sums = {};
   for (const e of state.ledger || []) if (e.gen === gen) sums[e.label] = (sums[e.label] || 0) + e.v;
   return Object.entries(sums).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+}
+
+// ═════════════════════════ 规模效应 / 战略投资 / 市场份额 ═════════════════════════
+
+/** 规模效应：卖得越多，采购越便宜（最多 -15%） */
+export function scaleDiscount(state) {
+  return Math.min(0.15, 0.03 * Math.log2(1 + (state.cumSold || 0) / 20));
+}
+
+export const hasAsset = (state, id) => (state.assets || []).includes(id);
+export function assetMul(state, key) {
+  return EXPANSIONS.filter((e) => hasAsset(state, e.id) && e[key]).reduce((a, e) => a * e[key], 1);
+}
+
+export function buyExpansion(state, id) {
+  const e = EXPANSIONS.find((x) => x.id === id);
+  if (!e || hasAsset(state, id)) return { ok: false, msg: '已经有了' };
+  if (e.need && !e.need(state)) return { ok: false, msg: `条件不够：${e.needText}` };
+  if (state.cash < e.cost) return { ok: false, msg: '现金不够' };
+  book(state, '战略投资', -e.cost, e.name);
+  state.assets = [...(state.assets || []), id];
+  if (e.faith) state.faith = Math.min(100, state.faith + e.faith);
+  return { ok: true, msg: `${e.icon} ${e.name}：完成！` };
+}
+
+/** 战略资产的每月运营费 */
+function upkeep(state) {
+  return EXPANSIONS.filter((e) => hasAsset(state, e.id)).reduce((a, e) => a + e.upkeep, 0);
+}
+
+/** 记录这个月的出货，算市场份额（你 vs 四家竞品） */
+export function recordShare(state, myUnits) {
+  const m = state.month;
+  const rivals = RIVAL_SHARE.map((r) => ({
+    brand: r.brand,
+    color: r.color,
+    v: Math.round(r.base * Math.pow(1 + r.grow, m) * (0.9 + 0.2 * Math.abs(Math.sin(m * 1.7 + r.base)))),
+  }));
+  state.shareHist = [...(state.shareHist || []), { m, me: Math.round(myUnits * 10) / 10, rivals }].slice(-40);
+}
+
+/** 最近三个月的市场份额排名 */
+export function shareTable(state, upto = (state.shareHist || []).length) {
+  const hist = (state.shareHist || []).slice(Math.max(0, upto - 3), upto);
+  if (!hist.length) return null;
+  const sum = { 你: 0 };
+  for (const h of hist) {
+    sum['你'] += h.me;
+    for (const r of h.rivals) sum[r.brand] = (sum[r.brand] || 0) + r.v;
+  }
+  const total = Object.values(sum).reduce((a, b) => a + b, 0) || 1;
+  const rows = Object.entries(sum)
+    .map(([k, v]) => ({ name: k, v, pct: (v / total) * 100, me: k === '你', color: k === '你' ? '#e67e22' : RIVAL_SHARE.find((r) => r.brand === k)?.color }))
+    .sort((a, b) => b.v - a.v);
+  return { rows, rank: rows.findIndex((r) => r.me) + 1, pct: rows.find((r) => r.me).pct };
 }
 
 // ═════════════════════════ 部门 ═════════════════════════
@@ -109,7 +164,8 @@ export function prLaunchBonus(state) {
 
 export function chipResearchCost(state) {
   const gen = state.chip.gen;
-  return { cash: 100 + gen * 40, months: deptLevel(state, 'rnd') >= 3 ? 2 : 3, next: gen + 1 };
+  const lab = hasAsset(state, 'chiplab');
+  return { cash: Math.round((100 + gen * 40) * (lab ? 0.65 : 1)), months: (deptLevel(state, 'rnd') >= 3 ? 2 : 3) - (lab ? 1 : 0), next: gen + 1 };
 }
 
 export function startChipResearch(state) {
@@ -290,7 +346,9 @@ export function advanceMonth(state, allocation) {
   if (total > manpowerCap(state)) return { ok: false, msg: `本月人力最多 ${manpowerCap(state)} 点` };
   const pay = payroll(state);
   book(state, '团队工资', -pay);
-  state.monthDelta = -pay;
+  const up = upkeep(state);
+  if (up) book(state, '海外与门店运营', -up);
+  state.monthDelta = -pay - up;
   const caps = capsMap(state);
   const gains = {};
   for (const [slotId, pts] of Object.entries(allocation)) {
@@ -383,6 +441,8 @@ export function sellTail(state) {
   income = Math.round(income);
   if (income) book(state, restock > 0.5 ? '在售机型（含补货）' : '在售机型', income);
   state.tailTotal = (state.tailTotal || 0) + income;
+  state.cumSold = (state.cumSold || 0) + units;
+  recordShare(state, units);
   return { units: Math.round(units), income, restock: Math.round(restock), lines, retired: retired.map((m) => m.name) };
 }
 
@@ -719,7 +779,7 @@ export function stockedUnits(state) {
 
 /** 单台毛利（游戏内现金单位 / 万台） */
 export function unitMargin(state, price) {
-  const unitCost = Math.round((state.design ? physical(state.design).unitCost : 2400) * (deptLevel(state, 'supply') === 3 ? 0.95 : 1) * marketMod(state, 'cost'));
+  const unitCost = Math.round((state.design ? physical(state.design).unitCost : 2400) * (deptLevel(state, 'supply') === 3 ? 0.95 : 1) * marketMod(state, 'cost') * (1 - scaleDiscount(state)) * assetMul(state, 'costMul'));
   const channel = Math.round(price * 0.15); // 渠道 + 营销
   // 每卖 1 万台进账（单位 ¥100 万）
   return { unitCost, channel, perUnit: price - unitCost - channel, margin: (price - unitCost - channel) / 100 };
@@ -741,7 +801,7 @@ function demandUnits(state, { price, media, user, W, tradeBoost = 1 }) {
   // 和上一代几乎一样：老用户没理由换，新用户也没新鲜感
   const st = staleness(state);
   const fatigue = st > 0.5 ? 1 - Math.min(0.3, (st - 0.5) * 0.6) : 1;
-  const demand = fatigue * chipD * (win?.mul || 1) * clashF * pe.demandMul * quality * (state.reputation / 55) * tradeBoost * (state.generation === 1 ? 1.15 : 1) * marketMod(state, 'demand');
+  const demand = assetMul(state, 'demand') * fatigue * chipD * (win?.mul || 1) * clashF * pe.demandMul * quality * (state.reputation / 55) * tradeBoost * (state.generation === 1 ? 1.15 : 1) * marketMod(state, 'demand');
   return { units: Math.round(17 * demand), win, clash, clashF, pe, fatigue };
 }
 
@@ -888,6 +948,8 @@ export function runSales(state) {
   }
   const profit = revenue - cogs - inventoryFee;
   book(state, '首月销售', revenue - cogs, state.design?.modelName);
+  state.cumSold = (state.cumSold || 0) + sold;
+  recordShare(state, sold + (state.onSale || []).reduce((a, m) => a + ((m.history || []).slice(-1)[0] || 0) * 0.5, 0));
   // 没买到的人：一部分会等补货（追加生产，之后几个月按产能交付）
   const backlog = Math.max(0, baseUnits - stocked) * 0.7;
   // 进入长尾：之后每月继续卖（受口碑影响）
@@ -907,7 +969,7 @@ export function runSales(state) {
     unitMargin: margin,
     months: LIFE_MONTHS,
     backlog,
-    cap: Math.max(8, stocked * 0.9), // 每月最大产能
+    cap: Math.max(8, stocked * 0.9) * assetMul(state, 'cap'), // 每月最大产能
     firstProfit: revenue - inventoryFee,
     history: [sold],
   });
@@ -967,6 +1029,12 @@ export function enterNext(state) {
     });
     if (state.models.length > 12) state.models = state.models.slice(-12);
     state.archived = true;
+  }
+  const sh = shareTable(state);
+  if (sh) {
+    state.lastRank = state.rank || sh.rank;
+    state.rank = sh.rank;
+    state.bestRank = Math.min(state.bestRank || 9, sh.rank);
   }
   state.phase = state.month >= RUN_MONTHS ? 'ending' : 'next';
 }
