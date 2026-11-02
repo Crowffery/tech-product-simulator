@@ -41,13 +41,17 @@ const play = (name, ...a) => {
   if (typeof fn === 'function') return fn.apply(sfx, a);
 };
 
-function toast(msg) {
+function toast(msg, ms) {
   if (!msg) return;
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = msg;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1600);
+  // 长文案按字数加时，短提示也至少留约 3.5 秒，点一下可提前关掉
+  const hold = ms ?? Math.min(10000, Math.max(3500, 1400 + String(msg).length * 80));
+  const close = () => el.remove();
+  el.addEventListener('click', close, { once: true });
+  setTimeout(close, hold);
 }
 
 function flash(msg) {
@@ -1850,7 +1854,7 @@ function onClick(e) {
     }
     case 'cut-price': {
       const r = L.cutPrice(state, i);
-      toast(r.msg);
+      toast(r.msg, Math.min(12000, Math.max(5500, 2000 + String(r.msg || '').length * 90)));
       if (r.ok) play('keep');
       break;
     }
