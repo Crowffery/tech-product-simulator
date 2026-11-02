@@ -105,6 +105,46 @@ function moneyFx(fromRect, amount) {
   setTimeout(() => el.remove(), 1100);
 }
 
+/** 任意 HUD 资源飞字（研发点 / 信仰 / 口碑） */
+function statFx(statId, fromRect, amount, label) {
+  const to = document.querySelector(`.hud-stat.s-${statId}`)?.getBoundingClientRect();
+  if (!fromRect || !to || !amount || document.body.classList.contains('reduce-motion')) return;
+  const icons = { cash: 'coin', faith: 'heart', rep: 'star', rp: 'flask' };
+  const el = document.createElement('div');
+  el.className = `money-fx ${amount < 0 ? 'neg' : 'pos'}`;
+  el.innerHTML = `${icon(icons[statId] || 'flask', 16)}${amount > 0 ? '+' : ''}${amount}${label ? ` ${label}` : ''}`;
+  el.style.left = `${fromRect.left + fromRect.width / 2}px`;
+  el.style.top = `${fromRect.top}px`;
+  el.style.setProperty('--dx', `${to.left + to.width / 2 - (fromRect.left + fromRect.width / 2)}px`);
+  el.style.setProperty('--dy', `${to.top - fromRect.top}px`);
+  document.body.appendChild(el);
+  const hudEl = document.querySelector(`.hud-stat.s-${statId}`);
+  if (hudEl) {
+    hudEl.classList.remove('gain', 'flash');
+    void hudEl.offsetWidth;
+    hudEl.classList.add(amount > 0 ? 'gain' : 'flash');
+  }
+  setTimeout(() => el.remove(), 1100);
+}
+
+function rpGainBlock() {
+  const b = state.lastRpBreak;
+  const total = state.lastRp || 0;
+  if (!b) return `<p class="rp-gain">🔬 ${term('研发点')} <b class="pos">+${total}</b></p>`;
+  const rows = [
+    ['保底', b.base],
+    ['媒体分', b.media],
+    ['惊艳度', b.wow],
+    ['首发加成', b.firsts],
+    ['研发部', b.dept],
+    ['办公楼', b.office],
+  ].filter(([, v]) => v);
+  return `<div class="rp-gain-box">
+    <div class="rp-gain-h">🔬 研发点进账拆解 <b class="pos">+${total}</b></div>
+    <ul class="rp-gain-list">${rows.map(([n, v]) => `<li><span>${n}</span><b class="${v >= 0 ? 'pos' : 'neg'}">${v > 0 ? '+' : ''}${v}</b></li>`).join('')}</ul>
+  </div>`;
+}
+
 /** 顶部资源：像素图标 + 数值 + 名称，点了有解释 */
 const STATS = {
   cash: { icon: 'coin', name: '资金' },
@@ -133,19 +173,19 @@ const STAT_HELP = {
     down: ['每月团队工资和海外 / 门店运营费', '升级部门、扩建、流片、战略投资', '突发事件、库存积压'],
   },
   faith: {
-    what: '老用户对你的忠诚度（0～100）。信仰高，用户打分更宽容，新品更好卖。',
-    up: ['用户口碑好的产品', '以旧换新、生态绑定', '开线下体验店'],
-    down: ['首发 3 个月内降价（背刺老用户）', '货不对板、断货', '处理事件时甩锅'],
+    what: '铁粉忠诚度（0～100）。和「口碑」分叉：信仰只跟用户满意度 / 以旧换新走，不管媒体怎么写。',
+    up: ['用户评分高的产品', '以旧换新（信仰 +4，护老用户）', '生态绑定、开线下体验店'],
+    down: ['首发 3 个月内降价（背刺铁粉）', '降价清仓（信仰 -1）', '货不对板、处理事件时甩锅'],
   },
   rep: {
-    what: '大众和媒体对这个牌子的印象（0～100）。直接影响每一代的销量，也是进军欧美的门槛。',
-    up: ['媒体评分高的产品', '出事时诚恳处理（召回、道歉）'],
-    down: ['媒体差评、发布会翻车', '断货、降价清仓', '发热门、电池鼓包这类事故'],
+    what: '大众与媒体对品牌的公开印象（0～100）。和「信仰」分叉：口碑主要跟媒体评分走，直接乘进销量。',
+    up: ['媒体评分高', '以旧换新显得护老用户（口碑 +1）', '出事时诚恳处理'],
+    down: ['媒体差评、发布会翻车', '降价清仓（口碑 -3）', '断货、发热门等事故'],
   },
   rp: {
     what: '每次发布积累的技术经验，用来在设计阶段的「💡 创新」页解锁新的概念件。',
-    up: ['每次发布会都会获得：评分越高、首发越多，获得越多', '研发部升级、搬进写字楼 / 科技园'],
-    down: ['解锁概念件时消耗'],
+    up: ['发布后按媒体分 / 惊艳度 / 首发数拆账进账（见评测页卡片）', '研发部升级、搬进写字楼 / 科技园'],
+    down: ['解锁概念件时消耗（有飞字）'],
   },
 };
 function showStat(id) {
@@ -288,7 +328,7 @@ P.plan = () => {
       .map((x) => `<button type="button" class="chip ${multi ? (cur.includes(x.id) ? 'on' : '') : cur === x.id ? 'on' : ''}" data-act="${act}" data-id="${x.id}">${x.name}</button>`)
       .join('');
   return {
-    scene: ['plan', { office: state.office, month: state.month, positioning: p.positioningId, points: p.pointIds.length, price: p.priceId, color: state.designDraft?.color }],
+    scene: ['plan', { office: state.office, month: state.month, positioning: p.positioningId, points: p.pointIds.length, price: p.priceId, color: state.designDraft?.color, concepts: state.designDraft?.concepts || [] }],
     caption: `企划会：第 ${state.generation} 代要赌什么？`,
     sheet: `<h2 class="sheet-h">${icon('clipboard', 22)} 企划</h2>
       ${marketEventCard()}
@@ -538,6 +578,8 @@ function devSceneData(event = null) {
     caps: L.capsMap(state),
     event,
     rivalSoon: !!clashAt(state.month + state.monthsLeft + 1, state.product?.positioningId),
+    color: state.design?.color || state.designDraft?.color,
+    concepts: state.design?.concepts || state.designDraft?.concepts || [],
   };
 }
 
@@ -576,7 +618,7 @@ P.factory = () => {
   const run = !draft.factoryDone;
   const units = stockedUnits();
   return {
-    scene: ['factory', { color: state.design.color, stockId: state.stockId }],
+    scene: ['factory', { color: state.design.color, stockId: state.stockId, concepts: state.design?.concepts || [] }],
     caption: run ? '流水线开足马力' : '首批货已装箱，等发布会开售',
     sheet: `<h2 class="sheet-h">${icon('factory', 22)} 量产 <small>${esc(state.design.modelName)} · ${esc(paletteName(state.design.color))}</small></h2>
       <div class="fac ${run ? 'running' : 'done'}">
@@ -698,13 +740,13 @@ P.score = () => {
   const W = state.wowResult || {};
   const heat = state.launchHeat ?? 60;
   return {
-    scene: ['score', { color: state.design?.color, grade: W.grade, flop: state.launchFlop, hidePhone: !!state.lastCut }],
+    scene: ['score', { color: state.design?.color, grade: W.grade, flop: state.launchFlop, hidePhone: !!state.lastCut, concepts: state.design?.concepts || [] }],
     imgs: state.lastCut ? [{ src: state.lastCut, x: 50, y: 50, h: 52, cls: 'hero' }] : [],
     caption: state.launchFlop ? '演示机卡住了，但发布会总算撑完了' : heat >= 85 ? '全场沸腾，掌声停不下来' : '发布会落幕，媒体开始写稿',
     sheet: `<h2 class="sheet-h">${icon('news', 22)} 媒体评测 <small>发布会结束 30 分钟后</small></h2>
       <div class="score-big">
-        <div class="sb-cell rv-step" data-step="1"><b data-count="${state.mediaScore}">${state.mediaScore}</b><span>媒体评分</span></div>
-        <div class="sb-cell rv-step" data-step="2"><b class="sub" data-count="${state.userScore}">${state.userScore}</b><span>用户口碑</span></div>
+        <div class="sb-cell rv-step" data-step="1"><b data-count="${state.mediaScore}">${state.mediaScore}</b><span>媒体评分 → 口碑</span></div>
+        <div class="sb-cell rv-step" data-step="2"><b class="sub" data-count="${state.userScore}">${state.userScore}</b><span>用户评分 → 信仰</span></div>
       </div>
       <div class="headline-g rv-step stamp" data-step="3">${esc(state.headline)}</div>
       <div class="rv-step" data-step="4">
@@ -715,7 +757,7 @@ P.score = () => {
       </div>
       <div class="rv-step" data-step="5">${commentBlock()}</div>
       <div class="rv-step" data-step="6">${reviewBlock()}
-      <p class="muted">🔬 ${term('研发点')} +${state.lastRp}</p></div>`,
+      ${rpGainBlock()}</div>`,
     cta: `<button type="button" class="primary big" data-act="to-sales">开售！看首月战报 ▶</button>
       <button type="button" data-act="share-launch">📤 分享</button>`,
   };
@@ -740,7 +782,7 @@ P.sales = () => {
   const queue = r.stockState === 'short' ? 1 : r.stockState === 'over' ? 0.15 : 0.55;
   const pct = Math.round((r.sold / Math.max(1, r.stocked)) * 100);
   return {
-    scene: ['sales', { month: state.month, color: state.design?.color, state: r.stockState, queue, hidePhone: !!state.lastCut }],
+    scene: ['sales', { month: state.month, color: state.design?.color, state: r.stockState, queue, hidePhone: !!state.lastCut, concepts: state.design?.concepts || [] }],
     imgs: state.lastCut ? [{ src: state.lastCut, x: 31, y: 41, h: 30 }] : [],
     caption: r.stockState === 'short' ? '门口排起长队，黄牛也来了' : r.stockState === 'over' ? '店里有点冷清，仓库在吃灰' : '门店生意不错',
     sheet: `<h2 class="sheet-h">${icon('cart', 22)} 首月战报</h2>
@@ -754,7 +796,8 @@ P.sales = () => {
         <p class="stock-note">${esc(r.stockNote)}</p>
       </div>
       <div class="rv-step" data-step="4">
-        ${r.oldNote ? `<p class="warn-line good">♻ ${esc(r.oldNote)}</p>` : ''}
+        ${r.oldNote ? `<p class="warn-line ${r.oldPolicy === 'clear' ? 'bad' : 'good'}">♻ ${esc(r.oldNote)}</p>` : ''}
+        ${r.repDelta || r.faithDelta ? `<p class="stat-fork"><span>⭐ 大众口碑 ${r.repDelta >= 0 ? '+' : ''}${r.repDelta || 0} <small>跟媒体分</small></span><span>❤ 铁粉信仰 ${r.faithDelta >= 0 ? '+' : ''}${r.faithDelta || 0} <small>跟用户评分</small></span></p>` : ''}
         ${r.window ? `<p class="warn-line ${r.windowMul > 1 ? 'good' : 'bad'}">📅 ${r.windowMul > 1 ? '赶上' : '撞上'}${r.window}</p>` : ''}
         ${r.clash ? `<p class="warn-line bad">⚔ ${r.clash}</p>` : ''}
         ${(r.chain || []).map((c) => `<p class="chain">🔗 ${esc(c)}</p>`).join('')}
@@ -1179,6 +1222,12 @@ export function render() {
   if (phase === 'score' && draft._scoreSfx !== state?.generation) {
     draft._scoreSfx = state?.generation;
     play('media-score');
+    const rp = state?.lastRp || 0;
+    if (rp) {
+      toast(`🔬 研发点 +${rp}`);
+      const sheet = document.getElementById('g-sheet');
+      requestAnimationFrame(() => statFx('rp', sheet?.getBoundingClientRect(), rp));
+    }
   }
   if (phase === 'sales' && draft._salesSfx !== state?.generation) {
     draft._salesSfx = state?.generation;
@@ -1212,9 +1261,14 @@ async function mountStudio() {
     isNew: (id) => (state.newConcepts || []).includes(id),
     getChipNote: () => (state.chip.research ? `X${state.chip.research.gen} 流片中` : `最新：${state.chip.series} X${state.chip.gen}`),
     onUnlock: (id) => {
+      const from = document.querySelector(`[data-unlock="${id}"]`)?.getBoundingClientRect();
       const r = L.unlockConcept(state, id);
       persist();
       $('#g-hud').innerHTML = hud();
+      if (r?.ok && r.spent) {
+        toast(`🔬 研发点 −${r.spent} · ${r.msg}`);
+        if (from) statFx('rp', from, -r.spent);
+      }
       return r;
     },
     confirmLabel: '定稿，去谈供应链 ▶',

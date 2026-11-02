@@ -285,7 +285,7 @@ export function unlockConcept(state, id) {
   if (state.rp < st.cost) return { ok: false, msg: `研发点不够（需要 ${st.cost}）` };
   state.rp -= st.cost;
   state.unlocked.push(id);
-  return { ok: true, msg: `已解锁「${conceptName(id)}」，可以装备了` };
+  return { ok: true, spent: st.cost, msg: `已解锁「${conceptName(id)}」，可以装备了` };
 }
 
 // ═════════════════════════ 供应链 ═════════════════════════
@@ -536,9 +536,9 @@ export function cutPrice(state, idx) {
 }
 
 export const OLD_POLICIES = [
-  { id: 'keep', name: '继续卖', desc: '旧款继续每月进账（同定位销量砍半）；能拿到后续续销' },
-  { id: 'clear', name: '降价清仓', desc: '一次性回款约 5 成，放弃后续月续销，口碑 -1' },
-  { id: 'tradein', name: '以旧换新', desc: '补贴换首月 +12%，放弃后续月续销；信仰 +3' },
+  { id: 'keep', name: '继续卖', desc: '旧款继续按月进账（同定位销量砍半）；拿得到后续续销' },
+  { id: 'clear', name: '降价清仓', desc: '一次回款约 5 成并放弃续销；大众口碑 -3、铁粉信仰 -1' },
+  { id: 'tradein', name: '以旧换新', desc: '补贴换首月 +12% 并放弃续销；铁粉信仰 +4、大众口碑 +1' },
 ];
 
 export function recommendedEventChoice(eventId) {
@@ -804,10 +804,19 @@ export function finalizeScores(state) {
   state.mediaScore = media;
   state.userScore = user;
   state.headline = W ? W.headline : '中规中矩';
-  // 研发点
-  const gain = Math.round(2 + media / 12 + (W ? W.score / 15 + W.firsts.length * 2 : 0) + (deptLevel(state, 'rnd') - 1) + office(state).rp);
+  // 研发点：拆成可展示的进账项（公式与原先一致）
+  const parts = {
+    base: 2,
+    media: Math.round((media / 12) * 10) / 10,
+    wow: W ? Math.round((W.score / 15) * 10) / 10 : 0,
+    firsts: W ? W.firsts.length * 2 : 0,
+    dept: deptLevel(state, 'rnd') - 1,
+    office: office(state).rp,
+  };
+  const gain = Math.round(parts.base + parts.media + parts.wow + parts.firsts + parts.dept + parts.office);
   state.rp += gain;
   state.lastRp = gain;
+  state.lastRpBreak = parts; // UI 研发点进账拆解卡片
 }
 
 // ═════════════════════════ 审美疲劳 ═════════════════════════
@@ -1004,18 +1013,22 @@ export function runSales(state) {
     if (policy === 'clear') {
       const v = Math.round(tailValue(state) * 0.5);
       book(state, '旧款清仓', v);
-      state.reputation = Math.max(0, state.reputation - 1);
-      oldNote = `旧款降价清仓，回款 ${v}`;
+      // 清仓伤「大众口碑」；铁粉也觉得被割韭菜
+      state.reputation = Math.max(0, state.reputation - 3);
+      state.faith = Math.max(0, state.faith - 1);
+      oldNote = `旧款降价清仓，回款 ${v}；大众口碑 -3 · 铁粉信仰 -1（已放弃后续月续销）`;
       state.onSale = [];
     } else if (policy === 'tradein') {
       book(state, '以旧换新补贴', -40);
-      state.faith = Math.min(100, state.faith + 3);
+      // 以旧换新养「铁粉信仰」，顺带让大众觉得你护老用户
+      state.faith = Math.min(100, state.faith + 4);
+      state.reputation = Math.min(100, state.reputation + 1);
       tradeBoost = 1.12;
-      oldNote = '以旧换新：老用户换新机，信仰 +3';
+      oldNote = '以旧换新：铁粉信仰 +4 · 大众口碑 +1（已放弃后续月续销）';
       state.onSale = [];
     } else {
       for (const m of state.onSale) m.comp *= m.pos === state.product.positioningId ? 0.5 : 0.85;
-      oldNote = '新旧同台：旧款销量被新品蚕食';
+      oldNote = '新旧同台：旧款继续按月卖，同定位会被新品蚕食';
     }
   }
   state.oldPolicy = 'keep';
@@ -1074,9 +1087,12 @@ export function runSales(state) {
     history: [sold],
   });
   state.monthDelta = profit;
-  state.reputation = Math.max(0, Math.min(100, state.reputation + Math.round((state.mediaScore - 60) / 10)));
-  state.faith = Math.max(0, Math.min(100, state.faith + Math.round((state.userScore - 60) / 12)));
-  if (state.product.bindEco) state.faith = Math.min(100, state.faith + 3);
+  // 公式分叉：口碑看媒体/大众，信仰看老用户满意度（别再撞成同一个感觉）
+  const repDelta = Math.round((state.mediaScore - 60) / 10);
+  const faithDelta = Math.round((state.userScore - 60) / 12) + (state.product.bindEco ? 3 : 0);
+  state.reputation = Math.max(0, Math.min(100, state.reputation + repDelta));
+  state.faith = Math.max(0, Math.min(100, state.faith + faithDelta));
+  state._statDelta = { rep: repDelta, faith: faithDelta, policy };
   // —— 定价的连锁反应 ——
   const pos = state.product.positioningId;
   const chain = [];
@@ -1090,10 +1106,13 @@ export function runSales(state) {
   }
   if (stockState === 'short' && pe.ratio <= 0.9) chain.push('黄牛加价 ¥500 倒卖，二手平台一机难求');
   state.lastPrices = { ...(state.lastPrices || {}), [pos]: priceVal };
+  const sd = state._statDelta || { rep: 0, faith: 0, policy };
+  delete state._statDelta;
   state.salesResult = {
     sold, stocked, demand: baseUnits, revenue, cogs, inventoryFee, profit, stockNote, stockState, price: priceVal, unitCost, chain, priceRatio: pe.ratio,
     perUnit, channel, backlog: Math.round(backlog), backlogValue: Math.round(backlog * margin),
     window: win?.name || '', windowMul: win?.mul || 1, clash: clash ? `${clash.brand} 同月发布，瓜分了需求` : '', clashF, oldNote,
+    repDelta: sd.rep, faithDelta: sd.faith, oldPolicy: sd.policy,
   };
   state.phase = 'sales';
   if (state.cash < 0) goBroke(state, '首月结算后现金为负：售价、成本和备货没谈拢。', 'sales');
