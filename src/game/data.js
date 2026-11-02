@@ -1,13 +1,13 @@
-/** 静态配置与文案 — 《电子产品发展国》原型（休闲口语） */
+/** 静态配置与文案 — 《电子产品发展国》原型 */
 
 export const SAVE_KEY = 'epdg-prototype-v2';
 
 export const SLOTS = [
-  { id: 'perf', name: '好不好用', blurb: '点开 App 更顺了' },
-  { id: 'design', name: '漂不漂亮', blurb: '拿出去有点面儿' },
-  { id: 'camera', name: '拍不拍得好看', blurb: '朋友圈能发了' },
-  { id: 'battery', name: '耐不耐用', blurb: '晚上不用到处找插座' },
-  { id: 'os', name: '顺不顺手', blurb: '用着越来越顺' },
+  { id: 'perf', name: '性能', blurb: '更流畅了' },
+  { id: 'design', name: '屏幕与外观', blurb: '外形有点信仰' },
+  { id: 'camera', name: '影像', blurb: '样张能发朋友圈了' },
+  { id: 'battery', name: '续航与稳定', blurb: '半夜不用趴着充电' },
+  { id: 'os', name: '系统与生态', blurb: '软硬一体有那么点意思' },
 ];
 
 /** 部门：玩家只管大方向，升级部门而不是逐个招人 */
@@ -19,19 +19,19 @@ export const DEPTS = [
 ];
 
 export const POSITIONING = [
-  { id: 'flagship', name: '高高在上款', exp: 1.2, cost: 1.25, months: 5 },
-  { id: 'mainstream', name: '大众都买款', exp: 1.0, cost: 1.0, months: 4 },
-  { id: 'minimal', name: '极简干净款', exp: 0.95, cost: 0.9, months: 4 },
-  { id: 'pro', name: '专业干活款', exp: 1.15, cost: 1.15, months: 5 },
+  { id: 'flagship', name: '旗舰', exp: 1.2, cost: 1.25, months: 5 },
+  { id: 'mainstream', name: '主流', exp: 1.0, cost: 1.0, months: 4 },
+  { id: 'minimal', name: '极简', exp: 0.95, cost: 0.9, months: 4 },
+  { id: 'pro', name: '专业', exp: 1.15, cost: 1.15, months: 5 },
 ];
 
 export const SELL_POINTS = [
-  { id: 'thin', name: '薄到离谱' },
-  { id: 'fast', name: '快到飞起' },
-  { id: 'photo', name: '拍照好看' },
-  { id: 'battery', name: '特别耐用' },
-  { id: 'eco', name: '全家桶联动' },
-  { id: 'price', name: '价格真香' },
+  { id: 'thin', name: '极致轻薄' },
+  { id: 'fast', name: '性能猛兽' },
+  { id: 'photo', name: '影像叙事' },
+  { id: 'battery', name: '续航焦虑终结者' },
+  { id: 'eco', name: '生态闭环' },
+  { id: 'price', name: '性价比刺客' },
 ];
 
 export const PRICE_BANDS = [
@@ -43,24 +43,24 @@ export const PRICE_BANDS = [
 export const SUPPLIERS = [
   {
     id: 'cheap',
-    name: '便宜厂',
-    desc: '省钱，但爱出幺蛾子',
+    name: '便宜不稳',
+    desc: '报价香，但事故多',
     costMul: 0.85,
     eventChance: 0.55,
     quality: 0.9,
   },
   {
     id: 'balanced',
-    name: '稳妥厂',
-    desc: '不翻车也不最贵',
+    name: '均衡之选',
+    desc: '中庸即正义',
     costMul: 1.0,
     eventChance: 0.35,
     quality: 1.0,
   },
   {
     id: 'premium',
-    name: '贵贵厂',
-    desc: '贵，但省心',
+    name: '贵但稳',
+    desc: '钱包瘦了，良率胖了',
     costMul: 1.2,
     eventChance: 0.18,
     quality: 1.12,
@@ -68,55 +68,82 @@ export const SUPPLIERS = [
 ];
 
 export const STOCK_OPTS = [
-  { id: 'safe', name: '少备一点', mul: 0.7, note: '怕压货' },
-  { id: 'normal', name: '正常备货', mul: 1.0, note: '跟着感觉走' },
-  { id: 'aggressive', name: '多备猛卖', mul: 1.4, note: '赌会爆单' },
+  { id: 'safe', name: '保守', mul: 0.7, note: '宁缺毋滥' },
+  { id: 'normal', name: '正常', mul: 1.0, note: '按直觉备' },
+  { id: 'aggressive', name: '激进', mul: 1.4, note: '仓库赌徒' },
 ];
 
 export const COMPANY_NAME_SEEDS = [
-  '键程小作坊',
-  '像素玩具屋',
-  '北桥小厂',
-  '清河电电',
+  '键程实验室',
+  '像素工坊',
+  '北桥电子',
+  '清河智造',
   '蜂鸟硬件社',
   '回路工作室',
   '星轨终端',
   '青瓷数码',
 ];
 
-/** 事件卡：零件迟到 / 做好做坏 / 提前漏光 */
+/** 事件卡：缺芯 / 良率 / 泄露 */
 export const EVENTS = [
   {
     id: 'chip_short',
-    type: '零件迟到',
-    title: '关键零件又鸽了',
-    body: '说好这周到的零件没影了。论坛开始复读「又延期」。',
+    type: '缺芯',
+    title: '晶圆厂说「下个月一定有」',
+    body: '主芯片交期跳票。论坛已经开始复读「又跳票」。',
     choices: [
-      { label: '加钱插队', effect: { cash: -40, months: 0, slotPenalty: {} } },
-      { label: '认栽，晚发一个月', effect: { cash: 0, months: 1, slotPenalty: {} } },
-      { label: '换差一点的先顶上', effect: { cash: -10, months: 0, slotPenalty: { perf: 8 } } },
+      {
+        label: '加钱插队',
+        effect: { cash: -40, months: 0, slotPenalty: {} },
+      },
+      {
+        label: '延期一个月',
+        effect: { cash: 0, months: 1, slotPenalty: {} },
+      },
+      {
+        label: '降规格换芯片',
+        effect: { cash: -10, months: 0, slotPenalty: { perf: 8 } },
+      },
     ],
   },
   {
     id: 'yield',
-    type: '做好做坏',
-    title: '试产机合格的太少了',
-    body: '流水线抽检一片惨淡。进货高手的咖啡续上了第三杯。',
+    type: '良率',
+    title: '良率曲线画成了滑雪道',
+    body: '试产线良率扑街。供应链经理的咖啡因超标了。',
     choices: [
-      { label: '砸钱抢修产线', effect: { cash: -35, months: 0, slotPenalty: {} } },
-      { label: '接受晚点发布', effect: { cash: 0, months: 1, slotPenalty: {} } },
-      { label: '赌一把继续冲', effect: { cash: 0, months: 0, slotPenalty: { battery: 6, design: 4 }, gambleFail: true } },
+      {
+        label: '加急治具（烧钱）',
+        effect: { cash: -35, months: 0, slotPenalty: {} },
+      },
+      {
+        label: '接受延期',
+        effect: { cash: 0, months: 1, slotPenalty: {} },
+      },
+      {
+        label: '赌一把继续',
+        effect: { cash: 0, months: 0, slotPenalty: { battery: 6, design: 4 }, gambleFail: true },
+      },
     ],
   },
   {
     id: 'leak',
-    type: '提前漏光',
-    title: '真机照片跑进群里了',
-    body: '糊成马赛克的真机图配「内部消息」——热度有了，惊喜没了。',
+    type: '泄露',
+    title: '工程机出现在二手群',
+    body: '模糊真机图配上「内部人士」——热度来了，惊喜没了。',
     choices: [
-      { label: '花钱降温', effect: { cash: -20, hype: -5, leak: 1 } },
-      { label: '顺势炒热', effect: { cash: 0, hype: 12, leak: 1 } },
-      { label: '装作没看见', effect: { cash: 0, hype: 4, faith: -4, leak: 1 } },
+      {
+        label: '公关降温',
+        effect: { cash: -20, hype: -5, leak: 1 },
+      },
+      {
+        label: '顺势预热',
+        effect: { cash: 0, hype: 12, leak: 1 },
+      },
+      {
+        label: '装作没看见',
+        effect: { cash: 0, hype: 4, faith: -4, leak: 1 },
+      },
     ],
   },
   {

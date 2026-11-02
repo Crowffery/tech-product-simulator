@@ -37,9 +37,6 @@ const play = (name, ...a) => {
   if (!sfx) return;
   const fn = sfx[name] || sfx[name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
   if (typeof fn === 'function') return fn.apply(sfx, a);
-  // VO shortcuts
-  if (name === 'vo-start') return sfx.voStart?.();
-  if (name === 'vo-confirm') return sfx.voConfirm?.();
 };
 
 function toast(msg) {
@@ -1170,7 +1167,6 @@ function onClick(e) {
   if (act === 'new') {
     draft.companyName = randomCompanyName();
     screen = 'create';
-    play('vo-start');
     play('page-turn');
     render();
     return;
@@ -1197,7 +1193,6 @@ function onClick(e) {
     const name = ($('#cname')?.value || draft.companyName).trim() || randomCompanyName();
     const chip = ($('#chipname')?.value || draft.chipSeries || '蜂鸟').trim().slice(0, 4) || '蜂鸟';
     play('confirm');
-    play('vo-confirm');
     startGame(createNewGame(name, chip));
     persist();
     play('save');

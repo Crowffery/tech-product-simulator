@@ -116,12 +116,9 @@ function playFile(id, { volume = 0.7 } = {}) {
   }
 }
 
-function playVo(id) {
-  if (muted) return;
-  const now = Date.now();
-  if (now - lastVoAt < VO_COOLDOWN_MS) return;
-  lastVoAt = now;
-  playFile(id, { volume: 0.85 });
+function playVo(_id) {
+  // VO / female narration disabled — keep SFX/BGM only
+  return;
 }
 
 function tone(freq, dur, { type = 'square', vol = 0.06, at = 0, slide = 0 } = {}) {
@@ -234,7 +231,6 @@ export const sfx = {
       tone(220, 0.25, { type: 'sawtooth', vol: 0.05, slide: 0.5 });
       tone(165, 0.35, { type: 'sine', vol: 0.08, at: 0.2, slide: 0.7 });
     }
-    playVo('vo-bust');
   },
   save() {
     if (!playFile('save')) {
@@ -248,7 +244,6 @@ export const sfx = {
       sfx.boom(0.75);
       sfx.fanfare(0.85);
     }
-    playVo('vo-launch');
   },
   pressReveal() {
     sfx['press-reveal']();
@@ -265,7 +260,6 @@ export const sfx = {
     if (!playFile('first-month-sales-big-number', { volume: 0.8 })) {
       [392, 523, 659, 784, 1046].forEach((f, i) => tone(f, 0.07, { vol: 0.045, at: i * 0.05 }));
     }
-    playVo('vo-cheer');
   },
   salesBig() {
     sfx['first-month-sales-big-number']();
@@ -375,10 +369,10 @@ export const sfx = {
   },
 
   voStart() {
-    playVo('vo-start');
+    /* VO disabled */
   },
   voConfirm() {
-    playVo('vo-confirm');
+    /* VO disabled */
   },
 
   setMuted(v) {

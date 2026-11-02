@@ -353,7 +353,7 @@ export function resolveEvent(state, choiceIndex) {
   }
   if (eff.gambleFail && Math.random() < 0.45) {
     state.monthsLeft += 1;
-    state.eventLog.push(`${ev.type}：赌输了，又晚一个月`);
+    state.eventLog.push(`${ev.type}：赌输了，又拖一个月`);
   } else {
     state.eventLog.push(`${ev.type}：${choice.label}`);
   }
@@ -366,7 +366,7 @@ export function resolveEvent(state, choiceIndex) {
 export function afterDevCheck(state) {
   if (state.cash < 0) {
     state.phase = 'bust';
-    state.bustReason = '钱花光了。要么太贵太慢，要么突发状况砸太狠。';
+    state.bustReason = '现金烧穿了。三角没权衡好，或事件砸太狠。';
     return { ok: true, bust: true };
   }
   const r = devRatio(state);
@@ -572,7 +572,7 @@ export function runSales(state) {
   state.phase = 'sales';
   if (state.cash < 0) {
     state.phase = 'bust';
-    state.bustReason = '卖完一个月还是欠钱。价格、成本和备货没算明白。';
+    state.bustReason = '首月结算后现金为负。售价、成本与备货没谈拢。';
   }
 }
 
