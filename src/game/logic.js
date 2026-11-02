@@ -25,21 +25,33 @@ import {
 
 // ═════════════════════════ 账本 ═════════════════════════
 
-/** 所有现金变动都记账：label 为分类（财报按它汇总） */
-export function book(state, label, v, note = '') {
+/** 所有现金变动都记账：label 为分类（财报按它汇总）
+ *  meta.productGen：在售续销归属哪一代机型（跨代入账时仍能看出是哪款旧机） */
+export function book(state, label, v, note = '', meta = null) {
   const n = Math.round(v);
   if (!n) return;
   state.cash += n;
   state.ledger ||= [];
-  state.ledger.push({ m: state.month, gen: state.generation, label, v: n, note });
+  const entry = { m: state.month, gen: state.generation, label, v: n, note };
+  if (meta && meta.productGen != null) entry.productGen = meta.productGen;
+  state.ledger.push(entry);
   if (state.ledger.length > 160) state.ledger = state.ledger.slice(-160);
 }
 
-/** 某一代的分类汇总 */
+/** 某一代的分类汇总（按入账时的 generation；在售续销用「在售·机型名」分行） */
 export function ledgerOf(state, gen = state.generation) {
   const sums = {};
   for (const e of state.ledger || []) if (e.gen === gen) sums[e.label] = (sums[e.label] || 0) + e.v;
   return Object.entries(sums).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+}
+
+/** 某代入账的在售续销合计（含前代机型在本代研发月继续卖的钱） */
+export function onSaleIncomeOf(state, gen = state.generation) {
+  let n = 0;
+  for (const e of state.ledger || []) {
+    if (e.gen === gen && (e.label === '在售机型' || e.label === '在售机型（含补货）' || e.label.startsWith('在售·'))) n += e.v;
+  }
+  return n;
 }
 
 // ═════════════════════════ 规模效应 / 战略投资 / 市场份额 ═════════════════════════
@@ -353,7 +365,6 @@ export function advanceMonth(state, allocation) {
   book(state, '团队工资', -pay);
   const up = upkeep(state);
   if (up) book(state, '海外与门店运营', -up);
-  state.monthDelta = -pay - up;
   const caps = capsMap(state);
   const gains = {};
   for (const [slotId, pts] of Object.entries(allocation)) {
@@ -365,6 +376,8 @@ export function advanceMonth(state, allocation) {
     gains[slotId] = slot.progress - before;
   }
   const tail = sellTail(state);
+  // 净额 = 工资/运营 + 在售续销（HUD / 月报大字用这个，别只显示负数工资）
+  state.monthDelta = -pay - up + (tail.income || 0);
   const chipDone = tickChip(state);
   state.monthsLeft = Math.max(0, state.monthsLeft - 1);
   state.month += 1;
@@ -427,45 +440,63 @@ export function sellTail(state) {
     const fromBacklog = Math.max(0, u - nat);
     m.backlog = Math.max(0, (m.backlog || 0) - fromBacklog) * 0.85; // 等太久的人会走
     const inc = u * m.unitMargin;
+    const lineInc = Math.round(inc);
     units += u;
     restock += fromBacklog;
-    income += inc;
+    income += lineInc;
     m.total = (m.total || 0) + u;
-    m.profit = (m.profit || 0) + inc;
+    m.profit = (m.profit || 0) + lineInc;
+    m.lastUnits = Math.round(u * 10) / 10;
+    m.lastProfit = lineInc;
     m.history = [...(m.history || []), Math.round(u * 10) / 10].slice(-LIFE_MONTHS);
     m.months = LIFE_MONTHS - m.age;
-    lines.push({ name: m.name, units: Math.round(u * 10) / 10, stage: lifeStage(m).name, hit: hit?.brand });
+    lines.push({
+      name: m.name,
+      units: Math.round(u * 10) / 10,
+      profit: lineInc,
+      stage: lifeStage(m).name,
+      hit: hit?.brand,
+      gen: m.gen,
+    });
     const rec = (state.models || []).find((x) => x.gen === m.gen);
     if (rec) {
       rec.lifeSold = Math.round((rec.sold || 0) + m.total);
       rec.lifeProfit = Math.round((m.firstProfit || 0) + m.profit);
     }
+    // 按机型拆账，并带上所属世代，跨代续销也能对上号
+    if (lineInc) {
+      const tag = fromBacklog > 0.5 ? `在售·${m.name}（含补货）` : `在售·${m.name}`;
+      book(state, tag, lineInc, m.gen ? `第${m.gen}代` : '', { productGen: m.gen });
+    }
   }
   const retired = (state.onSale || []).filter((m) => m.age >= LIFE_MONTHS || (naturalDemand({ ...m, age: m.age + 1 }) < 0.3 && (m.backlog || 0) < 0.3));
   state.onSale = (state.onSale || []).filter((m) => !retired.includes(m));
   income = Math.round(income);
-  if (income) book(state, restock > 0.5 ? '在售机型（含补货）' : '在售机型', income);
   state.tailTotal = (state.tailTotal || 0) + income;
   state.cumSold = (state.cumSold || 0) + units;
   recordShare(state, units);
   return { units: Math.round(units), income, restock: Math.round(restock), lines, retired: retired.map((m) => m.name) };
 }
 
-/** 生命周期剩余价值预估（给清仓 / 以旧换新做参考） */
-export function tailValue(state) {
+/** 单台在售机型剩余生命周期预估利润 */
+export function modelTailValue(m0) {
+  if (!m0) return 0;
+  const m = { ...m0 };
+  let backlog = m.backlog || 0;
   let v = 0;
-  for (const m0 of state.onSale || []) {
-    const m = { ...m0 };
-    let backlog = m.backlog || 0;
-    for (let a = (m.age || 0) + 1; a <= LIFE_MONTHS; a++) {
-      m.age = a;
-      const nat = naturalDemand(m);
-      const u = Math.min(nat + backlog, m.cap);
-      backlog = Math.max(0, backlog - Math.max(0, u - nat)) * 0.85;
-      v += u * m.unitMargin;
-    }
+  for (let a = (m.age || 0) + 1; a <= LIFE_MONTHS; a++) {
+    m.age = a;
+    const nat = naturalDemand(m);
+    const u = Math.min(nat + backlog, m.cap);
+    backlog = Math.max(0, backlog - Math.max(0, u - nat)) * 0.85;
+    v += u * m.unitMargin;
   }
   return Math.round(v);
+}
+
+/** 生命周期剩余价值预估（给清仓 / 以旧换新做参考） */
+export function tailValue(state) {
+  return (state.onSale || []).reduce((a, m) => a + modelTailValue(m), 0);
 }
 
 /** 预测一条生命周期曲线（首月之后每个月的销量），给战报画图 */
@@ -503,9 +534,9 @@ export function cutPrice(state, idx) {
 }
 
 export const OLD_POLICIES = [
-  { id: 'keep', name: '继续卖', desc: '同定位旧款销量砍半，其他 ×0.85' },
-  { id: 'clear', name: '降价清仓', desc: '一次性回款约 5 成，口碑 -1' },
-  { id: 'tradein', name: '以旧换新', desc: '补贴 ¥4,000 万，信仰 +3，新品首月 +12%' },
+  { id: 'keep', name: '继续卖', desc: '旧款继续每月进账（同定位销量砍半）；能拿到后续续销' },
+  { id: 'clear', name: '降价清仓', desc: '一次性回款约 5 成，放弃后续月续销，口碑 -1' },
+  { id: 'tradein', name: '以旧换新', desc: '补贴换首月 +12%，放弃后续月续销；信仰 +3' },
 ];
 
 export function recommendedEventChoice(eventId) {

@@ -358,7 +358,7 @@ P.dev = () => {
     sheet: `<h2 class="sheet-h">${icon('flask', 22)} 研发 <small>${state.notes?.[state.product.positioningId] ? `📒 ${term('企划笔记')}生效` : '⭐ 点星标出重点'}</small></h2>
       ${devTimeline()}
       ${state.month > 1 || state.slots.perf.progress > 0 ? benchCard() : ''}
-      ${onSaleBlock()}
+      ${onSaleBlock(true, true)}
       ${state.chip?.research ? `<p class="chip-line">🧪 ${esc(chipName(state.chip.series, state.chip.research.gen, 1).replace(/ Pro$/, ''))} 流片中：还剩 ${state.chip.research.months} 个月 <i style="--p:${Math.round((1 - state.chip.research.months / state.chip.research.total) * 100)}%"></i></p>` : ''}
       <div class="slots">${SLOTS.map((s) => {
         const sl = state.slots[s.id];
@@ -488,19 +488,27 @@ function spark(vals, forecast = []) {
   return `<span class="spark">${all.map((v, i) => `<i class="${i >= vals.length ? 'fc' : ''}" style="height:${Math.max(6, Math.round((v / max) * 100))}%" title="${v} 万台"></i>`).join('')}</span>`;
 }
 
-/** 在售产品：生命周期一目了然，可以降价续命 */
-function onSaleBlock(withActions = true) {
+/** 在售产品：生命周期一目了然，可以降价续命；展示本月/累计利润 */
+function onSaleBlock(withActions = true, showEmpty = false) {
   const list = state.onSale || [];
-  if (!list.length) return '';
-  return `<div class="onsale"><div class="os-h"><b>🛒 在售产品</b><small>每台手机都有生命周期，约 ${L.LIFE_MONTHS} 个月后退市</small></div>
+  if (!list.length) {
+    if (!showEmpty) return '';
+    return `<div class="onsale empty"><div class="os-h"><b>🛒 在售产品</b></div>
+      <p class="os-empty">暂无在售旧机（可能已清仓或以旧换新）——选清仓/以旧换新会放弃后续月续销。</p></div>`;
+  }
+  return `<div class="onsale"><div class="os-h"><b>🛒 在售产品</b><small>每台手机都有生命周期，约 ${L.LIFE_MONTHS} 个月后退市；推进研发月时会自动结算续销</small></div>
     ${list
       .map((m, i) => {
         const st = L.lifeStage(m);
-        const last = (m.history || []).slice(-1)[0] ?? 0;
+        const last = m.lastUnits ?? (m.history || []).slice(-1)[0] ?? 0;
+        const monthP = Math.round(m.lastProfit || 0);
+        const lifeP = Math.round((m.firstProfit || 0) + (m.profit || 0));
+        const left = L.modelTailValue(m);
         return `<div class="os-row">
           <span class="os-dot" style="background:${m.color}"></span>
           <div class="os-main"><b>${esc(m.name)}</b><em class="lstage ${st.cls}">${st.name}</em>
-            <small>上月 ${last} 万台 · 累计 ${Math.round((m.history || []).reduce((a, b) => a + b, 0))} 万台 · ¥${m.price}${m.backlog > 0.5 ? ` · 排队 ${Math.round(m.backlog)} 万` : ''}</small></div>
+            <small>本月 ${last} 万台 · 本月利润 <b class="pos">${money(monthP, { sign: true })}</b> · 累计利润 <b class="pos">${money(lifeP, { sign: true })}</b></small>
+            <small>累计 ${Math.round((m.history || []).reduce((a, b) => a + b, 0))} 万台 · ¥${m.price} · 预计还能赚 ${money(left)}${m.backlog > 0.5 ? ` · 排队 ${Math.round(m.backlog)} 万` : ''}</small></div>
           ${spark(m.history || [])}
           ${withActions ? `<button type="button" class="os-cut" data-act="cut-price" data-i="${i}" ${(m.cuts || 0) >= 3 ? 'disabled' : ''}>降价<small>-10%</small></button>` : ''}
         </div>`;
@@ -580,8 +588,9 @@ P.factory = () => {
       <div class="spec-row"><span>单台成本</span><b>¥${p.unitCost}</b></div>
       <div class="spec-row"><span>研发完成度</span><b>${Math.round(L.devRatio(state) * 100)}%</b></div>
       ${benchCard()}
-      ${(state.onSale || []).length ? `<div class="field-l" style="margin-top:8px">新品上市，旧款怎么办？<small class="muted">（旧款预计还能挣 ${money(L.tailValue(state))}）</small>
-        <div class="cards3">${L.OLD_POLICIES.map((o) => `<button type="button" class="pick ${(state.oldPolicy || 'keep') === o.id ? 'on' : ''}" data-act="old-policy" data-id="${o.id}"><b>${o.name}</b><small>${o.desc}</small></button>`).join('')}</div></div>` : ''}`,
+      ${(state.onSale || []).length ? `<div class="field-l" style="margin-top:8px">新品上市，旧款怎么办？<small class="muted">（旧款预计还能再挣 ${money(L.tailValue(state))}；选清仓/以旧换新 = <b class="neg">放弃后续月续销</b>）</small>
+        <div class="cards3">${L.OLD_POLICIES.map((o) => `<button type="button" class="pick ${(state.oldPolicy || 'keep') === o.id ? 'on' : ''}" data-act="old-policy" data-id="${o.id}"><b>${o.name}</b><small>${o.desc}</small></button>`).join('')}</div>
+        <p class="policy-warn">💡 想拿前几款的持续收入：选「继续卖」。清仓/以旧换新会立刻清空在售列表。</p></div>` : ''}`,
     cta: `<button type="button" class="primary big" data-act="to-launch" ${draft.factoryDone ? '' : 'disabled'}>${draft.factoryDone ? '🎤 去发布会后台 ▶' : '量产中…'}</button>`,
   };
 };
@@ -755,12 +764,17 @@ P.sales = () => {
           if (!m) return '';
           const fc = L.lifeForecast(m);
           const total = Math.round(r.sold + fc.reduce((a, b) => a + b, 0));
+          const left = L.modelTailValue(m);
+          const lifeP = Math.round((m.firstProfit || 0) + (m.profit || 0));
           return `<div class="life-fc"><div class="lf-h"><b>📈 生命周期预测</b><small>首月只是开始：后面 ${fc.length} 个月还会继续卖</small></div>
             ${spark([r.sold], fc)}
-            <p>预计总销量约 <b>${total} 万台</b>，口碑${m.wom > 0.03 ? '<b class="pos">很好，后面几个月会越卖越多</b>' : m.wom < -0.03 ? '<b class="neg">一般，热度会掉得很快</b>' : '平稳'}。竞品发新机、出了下一代都会分走销量，可以随时降价续命。</p></div>`;
+            <p>预计总销量约 <b>${total} 万台</b>，口碑${m.wom > 0.03 ? '<b class="pos">很好，后面几个月会越卖越多</b>' : m.wom < -0.03 ? '<b class="neg">一般，热度会掉得很快</b>' : '平稳'}。竞品发新机、出了下一代都会分走销量，可以随时降价续命。</p>
+            <div class="tail-callout"><b>🛒 持续收入</b>
+              <span>已入账（含首月） <b class="pos">${money(lifeP, { sign: true })}</b></span>
+              <span>预计剩余生命周期还能赚 <b class="pos">${money(left)}</b></span>
+              <small>下一代研发推进每个月都会自动结算「在售续销」，记在账本「在售·${esc(m.name)}」。</small></div></div>`;
         })()}
         <div class="unit-econ"><span>售价 <b>¥${r.price}</b></span><span>− 成本 <b>¥${r.unitCost}</b></span><span>− 渠道营销 <b>¥${r.channel}</b></span><span>= 每台赚 <b class="${r.perUnit < 0 ? 'neg' : ''}">¥${r.perUnit}</b></span></div>
-        <p class="muted">之后它还会继续在售几个月，收入记在账本「在售机型」里。</p>
       </div>`,
     cta: `<button type="button" class="primary big" data-act="to-next">${state.month >= RUN_MONTHS ? '三年结算 ▶' : '年终总结，规划下一代 ▶'}</button>`,
   };
@@ -778,19 +792,22 @@ P.next = () => {
       <div class="ntabs"><button type="button" class="${draft.nextTab !== 'invest' ? 'on' : ''}" data-act="next-tab" data-id="review">📊 年终复盘</button><button type="button" class="${draft.nextTab === 'invest' ? 'on' : ''}" data-act="next-tab" data-id="invest">🏗 投资与升级 <small>${money(state.cash)}</small></button></div>
       ${draft.nextTab === 'invest' ? investTab() : `
       ${last ? `<div class="model-card">${last.thumb ? `<img src="${last.thumb}" alt="" />` : ''}<div><b>${esc(last.design.modelName)}</b>
-        <small>惊艳 ${last.wow} ${last.grade} · 首月 ${last.sold} 万台 · 媒体 ${last.media}</small>
+        <small>惊艳 ${last.wow} ${last.grade} · 首月 ${last.sold} 万台 · 终身 ${last.lifeSold ?? last.sold} 万台 · 终身利润 ${money(last.lifeProfit ?? 0)} · 媒体 ${last.media}</small>
         ${(last.firsts || []).map((f) => `<span class="mini-first">🏆${esc(f)}</span>`).join('')}</div></div>` : ''}
       ${(() => {
         const sums = L.ledgerOf(state);
         if (!sums.length) return '';
         const net = sums.reduce((a, [, v]) => a + v, 0);
-        const max = Math.max(...sums.map(([, v]) => Math.abs(v)));
+        const max = Math.max(...sums.map(([, v]) => Math.abs(v)), 1);
+        const tailIn = L.onSaleIncomeOf(state);
         return `<div class="report"><div class="rp-h"><b>📊 这一代的财报</b><span class="${net < 0 ? 'neg' : 'pos'}">净 ${money(net, { sign: true })}</span></div>
           ${sums.map(([k, v]) => `<div class="rp-row"><span>${esc(k)}</span><i><u class="${v < 0 ? 'neg' : 'pos'}" style="width:${Math.round((Math.abs(v) / max) * 100)}%"></u></i><b class="${v < 0 ? 'neg' : 'pos'}">${money(v, { sign: true })}</b></div>`).join('')}
+          ${tailIn ? `<div class="tail-report"><b>🛒 在售机型（含前代续销）</b><span class="pos">本代入账 ${money(tailIn, { sign: true })}</span>
+            <small>研发月推进时自动结算；条目形如「在售·机型名」。清仓/以旧换新会放弃后续续销。</small></div>` : `<div class="tail-report muted"><b>🛒 在售续销</b><small>本代账本还没有「在售·…」入账——新品刚上市的续销会在下一代研发月里陆续进账。</small></div>`}
           <small class="muted">点顶部 💰 随时查看账本流水</small></div>`;
       })()}
       ${shareBlock()}
-      ${onSaleBlock(true)}
+      ${onSaleBlock(true, true)}
       <button type="button" class="go-invest" data-act="next-tab" data-id="invest">下一步：花钱让公司变强 ▶</button>`}`,
     cta: `<button type="button" class="primary big" data-act="next-gen">开新企划 ▶</button>`,
   };
@@ -1727,15 +1744,18 @@ function monthReport(res) {
   const log = DEV_LOG[top][Math.floor(Math.random() * DEV_LOG[top].length)];
   const el = document.createElement('div');
   el.className = 'mreport';
+  const hasTail = (res.tail?.income || 0) > 0;
   el.innerHTML = `<b>📋 ${monthOfYear(state.month - 1)} 月研发月报</b>
     ${gains.map(([id, v]) => `<span><em>${SLOTS.find((x) => x.id === id).name.slice(0, 2)}</em><i><u style="--w:${Math.min(100, v * 3)}%"></u></i><strong>+${v}</strong></span>`).join('')}
     <small>💬 ${log}</small>
-    ${(res.tail?.lines || []).map((l) => `<small class="sale">🛒 ${esc(l.name)} 卖了 ${l.units} 万台 · ${l.stage}${l.hit ? ` · ⚔ ${esc(l.hit)}发新机` : ''}</small>`).join('')}
+    ${hasTail ? `<b class="tail-earn">🛒 在售续销 ${money(res.tail.income, { sign: true })}${res.tail.restock ? ` · 补货 ${res.tail.restock} 万台` : ''}</b>` : ''}
+    ${(res.tail?.lines || []).map((l) => `<small class="sale">🛒 ${esc(l.name)} ${l.units} 万台 · ${money(l.profit || 0, { sign: true })} · ${l.stage}${l.hit ? ` · ⚔ ${esc(l.hit)}` : ''}</small>`).join('')}
     ${(res.tail?.retired || []).map((n) => `<small class="sale">👋 ${esc(n)} 退市</small>`).join('')}
-    <small class="pay">工资 ${money(state.monthDelta)}${res.tail?.income ? ` · 在售机型 ${money(res.tail.income, { sign: true })}${res.tail.restock ? `（补货 ${res.tail.restock} 万台）` : ''}` : ''}</small>`;
+    <small class="pay">本月净额 ${money(state.monthDelta, { sign: true })}（含工资/运营${hasTail ? '与续销' : ''}）</small>`;
   host.appendChild(el);
-  setTimeout(() => el.classList.add('out'), 1900);
-  setTimeout(() => el.remove(), 2300);
+  const hold = hasTail ? 3200 : 1900;
+  setTimeout(() => el.classList.add('out'), hold);
+  setTimeout(() => el.remove(), hold + 400);
 }
 
 async function advance(all = false) {
@@ -1772,18 +1792,20 @@ async function advance(all = false) {
   busy = false;
 }
 
-/** 账本：最近的现金流水 + 本代分项 */
+/** 账本：最近的现金流水 + 本代分项（在售续销按机型分行） */
 function showLedger() {
   document.querySelector('.ledger-ov')?.remove();
   const ov = document.createElement('div');
   ov.className = 'ledger-ov';
-  const recent = (state.ledger || []).slice(-14).reverse();
+  const recent = (state.ledger || []).slice(-18).reverse();
   const sums = L.ledgerOf(state);
+  const tailIn = L.onSaleIncomeOf(state);
   ov.innerHTML = `<div class="ledger kbox"><div class="lg-h"><b>📒 账本</b><span>现金 ${money(state.cash)}</span><button type="button" data-x>✕</button></div>
     <h4>第 ${state.generation} 代至今</h4>
     ${sums.length ? sums.map(([k, v]) => `<div class="lg-row"><span>${esc(k)}</span><b class="${v < 0 ? 'neg' : 'pos'}">${money(v, { sign: true })}</b></div>`).join('') : '<p class="muted">还没有流水</p>'}
+    ${tailIn ? `<div class="lg-row highlight"><span>🛒 在售续销小计（含前代机）</span><b class="pos">${money(tailIn, { sign: true })}</b></div>` : ''}
     <h4>最近流水</h4>
-    ${recent.map((e) => `<div class="lg-row sm"><span>${monthOfYear(e.m)} 月 · ${esc(e.label)}${e.note ? ` <i>${esc(e.note)}</i>` : ''}</span><b class="${e.v < 0 ? 'neg' : 'pos'}">${money(e.v, { sign: true })}</b></div>`).join('')}
+    ${recent.map((e) => `<div class="lg-row sm ${e.label.startsWith('在售') ? 'tail' : ''}"><span>${monthOfYear(e.m)} 月 · ${esc(e.label)}${e.note ? ` <i>${esc(e.note)}</i>` : ''}${e.productGen != null ? ` <i>机型第${e.productGen}代</i>` : ''}</span><b class="${e.v < 0 ? 'neg' : 'pos'}">${money(e.v, { sign: true })}</b></div>`).join('')}
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener('click', (e) => {

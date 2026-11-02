@@ -748,3 +748,19 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
   .launch-custom { padding: 6px; gap: 6px; }
   .launch-opt .lo-chips .chip { padding: 4px 7px; font-size: .72rem; }
 }
+
+
+.onsale.empty { background: #f4f6f7; }
+.os-empty { margin: 2px 0 0; font-size: .72rem; color: var(--muted); line-height: 1.4; }
+.os-main .pos { color: var(--green); font-weight: 900; }
+.tail-callout { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 6px 8px; background: #e8f8ef; border: 2px solid #1d6f42; }
+.tail-callout b { font-size: .86rem; }
+.tail-callout span { font-size: .78rem; }
+.tail-callout small { font-size: .66rem; color: var(--muted); }
+.tail-report { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 6px 8px; background: #eafaf1; border: 2px dashed #1d6f42; }
+.tail-report b { font-size: .82rem; }
+.tail-report.muted { border-color: #95a5a6; background: #f4f6f7; }
+.policy-warn { margin: 6px 0 0; font-size: .72rem; color: #7d5a00; background: #fef9e7; border: 1px dashed #d4a017; padding: 4px 6px; }
+.mreport b.tail-earn { display: block; margin-top: 3px; padding: 3px 5px; background: #1d6f42; color: #fff; font-size: .78rem; border: 2px solid #000; }
+.ledger .lg-row.highlight { background: #e8f8ef; border: 2px solid #1d6f42; padding: 3px 4px; margin-top: 4px; }
+.ledger .lg-row.sm.tail { background: #f0faf4; }
