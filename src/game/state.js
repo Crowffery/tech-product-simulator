@@ -43,6 +43,10 @@ export function createNewGame(companyName) {
     wowResult: null,
     lastThumb: '',
     archived: false,
+    notes: {},
+    overstocks: 0,
+    lastExp: 0,
+    review: null,
   };
 }
 
@@ -60,6 +64,7 @@ export function loadGame() {
     if (data.phase === 'supplier' || data.phase === 'stock') data.phase = 'logistics';
     if (data.phase === 'launchPrep') data.phase = 'launch';
     data.models ||= [];
+    data.notes ||= {};
     if (data.design === undefined) data.design = null;
     if (data.designDraft === undefined) data.designDraft = null;
     return data;

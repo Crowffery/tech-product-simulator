@@ -178,7 +178,7 @@ export function createStudio(root, opts = {}) {
       const fx = [
         c.thick ? `厚 +${c.thick}` : '',
         c.weight ? `重 +${c.weight}g` : '',
-        `成本 +${c.cost * 70}`,
+        `成本 +${c.cost * 55}`,
         ...Object.entries(c.caps).map(([k, v]) => `${{ design: '外观', camera: '影像', battery: '续航', os: '系统' }[k]} ${v > 0 ? '+' : ''}${v}`),
       ].filter(Boolean);
       return `<button type="button" class="concept ${on ? 'on' : ''}" data-concept="${c.id}" ${minor() || clash || full ? 'disabled' : ''} title="${esc(why)}">

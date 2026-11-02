@@ -5,6 +5,7 @@
  */
 import { SLOTS, POSITIONING, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS } from './data.js';
 import { emptySlots } from './state.js';
+import { IDEAL, matchOf, promiseCheck, priceFit, windowAt, clashAt, expectationBar, RUN_MONTHS } from './market.js';
 import {
   defaultDesign,
   slotCaps,
@@ -159,7 +160,14 @@ export function avgSlotProgress(state) {
 export function balancedAllocation(state, focus = []) {
   const cap = manpowerCap(state);
   const caps = capsMap(state);
-  const need = SLOTS.map((s) => ({ id: s.id, gap: Math.max(0, caps[s.id] - state.slots[s.id].progress) * (focus.includes(s.id) ? 2.5 : 1) }));
+  const pos = state.product?.positioningId;
+  // 团队直觉：半程贴近定位的理想配比；记下企划笔记后完全贴近
+  const ideal = pos ? IDEAL[pos] : null;
+  const k = pos && state.notes?.[pos] ? 1 : 0.5;
+  const need = SLOTS.map((s) => ({
+    id: s.id,
+    gap: Math.max(0, caps[s.id] - state.slots[s.id].progress) * (focus.includes(s.id) ? 2.5 : 1) * (ideal ? 1 + (ideal[s.id] / 20 - 1) * k : 1),
+  }));
   const total = need.reduce((a, b) => a + b.gap, 0) || 1;
   const alloc = Object.fromEntries(need.map((n) => [n.id, Math.floor((n.gap / total) * cap)]));
   let rem = cap - Object.values(alloc).reduce((a, b) => a + b, 0);
@@ -194,7 +202,7 @@ export function advanceMonth(state, allocation) {
     if (!pts) continue;
     const slot = state.slots[slotId];
     const before = slot.progress;
-    slot.progress = Math.min(caps[slotId], slot.progress + Math.round(pts * 10 * slotBoost(state, slotId)));
+    slot.progress = Math.min(caps[slotId], slot.progress + Math.round(pts * 14 * slotBoost(state, slotId)));
     slot.comment = commentFor(slotId, slot.progress);
     gains[slotId] = slot.progress - before;
   }
@@ -271,11 +279,22 @@ export function afterDevCheck(state) {
     return { ok: true, bust: true };
   }
   const r = devRatio(state);
-  if ((r >= 0.6 && state.monthsLeft <= 1) || state.monthsLeft <= 0 || r >= 0.97) {
+  if (state.monthsLeft <= 0 || r >= 0.97) {
     state.phase = 'factory';
     return { ok: true, toFactory: true };
   }
   state.phase = 'dev';
+  return { ok: true };
+}
+
+/** 提前量产：完成度 ≥60% 时可以抢档期，代价是完成度 */
+export function canEarlyLaunch(state) {
+  return state.phase === 'dev' && devRatio(state) >= 0.6;
+}
+export function earlyLaunch(state) {
+  if (!canEarlyLaunch(state)) return { ok: false };
+  state.eventLog.push(`提前量产：还剩 ${state.monthsLeft} 月工期`);
+  state.phase = 'factory';
   return { ok: true };
 }
 
@@ -310,11 +329,9 @@ export function resolveLaunchStyle(state, styleId) {
 
 export function experienceScore(state) {
   const sup = SUPPLIERS.find((s) => s.id === state.supplierId) || SUPPLIERS[1];
-  let score = avgSlotProgress(state) * state.product.expMul * sup.quality;
+  const m = matchOf(state.slots, state.product.positioningId);
+  let score = avgSlotProgress(state) * state.product.expMul * sup.quality * m.mult;
   if (state.product.bindEco) score += 4;
-  if (state.product.pointIds.includes('fast')) score += state.slots.perf.progress * 0.05;
-  if (state.product.pointIds.includes('photo')) score += state.slots.camera.progress * 0.05;
-  if (state.product.pointIds.includes('thin')) score += state.slots.design.progress * 0.04;
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
@@ -333,6 +350,7 @@ export function wowNow(state) {
   else if (n.score >= 55 && comp >= 85) headline = '「这才叫创新！」——科技媒体集体起立';
   else if (n.score >= 55) headline = '「概念满分，做工还差口气」';
   else if (n.score >= 30) headline = '「有新意，但不够炸」';
+  else if (!state.models.length) headline = '「中规中矩的首秀」——先活下来再说';
   else if (comp >= 80) headline = '「稳，但又是挤牙膏的一年」';
   else headline = '「既不新，也不稳」——评论区沉默了';
   const firsts = n.items.filter((i) => i.first).map((i) => i.label.replace(/^.*「|」$/g, ''));
@@ -344,11 +362,25 @@ export function finalizeScores(state) {
   const W = wowNow(state);
   state.wowResult = W;
   state.hype += Math.round((W?.buzz || 0) / 4);
+  const phys = physical(state.design);
+  const m = matchOf(state.slots, state.product.positioningId);
+  const promises = promiseCheck(state, phys);
+  const pf = priceFit(state.product.positioningId, state.product.priceId);
+  const bar = expectationBar(state);
+  const promiseUser = promises.reduce((a, p) => a + (p.ok ? 3 : -6), 0);
   const media = Math.max(
-    20,
-    Math.min(98, Math.round(exp * 0.45 + state.launchScore * 0.3 + state.hype * 0.12 + (W ? W.score * 0.3 : 15) + (Math.random() * 6 - 3))),
+    15,
+    Math.min(98, Math.round(16 + exp * 0.45 + state.launchScore * 0.3 + state.hype * 0.1 + (W ? W.score * 0.25 : 10) + (exp - bar) * 0.35 + (Math.random() * 6 - 3))),
   );
-  const user = Math.max(20, Math.min(98, Math.round(exp * 0.7 + state.faith * 0.1 + (W ? (W.completeness - 80) * 0.2 : 0) + (Math.random() * 8 - 4))));
+  const user = Math.max(
+    15,
+    Math.min(98, Math.round(8 + exp * 0.7 + state.faith * 0.1 + (W ? (W.completeness - 80) * 0.2 : 0) + promiseUser + pf.user + (Math.random() * 8 - 4))),
+  );
+  const pos = state.product.positioningId;
+  const newNote = m.match >= 0.85 && !state.notes[pos];
+  if (m.match >= 0.85) state.notes[pos] = true;
+  state.review = { exp, bar, match: Math.round(m.match * 100), mult: m.mult, verdict: m.verdict, promises, priceNote: pf.note, priceUser: pf.user, newNote };
+  state.lastExp = exp;
   state.mediaScore = media;
   state.userScore = user;
   state.headline = W ? W.headline : '中规中矩';
@@ -364,19 +396,25 @@ export function runSales(state) {
   const price = PRICE_BANDS.find((p) => p.id === state.product.priceId);
   const stock = STOCK_OPTS.find((s) => s.id === state.stockId);
   const W = state.wowResult;
+  const win = windowAt(state.month);
+  const clash = clashAt(state.month, state.product.positioningId);
+  const clashF = clash ? Math.max(0.6, Math.min(1.15, (state.mediaScore / (state.mediaScore + clash.power)) * 1.7)) : 1;
   const demand =
+    (win?.mul || 1) *
+    clashF *
     price.demand *
     (0.55 + state.mediaScore / 120) *
     (0.65 + state.userScore / 160) *
     (state.reputation / 55) *
-    (0.9 + (W?.score || 25) / 250) *
-    (1 + (W?.buzz || 0) / 120);
+    (0.82 + (W?.score || 20) / 140) *
+    (1 + (W?.buzz || 0) / 60);
   const baseUnits = Math.round(28 * demand);
-  const stocked = Math.round(32 * stock.mul);
+  const stocked = Math.round(30 * stock.mul * (0.5 + price.demand * 0.5));
   const sold = Math.min(stocked, baseUnits);
   const unitCost = Math.round((state.design ? physical(state.design).unitCost : 2400) * (deptLevel(state, 'supply') === 3 ? 0.95 : 1));
-  const margin = Math.max(0.3, (price.price - unitCost) / 2000);
-  const revenue = Math.round(sold * margin * 3.2);
+  // 单台毛利率 × 价位：高价利润厚但量小，低价走量但薄
+  const margin = Math.max(0.15, (price.price - unitCost) / 1000);
+  const revenue = Math.round(sold * margin * 2.0);
   const cogs = Math.round(sold * 0.3 * (SUPPLIERS.find((x) => x.id === state.supplierId)?.costMul || 1));
   let inventoryFee = 0;
   let stockNote;
@@ -390,6 +428,7 @@ export function runSales(state) {
     inventoryFee = Math.round((stocked - sold) * 0.6);
     stockNote = '仓库有点吃灰，现金被压住了。';
     stockState = 'over';
+    state.overstocks = (state.overstocks || 0) + 1;
     state.cash -= inventoryFee;
   } else {
     stockNote = '备货大致合适，供应链松了口气。';
@@ -401,7 +440,10 @@ export function runSales(state) {
   state.reputation = Math.max(0, Math.min(100, state.reputation + Math.round((state.mediaScore - 60) / 10)));
   state.faith = Math.max(0, Math.min(100, state.faith + Math.round((state.userScore - 60) / 12)));
   if (state.product.bindEco) state.faith = Math.min(100, state.faith + 3);
-  state.salesResult = { sold, stocked, demand: baseUnits, revenue, cogs, inventoryFee, profit, stockNote, stockState, price: price.price, unitCost };
+  state.salesResult = {
+    sold, stocked, demand: baseUnits, revenue, cogs, inventoryFee, profit, stockNote, stockState, price: price.price, unitCost,
+    window: win?.name || '', windowMul: win?.mul || 1, clash: clash ? `${clash.brand} 同月发布，瓜分了需求` : '', clashF,
+  };
   state.phase = 'sales';
   if (state.cash < 0) {
     state.phase = 'bust';
@@ -435,7 +477,7 @@ export function enterNext(state) {
     if (state.models.length > 12) state.models = state.models.slice(-12);
     state.archived = true;
   }
-  state.phase = 'next';
+  state.phase = state.month >= RUN_MONTHS ? 'ending' : 'next';
 }
 
 export function goNextGen(state) {
@@ -473,7 +515,7 @@ export const PHASE_STEPS = [
 ];
 
 export function stepIndex(phase) {
-  const map = { event: 'dev', score: 'launch', next: 'sales', bust: 'sales' };
+  const map = { event: 'dev', score: 'launch', next: 'sales', bust: 'sales', ending: 'sales' };
   return PHASE_STEPS.findIndex((s) => s.id === (map[phase] || phase));
 }
 

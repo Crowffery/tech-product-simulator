@@ -8,7 +8,8 @@ import { createNewGame, saveGame, loadGame, clearSave, hasSave } from './game/st
 import * as L from './game/logic.js';
 import { lsGet } from './game/storage.js';
 import { SceneView } from './scenes.js';
-import { physical, danmaku, paletteName } from './studio/parts.js';
+import { physical, danmaku, paletteName, novelty, buzzOf } from './studio/parts.js';
+import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, IDEAL } from './game/market.js';
 
 let state = null;
 let screen = 'title'; // title | create | game
@@ -72,7 +73,7 @@ function shell() {
 function hud() {
   if (!state) return `<div class="hud-title">电子产品发展国</div><button type="button" class="hud-btn" data-act="mute">${sfx?.muted ? '🔇' : '🔊'}</button>`;
   return `
-    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>第 ${state.generation} 代 · M${state.month}</small></div>
+    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>第 ${state.generation} 代 · M${state.month}/${RUN_MONTHS}</small></div>
     <div class="hud-stat ${state.cash < 30 ? 'low' : ''}"><i>💰</i><b>${state.cash}</b></div>
     <div class="hud-stat"><i>❤️</i><b>${state.faith}</b></div>
     <div class="hud-stat"><i>⭐</i><b>${state.reputation}</b></div>
@@ -130,7 +131,12 @@ P.plan = () => {
       <div class="field-l">卖点（1～3）<div class="chips">${chips(SELL_POINTS, p.pointIds, 'toggle-point', true)}</div></div>
       <div class="field-l">售价带<div class="chips">${chips(PRICE_BANDS, p.priceId, 'plan-price')}</div></div>
       ${state.generation > 1 ? `<label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco ? 'checked' : ''}/> 绑定上代生态（信仰 +）</label>` : ''}
-      <div class="mini-gauges">${gauge('体验预期', tri.experience)}${gauge('成本压力', tri.costPressure, 'warn')}<span class="pill">工期约 ${tri.months} 月</span></div>`,
+      ${(() => {
+        const pf = priceFit(p.positioningId, p.priceId);
+        return pf.note ? `<p class="warn-line ${pf.user < 0 ? 'bad' : 'good'}">💬 ${pf.note}（用户分 ${pf.user > 0 ? '+' : ''}${pf.user}）</p>` : '';
+      })()}
+      <div class="mini-gauges">${gauge('体验预期', tri.experience)}${gauge('成本压力', tri.costPressure, 'warn')}<span class="pill">工期约 ${tri.months} 月</span></div>
+      ${calendar(state.month, state.month + tri.months + 1, p.positioningId)}`,
     cta: `<button type="button" class="primary big" data-act="confirm-plan">定了！去设计部 ▶</button>`,
   };
 };
@@ -143,6 +149,13 @@ P.supply = () => ({
       (s) => `<button type="button" class="pick ${draft.supplierId === s.id ? 'on' : ''}" data-act="pick-sup" data-id="${s.id}">
         <b>${s.name}</b><small>${s.desc}</small><i>事故 ${Math.round(s.eventChance * 100)}% · 成本 ×${s.costMul}</i></button>`,
     ).join('')}</div>
+    ${(() => {
+      const d = state.design;
+      const firsts = novelty(d, state.models).items.filter((i) => i.first).length;
+      const bz = buzzOf(d, state.models);
+      const tip = firsts || bz >= 20 ? '🔥 话题度高：首发新概念容易卖断货，可以考虑激进备货' : state.design.redesign === 'minor' ? '小改款需求平稳，正常或保守备货更安全' : '';
+      return tip ? `<p class="warn-line good">${tip}</p>` : '';
+    })()}
     <div class="field-l">首批备货<div class="chips">${STOCK_OPTS.map(
       (s) => `<button type="button" class="chip ${draft.stockId === s.id ? 'on' : ''}" data-act="pick-stk" data-id="${s.id}">${s.name}<small> · ${s.note}</small></button>`,
     ).join('')}</div></div>`,
@@ -155,7 +168,8 @@ P.dev = () => {
   return {
     scene: ['dev', devSceneData()],
     caption: `研发实验室 · 完成度 ${r}% · 还剩约 ${state.monthsLeft} 月`,
-    sheet: `<h2 class="sheet-h">🔬 研发 <small>每月 ${L.manpowerCap(state)} 点人力，自动按缺口分配；点 ⭐ 设为重点</small></h2>
+    sheet: `<h2 class="sheet-h">🔬 研发 <small>每月 ${L.manpowerCap(state)} 点人力 · ${state.notes?.[state.product.positioningId] ? '📒 按企划笔记分配' : '团队凭直觉分配'} · ⭐ 设为重点</small></h2>
+      ${devTimeline()}
       <div class="slots">${SLOTS.map((s) => {
         const sl = state.slots[s.id];
         const cap = caps[s.id];
@@ -168,9 +182,36 @@ P.dev = () => {
         </div>`;
       }).join('')}</div>`,
     cta: `<button type="button" class="primary big" data-act="advance">⏩ 推进一个月</button>
-      <button type="button" data-act="advance-all">⏭ 一直推进</button>`,
+      <button type="button" data-act="advance-all">⏭ 一直推进</button>
+      ${L.canEarlyLaunch(state) ? `<button type="button" class="early" data-act="early">🚀 提前量产</button>` : ''}`,
   };
 };
+
+/** 档期日历：从 from 到 to，标出档期、竞品与预计上市月 */
+function calendar(from, launchAt, pos) {
+  const cells = [];
+  const rivals = rivalLaunches(from, from + 9);
+  for (let m = from; m < from + 10; m++) {
+    const w = windowAt(m);
+    const r = rivals.filter((x) => x.month === m);
+    const clash = r.some((x) => x.pos === pos);
+    cells.push(`<span class="cal ${w ? (w.mul > 1 ? 'hot' : 'cold') : ''} ${m === launchAt ? 'launch' : ''} ${clash ? 'clash' : ''}" title="${w ? w.name : ''}${r.map((x) => ` ${x.brand}发布`).join('')}">
+      <b>${monthOfYear(m)}月</b>${w ? `<i>${w.name}</i>` : '<i>&nbsp;</i>'}${r.length ? `<em>${r.map((x) => x.brand.slice(0, 2)).join('/')}</em>` : ''}</span>`);
+  }
+  return `<div class="calendar"><div class="cal-h">档期日历 <small>📦=预计上市 · 红框=同定位竞品撞档</small></div><div class="cal-row">${cells.join('')}</div></div>`;
+}
+
+function devTimeline() {
+  const launchAt = state.month + state.monthsLeft + 1;
+  const w = windowAt(launchAt);
+  const nw = nextWindow(state.month);
+  const clash = clashAt(launchAt, state.product.positioningId);
+  const bits = [];
+  bits.push(`📦 预计 ${monthOfYear(launchAt)} 月上市${w ? `，赶上<b>${w.name}</b>（需求 ×${w.mul}）` : ''}`);
+  if (!w && nw) bits.push(`下个旺季：${nw.name}（${monthOfYear(nw.month)} 月）`);
+  if (clash) bits.push(`<span class="bad">⚠ ${clash.brand} 同期发布同定位新机</span>`);
+  return `<p class="timeline">${bits.join(' · ')}</p>`;
+}
 
 function devSceneData(event = null) {
   return {
@@ -178,6 +219,7 @@ function devSceneData(event = null) {
     slots: Object.fromEntries(SLOTS.map((s) => [s.id, state.slots[s.id].progress])),
     caps: L.capsMap(state),
     event,
+    rivalSoon: !!clashAt(state.month + state.monthsLeft + 1, state.product?.positioningId),
   };
 }
 
@@ -245,10 +287,24 @@ P.score = () => {
         <span>惊艳 <b>${W.score ?? '-'}</b></span><span>新颖 <b>${W.novelty ?? '-'}</b></span><span>完成 <b>${W.completeness ?? '-'}%</b></span><span>🔥 出圈 <b>${W.buzz ?? 0}</b></span></div>
       ${W.firsts?.length ? `<div class="firsts">${W.firsts.map((f) => `<span>🏆 首发 ${esc(f)}</span>`).join('')}</div>` : ''}
       ${W.buzz >= 40 ? `<p class="trend">📈 #${esc(state.design.modelName)}# 冲上热搜</p>` : ''}
+      ${reviewBlock()}
       <p class="muted">研发点 +${state.lastRp}（现有 ${state.rp}）</p>`,
     cta: `<button type="button" class="primary big" data-act="to-sales">看首月销量 ▶</button>`,
   };
 };
+
+function reviewBlock() {
+  const R = state.review;
+  if (!R) return '';
+  const tag = { more: ['多了', 'm'], less: ['少了', 'l'], ok: ['刚好', 'o'] };
+  return `<details class="review" open><summary>📋 复盘：体验 ${R.exp} vs 期望线 ${R.bar} ${R.exp >= R.bar ? '✅' : '⬇'}</summary>
+    <div class="rv-row"><span>配比匹配 ${R.match}%（体验 ×${R.mult.toFixed(2)}）</span></div>
+    <div class="rv-chips">${R.verdict.map((v) => `<span class="rv rv-${tag[v.v][1]}">${v.name.slice(0, 2)} ${tag[v.v][0]}</span>`).join('')}</div>
+    <div class="rv-chips">${R.promises.map((p) => `<span class="rv ${p.ok ? 'rv-o' : 'rv-l'}">${p.ok ? '✓' : '✗ 货不对板'} ${p.name}</span>`).join('')}</div>
+    ${R.priceNote ? `<p class="warn-line ${R.priceUser < 0 ? 'bad' : 'good'}">💬 定价：${R.priceNote}</p>` : ''}
+    ${R.newNote ? '<p class="note-new">📒 摸清了这个定位的理想配比，已记入企划笔记：以后研发会自动按它分配</p>' : ''}
+  </details>`;
+}
 
 P.sales = () => {
   const r = state.salesResult;
@@ -260,8 +316,10 @@ P.sales = () => {
       <div class="score-big"><b>${r.sold}</b><span>台售出</span><b class="sub ${r.profit < 0 ? 'neg' : ''}">${r.profit > 0 ? '+' : ''}${r.profit}</b><span>盈亏</span></div>
       ${gauge('备货消化', (r.sold / Math.max(1, r.stocked)) * 100)}
       <p>${esc(r.stockNote)}</p>
+      ${r.window ? `<p class="warn-line good">📅 赶上${r.window}：需求 ×${r.windowMul}</p>` : ''}
+      ${r.clash ? `<p class="warn-line bad">⚔ ${r.clash}（×${r.clashF.toFixed(2)}）</p>` : ''}
       <p class="muted">售价 ¥${r.price} · 单台成本 ¥${r.unitCost}</p>`,
-    cta: `<button type="button" class="primary big" data-act="to-next">规划下一代 ▶</button>`,
+    cta: `<button type="button" class="primary big" data-act="to-next">${state.month >= RUN_MONTHS ? '三年结算 ▶' : '规划下一代 ▶'}</button>`,
   };
 };
 
@@ -284,6 +342,22 @@ P.next = () => {
       }).join('')}</div>
       <p class="muted">🔬 研发点 ${state.rp}：在设计阶段的「💡 创新」页解锁新概念件。</p>`,
     cta: `<button type="button" class="primary big" data-act="next-gen">开新企划 ▶</button>`,
+  };
+};
+
+P.ending = () => {
+  const E = endingTitles(state);
+  return {
+    scene: ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length })), finale: true }],
+    caption: '三年过去了，年会大结算',
+    sheet: `<h2 class="sheet-h">🏆 三年结算</h2>
+      <div class="titles">${E.titles.map((t, i) => `<div class="title-card ${i === 0 ? 'main' : ''}"><b>${t.t}</b><small>${esc(t.d)}</small></div>`).join('')}</div>
+      <div class="stat-grid">
+        <div><b>${E.stats.gens}</b><span>代产品</span></div><div><b>${E.stats.firsts}</b><span>项首创</span></div>
+        <div><b>${E.stats.avgWow}</b><span>平均惊艳</span></div><div><b>${E.stats.sold}</b><span>总销量</span></div>
+      </div>
+      <div class="ending-wall">${state.models.map((m) => `<span title="${esc(m.design.modelName)}">${m.thumb ? `<img src="${m.thumb}" alt="" />` : '📱'}<i>${m.grade || ''}</i></span>`).join('')}</div>`,
+    cta: `<button type="button" class="primary big" data-act="hard-restart">再来一局</button>`,
   };
 };
 
@@ -589,6 +663,12 @@ function onClick(e) {
     case 'advance-all':
       advance(true);
       return;
+    case 'early':
+      L.earlyLaunch(state);
+      draft.factoryDone = false;
+      play('keep');
+      flash('提前量产！');
+      break;
     case 'event-choice':
       L.resolveEvent(state, i);
       if (state.phase === 'factory') draft.factoryDone = false;

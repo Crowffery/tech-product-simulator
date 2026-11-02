@@ -128,7 +128,7 @@ const MAT_FIT = {
 export const RECOMMENDED = {
   flagship: { chip: 2, screen: 1, camera: 2, battery: 1, material: 1, size: 1 },
   mainstream: { chip: 1, screen: 1, camera: 1, battery: 1, material: 0, size: 1 },
-  minimal: { chip: 0, screen: 0, camera: 0, battery: 1, material: 0, size: 0 },
+  minimal: { chip: 0, screen: 0, camera: 0, battery: 1, material: 1, size: 0 },
   pro: { chip: 2, screen: 2, camera: 2, battery: 2, material: 2, size: 2 },
 };
 
@@ -170,8 +170,8 @@ export function physical(design) {
   const volume = (size.w * size.h * (thickness - cThick)) / 1000; // cm³
   const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight);
   const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost;
-  const unitCost = costPts * 70;
-  const band = unitCost < 1800 ? '亲民带 ¥1999' : unitCost < 3000 ? '主流带 ¥3999' : '旗舰带 ¥6999';
+  const unitCost = costPts * 55;
+  const band = unitCost < 1300 ? '亲民带 ¥1999' : unitCost < 2300 ? '主流带 ¥3999' : '旗舰带 ¥6999';
   return { w: size.w, h: size.h, thickness, weight, bench: chip.bench, unitCost, band, bump: cam.bump };
 }
 
@@ -511,6 +511,7 @@ export function wow(design, museum) {
   else if (n.score >= 55 && c.score >= 85) headline = '「这才叫创新！」——科技媒体集体起立';
   else if (n.score >= 55) headline = '「概念满分，做工还差口气」';
   else if (n.score >= 30) headline = '「有新意，但不够炸」';
+  else if (!museum.length) headline = '「中规中矩的首秀」——先活下来再说';
   else if (c.score >= 80) headline = '「稳，但又是挤牙膏的一年」';
   else headline = '「既不新，也不稳」——评论区沉默了';
   const firsts = n.items.filter((i) => i.first).map((i) => i.label.replace(/^.*「|」$/g, ''));

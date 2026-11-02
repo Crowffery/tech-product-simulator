@@ -226,6 +226,41 @@ export class SceneView {
     return night;
   }
 
+  /** 彩蛋：一只橘猫偶尔溜过（约每 18 秒一次） */
+  cat(y, seed = 0) {
+    const period = 18;
+    const T = (this.t + seed * 7) % period;
+    if (T > 9) return;
+    const dir = Math.floor((this.t + seed * 7) / period) % 2 ? 1 : -1;
+    const x = dir > 0 ? -12 + T * 30 : W + 12 - T * 30;
+    const step = Math.floor(this.t * 8) % 2;
+    const c = '#e67e22';
+    this.rect(x, y, 9, 4, c);
+    this.rect(x + (dir > 0 ? 8 : -3), y - 3, 4, 4, c);
+    this.rect(x + (dir > 0 ? 8 : -3), y - 4, 1, 1, c);
+    this.rect(x + (dir > 0 ? 11 : 0), y - 4, 1, 1, c);
+    this.rect(x + (dir > 0 ? 10 : -2), y - 2, 1, 1, '#1b1b1b');
+    this.rect(x + (dir > 0 ? -2 : 9), y - 2 - step, 2, 1, c);
+    this.rect(x + 1, y + 4, 1, 2 - step, c);
+    this.rect(x + 7, y + 4, 1, 1 + step, c);
+    for (let i = 1; i < 8; i += 3) this.rect(x + i, y, 1, 4, '#ca6f1e');
+  }
+
+  /** 天气：按月份下雨（4～6 月）或下雪（12～2 月） */
+  weather(month, yMax = H) {
+    const mo = ((month - 1) % 12) + 1;
+    const rain = mo >= 4 && mo <= 6;
+    const snow = mo === 12 || mo <= 2;
+    if (!rain && !snow) return;
+    for (let i = 0; i < (rain ? 50 : 36); i++) {
+      const sp = rain ? 120 : 18;
+      const x = (hash(i) * W + (rain ? this.t * 40 : Math.sin(this.t + i) * 6)) % W;
+      const y = (hash(i + 11) * yMax + this.t * sp) % yMax;
+      if (rain) this.rect(x, y, 1, 3, '#aed6f1');
+      else this.rect(x, y, 1, 1, '#ffffff');
+    }
+  }
+
   floorTiles(y, a = '#c4b59a', b = '#b8a88a') {
     for (let yy = y; yy < H; yy += 8) for (let xx = 0; xx < W; xx += 8) this.rect(xx, yy, 8, 8, ((xx + yy) / 8) % 2 ? a : b);
   }
@@ -383,6 +418,16 @@ const SCENES = {
     const a = s.t * 2;
     s.rect(147, 27, 1, 1, '#000');
     s.rect(147 + Math.round(Math.cos(a) * 4), 27 + Math.round(Math.sin(a) * 4), 1, 1, '#e74c3c');
+    // 电视：竞品快讯
+    s.rect(124, 66, 26, 18, '#1b1b1b');
+    const brands = ['#3949ab', '#26a69a', '#ef6c00'];
+    const bi = Math.floor(s.t / 2.5) % 3;
+    s.rect(126, 68, 22, 14, '#0b1a2a');
+    s.rect(128, 70, 8, 8, brands[bi]);
+    s.rect(138, 70, 8, 2, '#ecf0f1');
+    s.rect(138, 74, 6, 1, '#7f8c8d');
+    if (Math.floor(s.t * 3) % 2) s.rect(126, 80, 22, 2, '#c0392b');
+    s.cat(108, 1);
     // 盆栽
     s.rect(224, 104, 10, 10, '#a0522d');
     s.rect(222, 92, 14, 12, '#27ae60');
@@ -444,6 +489,7 @@ const SCENES = {
         s.rect(b.x + 29, ay + 5, 2, 1, '#e74c3c');
       }
     });
+    s.weather(d.month || 1, 120);
     // 我方代表 + 货车
     const rep = d.supplierId ? { cheap: 40, balanced: 116, premium: 192 }[d.supplierId] : 120 + Math.sin(s.t) * 40;
     s.person(Math.round(rep), 116, 0, d.supplierId ? 'cheer' : 'walk', -1);
@@ -494,6 +540,15 @@ const SCENES = {
       s.person(x + 16, 100, i * 2 + 1, pose, 1);
       if (hot && Math.floor(s.t * 4) % 2) s.rect(x + 18, 30, 4, 4, '#e74c3c');
     });
+    if (d.rivalSoon) {
+      const y0 = 6 + Math.round(Math.sin(s.t * 2) * 1);
+      s.rect(150, y0, 26, 30, '#fdfefe');
+      s.rect(152, y0 + 2, 22, 16, '#3949ab');
+      s.rect(158, y0 + 5, 10, 10, '#c5cae9');
+      s.text('VS', 155, y0 + 21, '#c0392b');
+      s.rect(162, y0 - 1, 2, 2, '#e74c3c');
+    }
+    s.cat(124, 2);
     // 事故层
     if (ev === 'leak' || ev === 'spyshot') {
       s.rect(196, 4, 40, 30, '#85c1e9');
@@ -572,6 +627,7 @@ const SCENES = {
     s.person(104, 108, 6, prog >= 1 ? 'cheer' : 'type', 1);
     s.person(176, 108, 8, 'walk', -1);
     s.rect(224, 20, 8, 8, prog >= 1 ? '#2ecc71' : Math.floor(s.t * 3) % 2 ? '#f39c12' : '#7e5109');
+    s.cat(142, 3);
     // 量产进度
     s.rect(10, 120, 120, 8, '#111');
     s.rect(11, 121, Math.round(118 * prog), 6, prog >= 1 ? '#2ecc71' : '#f5b041');
@@ -691,6 +747,8 @@ const SCENES = {
       s.text('+¥', 199, 101, '#c0392b');
     }
     if (d.state !== 'over' && Math.floor(s.t * 1.5) % 3 === 0 && s.parts.length < 6) s.pulse('cash', { x: 112 + Math.random() * 20, y: 80, text: '+' });
+    s.cat(124, 4);
+    s.weather(d.month || 1, 110);
     // 出门的人
     const wx = 120 + ((s.t * 20) % 140);
     s.person(Math.round(wx), 116, 12, 'walk', 1);
@@ -728,6 +786,14 @@ const SCENES = {
     s.person(116, 70, 0, 'cheer', 1);
     [20, 50, 170, 200].forEach((x, i) => s.person(x, 106, i + 4, Math.floor(s.t * 2 + i) % 2 ? 'cheer' : 'idle', i < 2 ? 1 : -1));
     if (Math.floor(s.t * 2) % 4 === 0 && s.parts.length < 30) s.pulse('confetti');
+    if (d.finale && Math.random() < 0.04) {
+      const fx = 20 + Math.random() * 200;
+      const fy = 8 + Math.random() * 20;
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2;
+        s.parts.push({ x: fx, y: fy, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40, life: 0.9, c: SHIRT[(i + Math.floor(fx)) % SHIRT.length], g: 30 });
+      }
+    }
   },
 
   // —— 倒闭 ——

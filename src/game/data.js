@@ -35,9 +35,9 @@ export const SELL_POINTS = [
 ];
 
 export const PRICE_BANDS = [
-  { id: 'low', name: '亲民带', price: 1999, demand: 1.25 },
+  { id: 'low', name: '亲民带', price: 1999, demand: 2.2 },
   { id: 'mid', name: '主流带', price: 3999, demand: 1.0 },
-  { id: 'high', name: '旗舰带', price: 6999, demand: 0.75 },
+  { id: 'high', name: '旗舰带', price: 6999, demand: 0.55 },
 ];
 
 export const SUPPLIERS = [
