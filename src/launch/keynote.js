@@ -11,6 +11,7 @@ import { roundPrice } from '../game/market.js';
 // ═════════════════════════ 画图小工具 ═════════════════════════
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const pickOne = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const ease = (k) => 1 - Math.pow(1 - clamp(k), 3);
 
 export function txt(g, str, x, y, size, color = '#fff', align = 'center', font = '"Noto Sans SC",sans-serif') {
@@ -529,6 +530,29 @@ export function buildKeynote(ctx) {
   const main = new Set(points || []);
   const out = [];
 
+  // —— 开场白（偶尔来一句经典的）——
+  const company = d.company || '我们';
+  const greet = quick ? null : pickOne([
+    { w: 'ARE YOU OK?', sub: '主讲人上台，挥手：「大家好！<b>Are you OK?</b>」', react: ['I\'m very OK!', '哈哈哈哈', '鬼畜预定'], mood: 'good' },
+    { w: 'ARE YOU OK?', sub: '主讲人：「Hello, everybody! <b>Are you OK?</b>」', react: ['OK!!!', '熟悉的味道', '😂'], mood: 'good' },
+    { w: '重新定义手机', sub: '「今天，我们要<b>重新定义手机</b>。」', react: ['又来了', '这次是真的吗', '👀'], mood: 'meh' },
+    { w: '一年的努力', sub: '「为了今天，我们准备了整整一年。」', react: ['加油！', '期待', '👏'], mood: 'good' },
+  ]);
+  if (greet)
+    out.push({
+      key: 'greet',
+      chap: null,
+      wall: (g, W, H, t) => {
+        bg(g, W, H, '#1a1030', '#30184a');
+        title(g, typed(greet.w, t, 9), W / 2, H / 2 + 8, greet.w.length > 8 ? 18 : 22, '#ffd08a');
+      },
+      sub: greet.sub,
+      react: greet.react,
+      mood: greet.mood,
+      pose: ['front', 'wide'],
+      ms: 2600,
+    });
+
   // —— 外观（必有，首页）——
   const matId = tier(d, 'material').id;
   const kind = C.has('titanium') ? 'metal' : MAT_KIND[matId] || 'plastic';
@@ -553,8 +577,8 @@ export function buildKeynote(ctx) {
       chap: null,
       main: main.has('thin'),
       wall: SLIDES.thin(phys.thickness, d.color),
-      sub: bad ? `我们说过要做最薄……它是 <b>${phys.thickness}mm</b>。` : `侧面看——只有 <b>${phys.thickness}mm</b>，比 ${Math.max(2, Math.round(phys.thickness / 1.85))} 枚硬币叠起来还薄`,
-      react: bad ? ['说好的极致轻薄？', '就这？', '😅'] : ['薄如蝉翼', '卡片机？', '🤏'],
+      sub: bad ? `我们说过要做最薄……它是 <b>${phys.thickness}mm</b>。` : `侧面看——只有 <b>${phys.thickness}mm</b>，比 ${Math.max(2, Math.round(phys.thickness / 1.85))} 枚硬币叠起来还薄。<br/><small>（比友商薄了整整 0.01mm）</small>`,
+      react: bad ? ['说好的极致轻薄？', '就这？', '😅'] : ['薄如蝉翼', '0.01mm 也是领先', '🤏'],
       mood: bad ? 'bad' : 'good',
       pose: ['side', 'close', { spin: 0 }],
       ms: 3000,
@@ -572,12 +596,35 @@ export function buildKeynote(ctx) {
       wall: SLIDES.bench(cs.bench, rivals, (d.modelName || '本机').slice(0, 6)),
       kpi: { label: `${cs.label} · 综合跑分`, from: 0, to: cs.bench, dec: 0, unit: '' },
       sub: `<b>${cs.label}</b>${up > 0 ? `，比上一代快 <b>${up}%</b>` : ''}${beat ? '，同期第一' : ''}${ctx.chipLag > 0 ? '<br/><small>（台下：友商都上新一代芯片了……）</small>' : bad ? '<br/><small>（性能调校没跟上，实际体验差点意思）</small>' : ''}`,
-      react: ctx.chipLag > 0 ? ['老芯片？', '落后一代了', '🥱'] : bad ? ['发热呢？', '跑分没用', '😐'] : beat ? ['遥遥领先？', '这么快？', '🔥🔥'] : ['够用', '还行吧'],
+      react: ctx.chipLag > 0 ? ['老芯片？', '落后一代了', '🥱'] : bad ? ['发热呢？', '跑分没用', '😐'] : beat ? ['遥遥领先！', '这次真领先了', '🔥🔥'] : ['够用', '还行吧'],
       mood: bad ? 'bad' : beat ? 'good' : 'meh',
       pose: ['back', 'wide'],
       explode: true,
       ms: 3800,
     });
+    if (beat && !bad)
+      out.push({
+        key: 'yyld',
+        chap: null,
+        wall: (g, W, H, t) => {
+          bg(g, W, H, '#3d0a0a', '#a93226');
+          const k = ease(t * 1.5);
+          g.save();
+          g.translate(W / 2, H / 2);
+          g.scale(0.6 + k * 0.4, 0.6 + k * 0.4);
+          title(g, '遥遥领先', 0, 10, 30, '#ffd700');
+          g.restore();
+          sheen(g, W, H, t, 1.4, 0.35);
+        },
+        kpi: { label: '领先同期最快机型', from: 0, to: Math.round((cs.bench / Math.max(...rivals.map((r) => r.v)) - 1) * 100), dec: 0, unit: '%' },
+        sub: '主讲人停顿了三秒，只说了四个字：<b>遥遥领先。</b>',
+        react: ['遥遥领先！！', '燃起来了', '🚀🚀🚀'],
+        mood: 'good',
+        pose: ['hero', 'close', { spin: 0.2 }],
+        shine: true,
+        sfx: 'fanfare',
+        ms: 2800,
+      });
   }
 
   const scr = d.parts.screen;
@@ -637,8 +684,8 @@ export function buildKeynote(ctx) {
       chap: '快充',
       wall: SLIDES.charge(),
       kpi: { label: '有线快充', from: 0, to: 100, dec: 0, unit: 'W' },
-      sub: '插上电，喝口水——<b>十分钟充一半</b>',
-      react: ['这么快？', '不用带充电宝了', '⚡'],
+      sub: '十分钟充一半。换句话说——<b>充电五分钟，刷剧两小时</b>',
+      react: ['这句好耳熟', '充电宝可以扔了', '⚡'],
       mood: 'good',
       pose: ['front', 'bottom', { spin: 0 }],
       ms: 3200,
@@ -698,10 +745,61 @@ export function buildKeynote(ctx) {
         ms: 3400,
       });
     });
+    out.push({
+      key: 'only',
+      chap: null,
+      wall: (g, W, H, t) => {
+        bg(g, W, H, '#000', '#111');
+        txt(g, 'ONLY', W / 2, 22, 10, '#aab7b8');
+        title(g, typed(company, t, 6), W / 2, 46, 20, '#fff');
+        txt(g, 'CAN DO.', W / 2, 64, 10, '#aab7b8');
+      },
+      sub: `「这件事，<b>Only ${company} can do.</b>」`,
+      react: ['好熟悉的句式', '狂起来了', '😎'],
+      mood: 'good',
+      pose: ['hero', 'wide', { spin: 0.25 }],
+      ms: 2600,
+    });
   }
 
   // —— 价格 ——
   const list = roundPrice(price * 1.2 + 300);
+  const fair = ctx.fair || price;
+  if (price <= fair * 0.95) {
+    // 价格逐级砸下来
+    const steps = [roundPrice(fair * 1.3), roundPrice(fair * 1.1), roundPrice(fair)].filter((v, i, a) => v > price * 1.04 && a.indexOf(v) === i);
+    steps.forEach((v, i) =>
+      out.push({
+        key: `price-${i}`,
+        chap: i === 0 ? '价格' : null,
+        main: i === 0 && main.has('price'),
+        wall: (g, W, H, t) => {
+          mono(g, `¥${v}`, W / 2, 44, 26, '#fff');
+          if (t > 0.6) {
+            g.fillStyle = '#e74c3c';
+            g.fillRect(W / 2 - 52, 36, Math.min(104, (t - 0.6) * 400), 4);
+          }
+        },
+        sub: `不要 <b>¥${v}</b>！`,
+        react: i === 0 ? ['来了来了', '熟悉的节奏'] : ['还降？', '😱'],
+        mood: 'good',
+        pose: ['hero', 'wide'],
+        ms: 1500,
+        notap: true,
+      }),
+    );
+    out.push({
+      key: 'price',
+      chap: steps.length ? null : '价格',
+      wall: SLIDES.price(steps[steps.length - 1] || list, price, '#2ecc71'),
+      sub: `${steps.length ? '' : '首销价，'}只要——<b>¥${price}</b>！`,
+      react: ['交个朋友！', '厚道！', '买买买', '👏👏👏'],
+      mood: 'good',
+      sfx: 'boom',
+      ms: 2800,
+    });
+    return out;
+  }
   out.push({
     key: 'price-q',
     chap: '价格',
@@ -715,12 +813,13 @@ export function buildKeynote(ctx) {
     pose: ['hero', 'wide'],
     ms: 1700,
   });
+  const pricy = price >= fair * 1.12;
   out.push({
     key: 'price',
     chap: null,
     wall: SLIDES.price(list, price, pf > 0 ? '#2ecc71' : pf < 0 ? '#f1948a' : '#f5b041'),
-    sub: `不！首销价——<b>¥${price}</b>！`,
-    react: pf > 0 ? ['太良心了！', '买买买', '👏👏👏'] : pf < 0 ? ['还是贵', '等降价', '😅'] : ['可以！', '真香', '👍'],
+    sub: pricy ? `首销价——<b>¥${price}</b>。<br/><small>（Pro Max 的价格，有没有 Pro Max 的体验，就看评测了）</small>` : `不！首销价——<b>¥${price}</b>！`,
+    react: pricy ? ['价格也遥遥领先', '钱包：告辞', '😅'] : pf > 0 ? ['太良心了！', '买买买', '👏👏👏'] : pf < 0 ? ['还是贵', '等降价', '😅'] : ['可以！', '真香', '👍'],
     mood: pf < 0 ? 'meh' : 'good',
     sfx: 'boom',
     ms: 2600,

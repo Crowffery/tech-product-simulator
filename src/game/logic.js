@@ -359,7 +359,7 @@ export function resolveEvent(state, choiceIndex) {
   if (eff.faith) state.faith += eff.faith;
   for (const [k, v] of Object.entries(eff.slotPenalty || {})) {
     if (state.slots[k]) {
-      state.slots[k].progress = Math.max(0, state.slots[k].progress - v);
+      state.slots[k].progress = Math.max(0, Math.min(capsMap(state)[k] ?? 100, state.slots[k].progress - v));
       state.slots[k].comment = commentFor(k, state.slots[k].progress);
     }
   }
@@ -473,11 +473,12 @@ export function wowNow(state) {
   const buzz = Math.round(buzzOf(d, state.models) * [1, 1.2, 1.4][deptLevel(state, 'pr') - 1]);
   let headline;
   if (buzz >= 40 && comp < 65) headline = '「做工翻车，但全网都在讨论」';
-  else if (n.score >= 55 && comp >= 85) headline = '「这才叫创新！」——科技媒体集体起立';
+  else if (n.score >= 55 && comp >= 85) headline = Math.random() < 0.5 ? `「Only ${state.companyName} can do」——外媒罕见点赞` : '「这才叫创新！」——科技媒体集体起立';
+  else if (chipLag(state) < 0 && comp >= 80) headline = '「遥遥领先」——自研芯片让友商连夜改 PPT';
   else if (n.score >= 55) headline = '「概念满分，做工还差口气」';
   else if (n.score >= 30) headline = '「有新意，但不够炸」';
   else if (!state.models.length) headline = '「中规中矩的首秀」——先活下来再说';
-  else if (comp >= 80) headline = '「稳，但又是挤牙膏的一年」';
+  else if (comp >= 80) headline = Math.random() < 0.5 ? '「稳，但又是挤牙膏的一年」' : '「这是我们最好的一代」——媒体：确实，就是有点眼熟';
   else headline = '「既不新，也不稳」——评论区沉默了';
   const firsts = n.items.filter((i) => i.first).map((i) => i.label.replace(/^.*「|」$/g, ''));
   return { score, grade: wowGrade(score), novelty: n.score, completeness: comp, headline, firsts, buzz };
@@ -512,6 +513,7 @@ export function finalizeScores(state) {
   if (m.match >= 0.85) state.notes[pos] = true;
   state.review = { exp, bar, match: Math.round(m.match * 100), mult: m.mult, verdict: m.verdict, promises, priceNote: pf.note, priceUser: pf.user, newNote, priceRatio: pe.ratio, anchorLast: pe.anchorLast, chipLag: lag };
   state.lastExp = exp;
+  if (lag < 0) state.chipLeads = (state.chipLeads || 0) + 1;
   state.mediaScore = media;
   state.userScore = user;
   state.headline = W ? W.headline : '中规中矩';

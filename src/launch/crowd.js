@@ -18,10 +18,11 @@ const DM = {
   thick: ['厚得像充电宝', '有点厚啊', '这厚度能防身', '握着应该挺扎实', '加厚版？'],
   heavy: ['砖头本砖', '这重量练手腕', '砸核桃神器', '口袋要被扯坏了'],
   bigcam: ['这镜头模组能煎蛋了', '镜头比我脸还大', '摄像头好凶', '这是背了台相机吧', '后摄有点密恐'],
-  fast: ['{chip} 跑分破百万！', '{chip} 太猛了', '性能怪兽来了', '打游戏稳了', '这性能能开飞机'],
+  fast: ['{chip} 跑分破百万！', '{chip} 太猛了', '性能怪兽来了', '打游戏稳了', '遥遥领先？', '不服跑个分'],
   chipok: ['{chip} 够用吗？', '{chip} 发热怎么样', '芯片挤牙膏了吗', '性能一般般？', '日常够用就行'],
   chiplag: ['芯片落后一代了吧', '还在用老芯片？', '友商都换新芯片了', '这芯片去年的吧', '性能要被吊打了'],
-  chiplead: ['自研芯片领先了！', '这芯片比友商还新', '国产芯片站起来了', '芯片代差拉开了'],
+  chiplead: ['自研芯片领先了！', '这芯片比友商还新', '遥遥领先！', '芯片代差拉开了'],
+  meme: ['Are you OK?', '真香警告', '等等党永不为奴', '为发烧而生？', '友商：？', '这波在大气层', '爷青回', '求求了别挤牙膏'],
   leather: ['终于有素皮了！', '素皮手感一定好', '素皮yyds'],
   metal: ['金属边框冷冷的，喜欢', '这金属光泽绝了', '金属机身有质感', '冰冰凉凉的高级感'],
   full: ['全面屏看片爽', '屏占比好高', '这边框窄得离谱'],
@@ -56,10 +57,10 @@ const DM_CONCEPT = {
   projector: ['直接投到墙上看电影', '自带投影仪？'],
   holo: ['全息影像？？科幻成真', '浮出来了！'],
   pet: ['背面养了只小鸡！', '电子宠物回来了'],
-  fastcharge: ['十分钟充一半？', '快充党狂喜'],
+  fastcharge: ['十分钟充一半？', '快充党狂喜', '充电五分钟，通话两小时'],
   ip68: ['能泡水？', '洗澡也能刷剧了'],
   ai: ['离线大模型？', 'AI 助手能写作业吗'],
-  periscope: ['十倍变焦能拍月亮吗', '演唱会神器'],
+  periscope: ['十倍变焦能拍月亮吗', '演唱会神器', '这月亮是 P 的吧'],
   oneinch: ['一英寸大底！', '这是相机吧'],
   titanium: ['钛金属，轻了不少', '钛灰好看'],
 };
@@ -69,7 +70,7 @@ export function danmakuLines(design, ctx = {}, n = 10) {
   const p = physical(design);
   const cs = chipSpec(design);
   const C = new Set(design.concepts || []);
-  const intents = ['price', 'wait', 'buy', 'look', 'next'];
+  const intents = ['price', 'wait', 'buy', 'look', 'next', 'meme'];
   if (p.thickness <= 7.6) intents.push('thin');
   if (p.thickness >= 8.8) intents.push('thick');
   if (p.weight >= 230) intents.push('heavy');
@@ -119,7 +120,12 @@ const CM = {
   extchip: { base: 260, t: ['用的外购芯片，性能还行就是没特色', '外购芯片稳是稳，就是不够独特'] },
   good: { base: 400, t: ['已下单，坐等发货', '颜值和手感都在线', '用了一周，挺满意的', '拍照比我想的好', '续航能撑一天半'] },
   meh: { base: 160, t: ['等一个详细评测', '看看首批用户怎么说', '再等等，不急', '还行吧，没惊喜'] },
-  joke: { base: 380, t: ['主讲人那句「之一」我能笑一年', '我妈问我为什么半夜在看发布会', '钱包：你礼貌吗', '等等党永不为奴'] },
+  joke: { base: 380, t: ['主讲人那句「之一」我能笑一年', '我妈问我为什么半夜在看发布会', '钱包：你礼貌吗', '等等党永不为奴', 'Are you OK 的含金量还在上升', '已经开始期待鬼畜区二创了'] },
+  yyld: { base: 1500, hot: true, t: ['遥遥领先（这次不是指 PPT）', '不服跑个分，跑完服了', '跑分截图已存，明天去友商评论区发'] },
+  only: { base: 1200, hot: true, t: ['Only {m} can do，这次我认了', '「Only xx can do」这句被你们玩明白了', '首发黑科技，友商又要连夜改 PPT 了'] },
+  flopMeme: { base: 1400, hot: true, t: ['「我不是为了输赢，我就是认真」已设为签名', '演示机：我也想休息一下', '翻车不可怕，可怕的是还挺可爱'] },
+  pricyMeme: { base: 900, hot: true, t: ['价格也遥遥领先了属于是', 'Pro Max 的价格，Pro Mini 的体验', '这价格，肾：我先走了'] },
+  cheapMeme: { base: 950, hot: true, t: ['不要 4999 不要 3999，这熟悉的配方', '交个朋友价，友商连夜开会', '厚道！这才叫为发烧而生'] },
 };
 
 /**
@@ -134,12 +140,16 @@ export function buildComments(ctx) {
     if (!free.length) return null;
     const t0 = pick(free);
     used.add(t0);
-    const t = t0.replace('{p}', vars.p || '').replace('{m}', ctx.modelName || '').replace('{last}', vars.last || '');
+    const t = t0.replace('{p}', vars.p || '').replace('{m}', ctx.company || ctx.modelName || '').replace('{last}', vars.last || '');
     return { t, like: Math.round(c.base * (0.6 + Math.random() * 0.8)), hot: !!c.hot };
   };
   const out = [];
   (ctx.promisesBroken || []).slice(0, 2).forEach((p) => out.push(say('broken', { p })));
-  if (ctx.priceRatio >= 1.12) out.push(say('pricy'));
+  if (ctx.priceRatio >= 1.12) out.push(say('pricy'), say('pricyMeme'));
+  if (ctx.priceRatio <= 0.95) out.push(say('cheapMeme'));
+  if (ctx.chipLead || ctx.benchFirst) out.push(say('yyld'));
+  if (ctx.firsts) out.push(say('only'));
+  if (ctx.flop) out.push(say('flopMeme'));
   if (ctx.anchorLast) out.push(say('pricyAnchor', { last: ctx.anchorLast }));
   if (ctx.priceRatio <= 0.88) out.push(say('cheap'), say('cheap'));
   else if (ctx.priceRatio < 1.12) out.push(say('fair'));
@@ -153,7 +163,7 @@ export function buildComments(ctx) {
   out.push(say('good'), say('good'), say('meh'), say('meh'), say('joke'));
   // 弹幕里的短句也会出现在评论区（换成评论语气）
   danmakuLines(ctx.design, ctx, 3).forEach((t) => out.push({ t, like: Math.round(60 + Math.random() * 220), hot: false }));
-  const list = out.filter(Boolean).slice(0, 11);
+  const list = out.filter(Boolean).slice(0, 12);
   const names = shuffle(NAMES);
   return list.map((c, i) => ({ ...c, who: names[i % names.length], av: AV[(i * 5 + (ctx.gen || 1)) % AV.length], reply: Math.round((c.like / 40) * Math.random()) }));
 }

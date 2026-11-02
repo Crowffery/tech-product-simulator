@@ -170,6 +170,42 @@ export const EVENTS = [
       { label: '干脆提前官宣', effect: { cash: 0, hype: 8, faith: 3 } },
     ],
   },
+  {
+    id: 'remix',
+    type: '鬼畜',
+    when: (st) => st.generation > 1,
+    title: '老板一句「Are you OK?」被剪成了鬼畜神曲',
+    body: '上次发布会的开场白被网友配上了电音，播放量破千万。公关部在群里发了一排问号。',
+    choices: [
+      { label: '顺势自黑，老板亲自转发', effect: { cash: 0, hype: 16, faith: 3 } },
+      { label: '花钱把热度推得更高', effect: { cash: -20, hype: 22 } },
+      { label: '律师函警告', effect: { cash: -10, hype: -4, faith: -4 } },
+    ],
+  },
+  {
+    id: 'yyld',
+    type: '友商',
+    when: (st) => st.month >= 6,
+    title: '友商发布会连说了 8 次「遥遥领先」',
+    body: '对方大屏上的跑分柱子比你的高出一截。你们的论坛评论区开始沦陷。',
+    choices: [
+      { label: '闷声搞研发，性能组加班', effect: { cash: -15, slotPenalty: { perf: -10 } } },
+      { label: '阴阳一句「领先的是 PPT」', effect: { cash: 0, hype: 10, faith: -2 } },
+      { label: '不接招', effect: { cash: 0, hype: -3 } },
+    ],
+  },
+  {
+    id: 'stealth',
+    type: '突袭',
+    when: (st) => st.month >= 8,
+    title: '友商没开发布会，新机直接悄悄开卖了',
+    body: '凌晨上架，秒空。媒体标题全是「遥遥领先」，你的新机还在实验室里。',
+    choices: [
+      { label: '马上官宣发布会日期', effect: { cash: 0, hype: 8 } },
+      { label: '加钱赶工', effect: { cash: -25, slotPenalty: { perf: -6, camera: -6 } } },
+      { label: '稳住，按原计划', effect: { cash: 0, faith: 2, hype: -2 } },
+    ],
+  },
 ];
 
 export function randomCompanyName() {

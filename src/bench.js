@@ -204,7 +204,7 @@ export function openBench(opts) {
   body.innerHTML = `<div class="bench-info"><div><small>测试机</small><b>${phoneName}</b></div><div><small>芯片</small><b>${chipLabel}</b></div>
       <div><small>性能调校</small><b>${tune}%</b></div></div>
     <p class="bench-tip">${tune < 60 ? '⚠ 调校才做了一半，现在跑分会偏低。' : tune < 95 ? '调校还没做满，分数还有上升空间。' : '调校已经做满，可以冲榜了。'}${rewardable ? '<br/>本代第一次正式跑分会被晒到数码论坛。' : ''}</p>
-    <button type="button" class="primary big bench-go" data-b="go">▶ 开始跑分</button>`;
+    <button type="button" class="primary big bench-go" data-b="go">▶ 不服跑个分</button>`;
   idle();
 
   const run = () => {
@@ -282,7 +282,7 @@ export function openBench(opts) {
       g.fillText(rank === 1 ? '🏆' : rank === 2 ? '🥈' : '😓', W / 2, 74 + Math.sin(t * 3) * 3);
       g.fillStyle = '#ffe8b0';
       g.font = 'bold 11px sans-serif';
-      g.fillText(rank === 1 ? '同期跑分第一！' : `同期第 ${rank} 名`, W / 2, 112);
+      g.fillText(rank === 1 ? '遥遥领先！' : `同期第 ${rank} 名`, W / 2, 112);
       g.textAlign = 'left';
       raf = requestAnimationFrame(loop);
     };
@@ -293,7 +293,7 @@ export function openBench(opts) {
           <i><b style="--w:${Math.round((r.v / max) * 100)}%"></b></i><em>${(r.v / 10000).toFixed(r.v >= 1e6 ? 0 : 1)}万</em></div>`,
       )
       .join('')}</div>
-      <p class="bench-verdict">${rank === 1 ? '跑分截图已经在数码论坛刷屏了。' : beaten > 0 ? `超过了 ${beaten} 款竞品，还不是第一。` : '被竞品全面压制，论坛开始玩梗了……'}${ratio < 0.95 ? '<br/><small>调校做满后还能再涨一截。</small>' : ''}</p>
+      <p class="bench-verdict">${rank === 1 ? '跑分截图在数码论坛刷屏，#遥遥领先# 冲上热搜。' : beaten > 0 ? `超过了 ${beaten} 款竞品，还不是第一。` : '被竞品全面压制，论坛开始玩梗了……'}${ratio < 0.95 ? '<br/><small>调校做满后还能再涨一截。</small>' : ''}</p>
       <div class="bench-btns"><button type="button" data-b="again">↻ 再跑一次</button><button type="button" class="primary" data-b="close">收好成绩 ✓</button></div>`;
   };
 

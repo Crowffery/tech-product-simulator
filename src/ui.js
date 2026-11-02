@@ -353,7 +353,7 @@ function effText(e) {
   if (e.months) bits.push(`⏳+${e.months}月`);
   if (e.hype) bits.push(`📣${e.hype > 0 ? '↑' : '↓'}`);
   if (e.faith) bits.push(`❤️${e.faith > 0 ? '↑' : '↓'}`);
-  if (e.slotPenalty && Object.keys(e.slotPenalty).length) bits.push('🔧进度受损');
+  if (e.slotPenalty && Object.keys(e.slotPenalty).length) bits.push(Object.values(e.slotPenalty).some((v) => v > 0) ? '🔧进度受损' : '🔧研发进度↑');
   if (e.gambleFail) bits.push('🎲赌');
   return bits.length ? `<i>${bits.join(' ')}</i>` : '';
 }
@@ -1100,6 +1100,7 @@ async function playReveal() {
       batCap: caps.battery,
       price: state.product.price || PRICE_BANDS.find((p) => p.id === state.product.priceId)?.price || 3999,
       chipLag: L.chipLag(state),
+      fair: state.product.fair,
       pf: state.review?.priceUser ?? 0,
       points: state.product.pointIds,
       promises: state.review?.promises,
@@ -1113,6 +1114,8 @@ async function playReveal() {
       { wall: (g, Wd, Hd) => { g.fillStyle = '#5d4037'; g.fillRect(Wd / 2 - 16, 14, 32, 32); g.fillStyle = '#f5cba7'; g.fillRect(Wd / 2 - 10, 20, 20, 18); g.fillStyle = '#2c3e50'; g.fillRect(Wd / 2 - 6, 26, 3, 3); g.fillRect(Wd / 2 + 4, 26, 3, 3); txt(g, '神秘嘉宾', Wd / 2, 62, 11, '#ffd08a'); }, sub: '有请神秘嘉宾——知名测评博主<b>「老喵」</b>！', react: ['老喵！！', '真人来了', '👋'], mood: 'good' },
       { wall: (g, Wd, Hd) => txt(g, '能不能送一台！', Wd / 2, Hd / 2 + 6, 16, '#f5b041'), sub: '台下有人大喊：「<b>能不能送一台！</b>」主讲人：「……散会后找我。」', react: ['哈哈哈哈', '我也要！', '😂'], mood: 'good' },
       { wall: (g, Wd, Hd) => txt(g, '最好的一代（之一）', Wd / 2, Hd / 2 + 6, 14, '#fff'), sub: '「这是我们有史以来最好的一代……之一。」', react: ['之一？？', '笑死', '🤣'], mood: 'meh' },
+      { wall: (g, Wd, Hd) => { txt(g, '友商', Wd / 2 - 40, Hd / 2, 14, '#aab7b8'); txt(g, '→', Wd / 2, Hd / 2, 14, '#fff'); txt(g, '我们', Wd / 2 + 40, Hd / 2, 14, '#f5b041'); txt(g, '（一图看懂）', Wd / 2, Hd - 10, 8, '#aab7b8'); }, sub: '「我们不点名，<b>友商</b>做得也很好——只是我们更好一点点。」', react: ['点名了', '友商：？', '🍿'], mood: 'good' },
+      { wall: (g, Wd, Hd) => txt(g, '1000 个夜晚', Wd / 2, Hd / 2 + 6, 16, '#f5b041'), sub: '「我们的工程师，为它熬了 <b>1000 个夜晚</b>。」大屏放出一张满是外卖盒的工位照片。', react: ['Respect', '心疼工程师', '🫡'], mood: 'good' },
       { wall: (g, Wd, Hd, t) => { for (let i = 0; i < 16; i++) { g.fillStyle = ['#f1948a', '#f5b041', '#5dade2'][(i + Math.floor(t * 4)) % 3]; g.fillRect(8 + i * 14, 20 + (i % 2) * 18, 12, 14); } txt(g, '粉丝应援', Wd / 2, 68, 9, '#fff'); }, sub: '粉丝举起了应援灯牌，全场一起倒数！', react: ['冲冲冲', '🌟🌟🌟', '爱了'], mood: 'good' },
     ];
     const mid = Math.max(1, Math.min(seg.length - 2, 3));
@@ -1128,8 +1131,8 @@ async function playReveal() {
           }
           txt(g, 'ERROR', Wd / 2, Hd / 2 + 8, 22, '#e74c3c', 'center', 'monospace');
         },
-        sub: '呃……现场演示机好像<b>卡住了</b>。我们换一台！',
-        react: ['哈哈哈哈', '翻车了！', '📸📸'],
+        sub: '呃……演示机<b>卡住了</b>。主讲人沉默两秒：「没关系。<b>我不是为了输赢，我就是认真。</b>」',
+        react: ['名场面', '认真你就输了', '📸📸'],
         mood: 'bad',
         act: () => {
           play('boom');
@@ -1270,6 +1273,9 @@ function comments() {
     chipLead: (R.chipLag || 0) < 0 && state.design.chipSrc !== 'ext',
     extChip: state.design.chipSrc === 'ext',
     gen: state.generation,
+    company: state.companyName,
+    firsts: (W.firsts || []).length > 0,
+    benchFirst: state.benchBest?.gen === state.generation && state.benchRank1 === state.generation,
   });
   draft.commentsFor = state.generation;
   return draft.comments;
@@ -1669,7 +1675,8 @@ function onClick(e) {
                 state.benchGen = state.generation;
                 const add = r.rank === 1 ? 8 : r.beaten > 0 ? 4 : 0;
                 state.hype += add;
-                toast(add ? `📈 跑分截图刷屏，热度 +${add}` : '论坛：「就这？」热度没涨');
+                if (r.rank === 1) state.benchRank1 = state.generation;
+                toast(r.rank === 1 ? `📈 #遥遥领先# 冲上热搜，热度 +${add}` : add ? `📈 跑分截图刷屏，热度 +${add}` : '论坛：「就这？」热度没涨');
               }
             }
             persist();

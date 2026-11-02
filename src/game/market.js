@@ -136,6 +136,9 @@ export function endingTitles(state) {
   if (state.overstocks >= 2) titles.push({ t: '仓库传说', d: `积压了 ${state.overstocks} 次` });
   if (state.cash >= 400) titles.push({ t: '印钞机', d: `账上躺着 ${state.cash}` });
   if (minors >= Math.max(3, ms.length - 1)) titles.push({ t: '挤牙膏之王', d: `${minors} 代小改款` });
+  if ((state.chipLeads || 0) >= 2) titles.push({ t: '遥遥领先', d: `${state.chipLeads} 代产品的芯片领先行业` });
+  if ((state.brand || 1) >= 1.2) titles.push({ t: 'Pro Max 定价大师', d: `品牌溢价 ×${state.brand.toFixed(2)}，卖得贵还有人排队` });
+  if ((state.brand || 1) <= 0.85) titles.push({ t: '交个朋友', d: '价格屠夫，用户心中的「厚道」代名词' });
   if (state.rescued && state.cash >= 150) titles.push({ t: '绝地翻盘', d: '差点倒闭，最后把投资人的钱挣回来了' });
   if (!titles.length) titles.push({ t: '稳健经营者', d: '不惊艳，但活下来了' });
   return { titles, stats: { gens: ms.length, firsts, avgWow: Math.round(avgWow), sold, cash: state.cash } };
