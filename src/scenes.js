@@ -563,7 +563,7 @@ const SCENES = {
       s.rect(x, 92, 40, 2, '#bdc3c7');
       s.rect(x + 2, 98, 3, 14, '#566573');
       s.rect(x + 35, 98, 3, 14, '#566573');
-      STATION_DRAW[st.id](s, x, p, cap, ev);
+      STATION_DRAW[st.id](s, x, p, cap, ev, d);
       // 进度条
       s.rect(x, 46, 40, 6, '#1b2631');
       s.rect(x + 1, 47, Math.round((38 * p) / 100), 4, p >= cap ? '#f1c40f' : '#2ecc71');
@@ -772,7 +772,7 @@ const SCENES = {
     s.rect(40, 42, 70, 50, '#d6eaf8');
     s.rect(130, 42, 70, 50, '#d6eaf8');
     // 橱窗海报
-    if (!d.hidePhone) s.phone(64, 48, 16, 28, brand);
+    if (!d.hidePhone) s.phone(64, 48, 16, 28, brand, { concepts: d.concepts || [], open: Math.sin(s.t * 0.85) > 0 ? 1 : 0 });
     s.rect(110, 46, 20, 60, '#7f8c8d');
     s.rect(112, 48, 16, 58, d.state === 'short' ? '#c0392b' : '#5d6d7e');
     if (d.state === 'short') s.text('0', 117, 66, '#fff');
@@ -785,7 +785,7 @@ const SCENES = {
         if (hash(i) > 0.5) s.rect(x + 1, y, 3, 1, '#ecf0f1');
       }
     } else {
-      for (let i = 0; i < 4; i++) s.phone(138 + i * 15, 70, 10, 16, i % 2 ? brand : shade(brand, -0.3));
+      for (let i = 0; i < 4; i++) s.phone(138 + i * 15, 70, 10, 16, i % 2 ? brand : shade(brand, -0.3), { concepts: d.concepts || [], open: 0 });
     }
     s.rect(0, 106, W, 4, '#95a5a6');
     s.rect(0, 110, W, 40, '#7f8c8d');
@@ -919,14 +919,38 @@ const STATION_DRAW = {
     if (ev === 'chip_short') s.text('?', x + 25, 86, '#e74c3c');
     else if (Math.sin(s.t * 5) > 0.5) s.rect(x + 26, 80, 2, 3, '#e67e22');
   },
-  design(s, x, p, cap, ev) {
+  design(s, x, p, cap, ev, d = {}) {
     s.rect(x + 6, 62, 28, 30, '#ecf0f1');
     s.rect(x + 8, 64, 24, 26, '#566573');
     const nozzle = x + 10 + ((Math.sin(s.t * 3) + 1) / 2) * 18;
     s.rect(nozzle, 66, 3, 4, '#e67e22');
+    const concepts = d.concepts || [];
+    const fold = concepts.includes('trifold') || concepts.includes('fold') || concepts.includes('rollable');
     const hgt = Math.round((18 * p) / 100);
-    s.rect(x + 16, 88 - hgt, 8, hgt, ev === 'hinge' ? '#c0392b' : '#a9cce3');
-    if (ev === 'hinge') s.rect(x + 19, 88 - hgt, 1, hgt, '#000');
+    if (fold) {
+      // 打印中的折叠样机：合盖厚砖 / 展开双叶随进度
+      const open = p >= 55 && Math.sin(s.t * 1.1) > 0;
+      const col = ev === 'hinge' ? '#c0392b' : (d.color || '#a9cce3');
+      if (open) {
+        const leaf = 5;
+        const y0 = 88 - Math.max(8, hgt);
+        s.rect(x + 10, y0, leaf, Math.max(8, hgt), '#1b1b1b');
+        s.rect(x + 11, y0 + 1, leaf - 2, Math.max(6, hgt - 2), '#101523');
+        s.rect(x + 10 + leaf, y0 + 1, 1, Math.max(6, hgt - 2), '#9aa0ab');
+        s.rect(x + 11 + leaf, y0, leaf, Math.max(8, hgt), '#1b1b1b');
+        s.rect(x + 12 + leaf, y0 + 1, leaf - 2, Math.max(6, hgt - 2), col);
+      } else {
+        const bw = 7;
+        const bh = Math.max(8, hgt);
+        s.rect(x + 14, 88 - bh, bw, bh, '#1b1b1b');
+        s.rect(x + 15, 89 - bh, bw - 2, bh - 2, col);
+        s.rect(x + 15, 89 - bh, 1, bh - 2, '#9aa0ab');
+      }
+      if (ev === 'hinge') s.rect(x + 17, 88 - hgt, 1, hgt, '#000');
+    } else {
+      s.rect(x + 16, 88 - hgt, 8, hgt, ev === 'hinge' ? '#c0392b' : '#a9cce3');
+      if (ev === 'hinge') s.rect(x + 19, 88 - hgt, 1, hgt, '#000');
+    }
   },
   camera(s, x, p) {
     s.rect(x + 8, 66, 2, 26, '#2c3e50');
