@@ -819,7 +819,8 @@ export function buildKeynote(ctx) {
   }
 
   // —— 其余概念件 ——
-  const others = (d.concepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter((c) => c && !firsts.includes(c.name) && c.id !== 'fastcharge' && c.id !== 'ai');
+  const others = (d.concepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter((c) => c && !firsts.includes(c.name) && c.id !== 'fastcharge' && c.id !== 'ai')
+    .sort((a, b) => Number(b.id === 'fold' || b.id === 'trifold') - Number(a.id === 'fold' || a.id === 'trifold'));
   const conceptLimit = style === 'specs' ? 3 : quick ? 0 : 2;
   if (!quick)
     others.slice(0, conceptLimit).forEach((c) => {
@@ -833,6 +834,8 @@ export function buildKeynote(ctx) {
         react: ['有点意思', '想试试', c.icon],
         mood: 'good',
         pose: camPose(c.cat === 'cam' ? 'back' : 'hero', c.cat === 'cam' ? 'macro' : 'push', { spin: 0.1, push: 1.2 }, cam),
+        spot: c.id === 'fold' || c.id === 'trifold' ? 'fold' : undefined,
+        spotLabel: c.id === 'fold' || c.id === 'trifold' ? c.name : undefined,
         screen: c.cat === 'cam' ? 'camera' : 'home',
         ms: 3000,
       });
@@ -856,6 +859,8 @@ export function buildKeynote(ctx) {
         mood: 'good',
         pose: camPose(i % 2 ? 'hero' : 'back', i % 2 ? 'dutch' : 'push', { spin: 0.18, push: 1.3, forceDutch: true }, cam),
         fanfare: true,
+        spot: c.id === 'fold' || c.id === 'trifold' ? 'fold' : undefined,
+        spotLabel: c.id === 'fold' || c.id === 'trifold' ? c.name : undefined,
         screen: c.id === 'ai' ? 'ai' : 'home',
         ms: 3400,
       });

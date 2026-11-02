@@ -129,6 +129,7 @@ export const EVENTS = [
   {
     id: 'leak',
     type: '泄露',
+    meme: 'leak',
     title: '工程机出现在二手群',
     body: '模糊真机图配上「内部人士」——热度来了，惊喜没了。',
     choices: [
@@ -161,6 +162,7 @@ export const EVENTS = [
   {
     id: 'spyshot',
     type: '谍照',
+    meme: 'lawyer',
     when: (st) => (st.design?.concepts || []).length > 0,
     title: '路人拍到工程机：「这是什么黑科技？」',
     body: '模糊照片在社交网络疯传，评论区已经开始脑补发布会。',
@@ -173,6 +175,7 @@ export const EVENTS = [
   {
     id: 'remix',
     type: '鬼畜',
+    meme: 'selfburn',
     when: (st) => st.generation > 1,
     title: '老板一句「Are you OK?」被剪成了鬼畜神曲',
     body: '上次发布会的开场白被网友配上了电音，播放量破千万。公关部在群里发了一排问号。',
@@ -185,6 +188,7 @@ export const EVENTS = [
   {
     id: 'yyld',
     type: '友商',
+    meme: 'rival',
     when: (st) => st.month >= 6,
     title: '友商发布会连说了 8 次「遥遥领先」',
     body: '对方大屏上的跑分柱子比你的高出一截。你们的论坛评论区开始沦陷。',
@@ -197,6 +201,7 @@ export const EVENTS = [
   {
     id: 'stealth',
     type: '突袭',
+    meme: 'rival',
     when: (st) => st.month >= 8,
     title: '友商没开发布会，新机直接悄悄开卖了',
     body: '凌晨上架，秒空。媒体标题全是「遥遥领先」，你的新机还在实验室里。',
@@ -204,6 +209,83 @@ export const EVENTS = [
       { label: '马上官宣发布会日期', effect: { cash: 0, hype: 8 } },
       { label: '加钱赶工', effect: { cash: -100, slotPenalty: { perf: -6, camera: -6 } } },
       { label: '稳住，按原计划', effect: { cash: 0, faith: 2, hype: -2 } },
+    ],
+  },
+  {
+    id: 'antenna',
+    type: '天线',
+    meme: 'antenna',
+    when: (st) => st.month >= 4,
+    title: '实验室：「握紧一点信号更好」',
+    body: '新天线方案在弱网测里翻车。有人提议加一条「正确握持姿势」说明。',
+    choices: [
+      { label: '重做射频（烧钱）', effect: { cash: -120, months: 0, slotPenalty: {} } },
+      { label: '再磨两周', effect: { cash: 0, months: 1 } },
+      { label: '说明书加持机示意图', effect: { cash: 0, hype: 6, faith: -3 } },
+    ],
+  },
+  {
+    id: 'reviewbomb',
+    type: '舆情',
+    meme: 'review',
+    when: (st) => st.generation > 1,
+    title: '上代被刷了一波「真香转头骂」',
+    body: '论坛置顶换成「别买，等下一代」。公关在群里发了三排省略号。',
+    choices: [
+      { label: '诚恳置顶回应', effect: { cash: -30, faith: 3 } },
+      { label: '甩锅供应链', effect: { cash: 0, hype: 4, faith: -4 } },
+      { label: '埋头改下一代', effect: { cash: -50, slotPenalty: { design: -6 } } },
+    ],
+  },
+  {
+    id: 'benchgate',
+    type: '跑分',
+    meme: 'bench',
+    when: (st) => st.month >= 5,
+    title: '工程机跑分截图漏到了群里',
+    body: '数字看着还行，但评论区已经在复读「实验室数据」。',
+    choices: [
+      { label: '正式官宣跑分', effect: { cash: 0, hype: 10 } },
+      { label: '否认「非最终版本」', effect: { cash: 0, hype: -2, faith: 1 } },
+      { label: '加钱冲一版性能补丁', effect: { cash: -80, slotPenalty: { perf: -8 } } },
+    ],
+  },
+  {
+    id: 'camflare',
+    type: '影像',
+    meme: 'camera',
+    when: (st) => (st.design?.concepts || []).some((c) => ['gimbal', 'periscope', 'oneinch'].includes(c)) || (st.slots?.camera?.progress || 0) >= 70,
+    title: '样张被说「滤镜开太满」',
+    body: '摄影组坚持「这是风格」。用户坚持「这是美颜」。',
+    choices: [
+      { label: '推「原色」模式', effect: { cash: -40, slotPenalty: { camera: -5 }, faith: 2 } },
+      { label: '就这个味儿', effect: { cash: 0, hype: 8 } },
+      { label: '找测评博主联调', effect: { cash: -70, hype: 6 } },
+    ],
+  },
+  {
+    id: 'batterygate',
+    type: '续航',
+    meme: 'battery',
+    when: (st) => st.month >= 3,
+    title: '续航样机在直播间当场关机',
+    body: '主播笑得很干。弹幕只剩「电量焦虑」。',
+    choices: [
+      { label: '加电芯（变厚也认）', effect: { cash: -90, slotPenalty: { battery: -8, design: 4 } } },
+      { label: '软件省电应急', effect: { cash: -20, faith: -2 } },
+      { label: '改口「综合续航」', effect: { cash: 0, hype: 5, faith: -3 } },
+    ],
+  },
+  {
+    id: 'supplymeme',
+    type: '供应链',
+    meme: 'supply',
+    title: '供应商把交期写成了「尽快」',
+    body: '采购问「尽快是几号」。对方回了一个笑脸。',
+    choices: [
+      { label: '加钱换档期', effect: { cash: -100 } },
+      { label: '找备胎供应商', effect: { cash: -60, months: 0, slotPenalty: { design: 3 } } },
+      { label: '接受再等一轮', effect: { cash: 0, months: 1 } },
     ],
   },
 ];

@@ -775,3 +775,12 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 .rp-gain { margin: 6px 0 0; font-weight: 800; }
 .stat-fork { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; padding: 4px 6px; background: #fef9e7; border: 2px dashed #d4a017; font-size: .78rem; font-weight: 800; }
 .stat-fork small { color: var(--muted); font-weight: 700; }
+
+/* 量产：按机型处理旧款 */
+.sku-policies { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.sku-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; background: var(--cream); border: 2px solid var(--border); }
+.sku-name { font-weight: 900; font-size: .86rem; }
+.sku-name small { font-weight: 700; color: var(--muted); margin-left: 6px; }
+.chips.tight { display: flex; flex-wrap: wrap; gap: 4px; }
+.chips.tight .chip { padding: 3px 8px; font-size: .72rem; }
+.chips.tight .chip.rec:not(.on) { outline: 1px dashed #27ae60; }

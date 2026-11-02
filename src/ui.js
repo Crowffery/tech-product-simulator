@@ -171,6 +171,7 @@ const STAT_HELP = {
     what: '公司账上的钱。所有花销都从这里扣，低于 0 就会破产（第一次有天使投资兜底）。',
     up: ['每台手机卖出去的利润（首月只结首月；之后约 24 个月按月续销）', '货架月 / 研发月的在售续销', '旧款清仓（一次性收尾，放弃后续月）'],
     down: ['每月团队工资和海外 / 门店运营费', '升级部门、扩建、流片、战略投资', '突发事件、库存积压'],
+    note: '融资完整面板后置；账上已预留 debt 字段。',
   },
   faith: {
     what: '铁粉忠诚度（0～100）。和「口碑」分叉：信仰只跟用户满意度 / 以旧换新走，不管媒体怎么写。',
@@ -630,9 +631,14 @@ P.factory = () => {
       <div class="spec-row"><span>单台成本</span><b>¥${p.unitCost}</b></div>
       <div class="spec-row"><span>研发完成度</span><b>${Math.round(L.devRatio(state) * 100)}%</b></div>
       ${benchCard()}
-      ${(state.onSale || []).length ? `<div class="field-l" style="margin-top:8px">新品上市，旧款怎么办？<small class="muted">（旧款预计还能再挣 ${money(L.tailValue(state))}；选清仓/以旧换新 = <b class="neg">放弃后续月续销</b>）</small>
-        <div class="cards3">${L.OLD_POLICIES.map((o) => `<button type="button" class="pick ${(state.oldPolicy || 'keep') === o.id ? 'on' : ''}" data-act="old-policy" data-id="${o.id}"><b>${o.name}</b><small>${o.desc}</small></button>`).join('')}</div>
-        <p class="policy-warn">💡 想拿前几款的持续收入：选「继续卖」。清仓/以旧换新会立刻清空在售列表。</p></div>` : ''}`,
+      ${(state.onSale || []).length ? `<div class="field-l" style="margin-top:8px">新品上市，旧款逐台处理<small class="muted">（合计预计还能再挣 ${money(L.tailValue(state))}；默认 <b>继续卖</b>，清仓/换新只动本行）</small>
+        <div class="sku-policies">${(state.onSale || []).map((m) => {
+          const key = m.key || m.name;
+          const cur = (state.oldPolicyMap || {})[key] || 'keep';
+          return `<div class="sku-row"><div class="sku-name">${esc(m.name)} <small>还能约 ${money(L.modelTailValue(m))}</small></div>
+            <div class="chips tight">${L.OLD_POLICIES.map((o) => `<button type="button" class="chip ${cur === o.id ? 'on' : ''} ${o.id === 'keep' ? 'rec' : ''}" data-act="old-policy-sku" data-key="${esc(key)}" data-id="${o.id}">${o.name}</button>`).join('')}</div></div>`;
+        }).join('')}</div>
+        <p class="policy-warn">💡 推荐默认「继续卖」拿跨代月度进账。清仓伤口碑、以旧换新养信仰——都只作用于本行机型。</p></div>` : ''}`,
     cta: `<button type="button" class="primary big" data-act="to-launch" ${draft.factoryDone ? '' : 'disabled'}>${draft.factoryDone ? '🎤 去发布会后台 ▶' : '量产中…'}</button>`,
   };
 };
@@ -1546,6 +1552,7 @@ async function playReveal() {
           exploded = false;
         }
         if (sl.pose) stage.pose(...sl.pose);
+        if (sl.spot) stage.spotlight?.(sl.spot, sl.spotLabel || '');
         if (sl.explode) {
           stage.setExploded(true);
           exploded = true;
@@ -1566,10 +1573,12 @@ async function playReveal() {
         }
         sl.act?.();
         if (sl.mood === 'good' && sl.react?.length) play('applause', 1);
-        // 自动翻页；也可以轻点屏幕提前翻
-        const minMs = sl.notap ? sl.ms : Math.min(sl.ms, 900);
-        await sleep(minMs);
-        if (sl.ms > minMs) await Promise.race([sleep(sl.ms - minMs), new Promise((r) => (tapNext = r))]);
+        // 保底等到预备+主 pose 落地，再允许点掉余韵（禁止 900ms 硬切空白）
+        const landMs = sl.notap
+          ? sl.ms
+          : Math.min(sl.ms, Math.max(sl.land || (sl.pose || sl.fanfare || sl.dim ? 780 : 650), Math.floor(sl.ms * 0.55)));
+        await sleep(landMs);
+        if (sl.ms > landMs) await Promise.race([sleep(sl.ms - landMs), new Promise((r) => (tapNext = r))]);
         tapNext = null;
       }
       kpi(null);
@@ -2167,6 +2176,12 @@ function onClick(e) {
       const r = L.cutPrice(state, i);
       toast(r.msg, Math.min(12000, Math.max(5500, 2000 + String(r.msg || '').length * 90)));
       if (r.ok) play('keep');
+      break;
+    }
+    case 'old-policy-sku': {
+      const key = btn.dataset.key;
+      if (!key) break;
+      state.oldPolicyMap = { ...(state.oldPolicyMap || {}), [key]: id };
       break;
     }
     case 'old-policy':

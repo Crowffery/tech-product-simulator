@@ -386,7 +386,9 @@ export function advanceMonth(state, allocation) {
   // 第一代是新手期：事故减半
   const chance = sup.eventChance * [1, 0.8, 0.6][deptLevel(state, 'supply') - 1] * (state.generation === 1 ? 0.5 : 1);
   if (Math.random() < chance) {
-    const pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)));
+    const cool = new Set(state.recentMemes || []);
+    let pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)) && !(e.meme && cool.has(e.meme)));
+    if (!pool.length) pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)));
     const ev = pool[Math.floor(Math.random() * pool.length)];
     state.pendingEvent = ev.id;
     state.phase = 'event';
@@ -536,9 +538,9 @@ export function cutPrice(state, idx) {
 }
 
 export const OLD_POLICIES = [
-  { id: 'keep', name: '继续卖', desc: '旧款继续按月进账（同定位销量砍半）；拿得到后续续销' },
-  { id: 'clear', name: '降价清仓', desc: '一次回款约 5 成并放弃续销；大众口碑 -3、铁粉信仰 -1' },
-  { id: 'tradein', name: '以旧换新', desc: '补贴换首月 +12% 并放弃续销；铁粉信仰 +4、大众口碑 +1' },
+  { id: 'keep', name: '继续卖', desc: '推荐默认：按月续销（同定位会被新品蚕食）' },
+  { id: 'clear', name: '降价清仓', desc: '仅对本机：回款约 5 成并放弃续销；口碑 -3' },
+  { id: 'tradein', name: '以旧换新', desc: '仅对本机：补贴换首月 +12%，放弃续销；信仰 +4' },
 ];
 
 export function recommendedEventChoice(eventId) {
@@ -588,6 +590,10 @@ export function resolveEvent(state, choiceIndex) {
   }
   state.lastEventId = ev.id;
   state.pendingEvent = null;
+  if (ev.meme) {
+    state.recentMemes = [...(state.recentMemes || []).filter((m) => m !== ev.meme), ev.meme].slice(-3);
+  }
+  if (eff.rep) state.reputation = Math.max(0, Math.min(100, state.reputation + eff.rep));
   state.phase = 'dev';
   return afterDevCheck(state);
 }
@@ -1005,33 +1011,47 @@ export function setPrice(state, price) {
 // ═════════════════════════ 销售 ═════════════════════════
 
 export function runSales(state) {
-  // 新品上市：先处理在售旧款（自相蚕食）
-  const policy = state.oldPolicy || 'keep';
+  // 新品上市：按机型处理旧款（禁止 onSale=[] 误杀全部 SKU）
+  const fallback = state.oldPolicy || 'keep';
+  const map = state.oldPolicyMap || {};
   let oldNote = '';
   let tradeBoost = 1;
-  if ((state.onSale || []).length) {
+  const notes = [];
+  const kept = [];
+  let cleared = 0;
+  let traded = 0;
+  let clearValue = 0;
+  for (const m of state.onSale || []) {
+    const key = m.key || m.name;
+    const policy = map[key] || m.retirePolicy || fallback;
     if (policy === 'clear') {
-      const v = Math.round(tailValue(state) * 0.5);
-      book(state, '旧款清仓', v);
-      // 清仓伤「大众口碑」；铁粉也觉得被割韭菜
-      state.reputation = Math.max(0, state.reputation - 3);
-      state.faith = Math.max(0, state.faith - 1);
-      oldNote = `旧款降价清仓，回款 ${v}；大众口碑 -3 · 铁粉信仰 -1（已放弃后续月续销）`;
-      state.onSale = [];
+      clearValue += Math.round(modelTailValue(m) * 0.5);
+      cleared += 1;
     } else if (policy === 'tradein') {
-      book(state, '以旧换新补贴', -40);
-      // 以旧换新养「铁粉信仰」，顺带让大众觉得你护老用户
-      state.faith = Math.min(100, state.faith + 4);
-      state.reputation = Math.min(100, state.reputation + 1);
-      tradeBoost = 1.12;
-      oldNote = '以旧换新：铁粉信仰 +4 · 大众口碑 +1（已放弃后续月续销）';
-      state.onSale = [];
+      traded += 1;
+      tradeBoost = Math.max(tradeBoost, 1.12);
     } else {
-      for (const m of state.onSale) m.comp *= m.pos === state.product.positioningId ? 0.5 : 0.85;
-      oldNote = '新旧同台：旧款继续按月卖，同定位会被新品蚕食';
+      m.comp *= m.pos === state.product.positioningId ? 0.5 : 0.85;
+      kept.push(m);
     }
   }
+  if (cleared) {
+    book(state, '旧款清仓', clearValue);
+    const repHit = Math.min(6, 2 + cleared);
+    state.reputation = Math.max(0, state.reputation - repHit);
+    notes.push(`清仓 ${cleared} 款回款 ${clearValue}（口碑 -${repHit}）`);
+  }
+  if (traded) {
+    book(state, '以旧换新补贴', -40 * traded);
+    const faithGain = Math.min(8, 3 + traded);
+    state.faith = Math.min(100, state.faith + faithGain);
+    notes.push(`以旧换新 ${traded} 款（信仰 +${faithGain}）`);
+  }
+  if (kept.length) notes.push(`继续卖 ${kept.length} 款（按月续销）`);
+  oldNote = notes.join('；') || '无在售旧款';
+  state.onSale = kept;
   state.oldPolicy = 'keep';
+  state.oldPolicyMap = {};
   const priceVal = state.product.price || PRICE_BANDS.find((p) => p.id === state.product.priceId).price;
   const W = state.wowResult;
   const { units: baseUnits, win, clash, clashF, pe } = demandUnits(state, { price: priceVal, media: state.mediaScore, user: state.userScore, W, tradeBoost });
@@ -1092,7 +1112,7 @@ export function runSales(state) {
   const faithDelta = Math.round((state.userScore - 60) / 12) + (state.product.bindEco ? 3 : 0);
   state.reputation = Math.max(0, Math.min(100, state.reputation + repDelta));
   state.faith = Math.max(0, Math.min(100, state.faith + faithDelta));
-  state._statDelta = { rep: repDelta, faith: faithDelta, policy };
+  state._statDelta = { rep: repDelta, faith: faithDelta, policy: cleared ? 'clear' : traded ? 'tradein' : 'keep' };
   // —— 定价的连锁反应 ——
   const pos = state.product.positioningId;
   const chain = [];

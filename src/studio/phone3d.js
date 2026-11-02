@@ -1212,30 +1212,60 @@ export function buildPhone(design, { hdScreen = false, liveScreen = null } = {})
   };
 
   if (C.has('fold') || C.has('trifold')) {
-    // 外折：左半屏绕背面铰链折到身后
-    const hingeL = new THREE.Group();
-    hingeL.position.set(-w / 2, 0, -t / 2);
-    const leafL = slab(w, h, t);
-    leafL.position.set(-w / 2, 0, t / 2);
-    hingeL.add(leafL);
-    root.add(hingeL);
-    const hinge = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, h - 6, 12), frameMaterial(2, '#9aa0ab'));
-    hinge.position.set(-w / 2, 0, -t / 2);
+    // 真·书本折叠：合盖=半宽厚砖+侧铰链；展开=双宽平板（不能还是直板叠叶）
+    Object.values(layers).forEach((g) => {
+      g.visible = false;
+    });
+    const hw = w * 0.5;
+    const ht = Math.max(t * 0.95, 6.8);
+    const gap = 1.2;
+    const hingeMat = frameMaterial(2, '#9aa0ab');
+    const hinge = new THREE.Mesh(
+      new THREE.CylinderGeometry(Math.max(2.0, ht * 0.42), Math.max(2.0, ht * 0.42), h - 4, 18),
+      hingeMat,
+    );
     root.add(hinge);
+    const right = new THREE.Group();
+    const rightLeaf = slab(hw - 1, h, ht, true);
+    rightLeaf.position.x = hw / 2 + gap * 0.35;
+    right.add(rightLeaf);
+    const camIsle = new THREE.Mesh(
+      new THREE.BoxGeometry(Math.min(16, hw * 0.4), Math.min(20, h * 0.16), 2.4),
+      frameMaterial(matId, frameHex, design.matSub),
+    );
+    camIsle.position.set(hw / 2 + gap * 0.35, h * 0.28, -ht / 2 - 1.2);
+    const camDot = new THREE.Mesh(new THREE.CircleGeometry(2.1, 16), new THREE.MeshBasicMaterial({ color: 0x050507 }));
+    camDot.position.set(0, 2.5, 1.25);
+    camIsle.add(camDot);
+    right.add(camIsle);
+    root.add(right);
+    const hingeL = new THREE.Group();
+    const leftLeaf = slab(hw - 1, h, ht, true);
+    leftLeaf.position.x = -(hw / 2 + gap * 0.35);
+    hingeL.add(leftLeaf);
+    const cover = slab(Math.max(20, hw * 0.7), Math.max(34, h * 0.4), Math.max(2, ht * 0.32), true);
+    cover.rotation.y = Math.PI;
+    cover.position.set(-(hw / 2 + gap * 0.35), h * 0.12, -ht / 2 - 0.85);
+    hingeL.add(cover);
+    root.add(hingeL);
     let hingeR = null;
     if (C.has('trifold')) {
-      // Z 字：右半屏绕正面铰链折到屏幕前
       hingeR = new THREE.Group();
-      hingeR.position.set(w / 2, 0, t / 2);
-      const leafR = slab(w, h, t);
-      leafR.position.set(w / 2, 0, -t / 2);
+      const leafR = slab(hw * 0.88, h, ht * 0.92, true);
+      leafR.position.x = (hw * 0.88) / 2 + gap;
+      hingeR.position.set(hw + gap * 0.6, 0, ht * 0.12);
       hingeR.add(leafR);
       root.add(hingeR);
+      const hinge2 = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, h - 8, 12), hingeMat);
+      hinge2.position.set(hw + gap * 0.3, 0, ht * 0.08);
+      root.add(hinge2);
     }
     anim.push((now) => {
-      const k = cyc(now, 9, 2.6, 1.4, 'fold');
-      hingeL.rotation.y = -Math.PI * k * 0.98;
-      if (hingeR) hingeR.rotation.y = Math.PI * cyc(now + 450, 9, 2.6, 1.4, 'fold') * 0.98;
+      const k = cyc(now, 9, 2.4, 1.5, 'fold'); // 0 合 → 1 展
+      hingeL.rotation.y = -Math.PI * (1 - k) * 0.98;
+      // 合盖时半宽砖居中；展开以铰链为中心（视觉双宽）
+      root.position.x = (1 - k) * (hw * 0.5);
+      if (hingeR) hingeR.rotation.y = Math.PI * (1 - cyc(now + 450, 9, 2.4, 1.5, 'fold')) * 0.92;
     });
   }
   if (C.has('rollable')) {

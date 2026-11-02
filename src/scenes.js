@@ -195,8 +195,41 @@ export class SceneView {
     if (pose === 'panic') this.rect(X + 3, Y + 4, 2, 1, '#1b1b1b');
   }
 
-  /** 小手机（背面）：主色 + 镜头模组 */
+  /** 小手机（背面）；fold/trifold 合盖半宽+铰链，展开双宽 */
   phone(x, y, w, h, color, opts = {}) {
+    const concepts = opts.concepts || [];
+    const isTri = concepts.includes('trifold');
+    const isFold = isTri || concepts.includes('fold') || concepts.includes('rollable');
+    if (isFold) {
+      const open = opts.open == null ? (Math.sin(this.t * 1.2) > 0 ? 1 : 0) : opts.open;
+      if (open) {
+        const leaf = Math.max(4, Math.floor(w * 0.48));
+        const total = isTri ? leaf * 3 + 2 : leaf * 2 + 1;
+        const x0 = x - Math.floor((total - w) / 2);
+        this.rect(x0, y, leaf, h, '#1b1b1b');
+        this.rect(x0 + 1, y + 1, leaf - 2, h - 2, '#101523');
+        this.rect(x0 + 2, y + 2, leaf - 4, Math.max(1, Math.floor((h - 4) / 3)), shade(color, 0.25));
+        this.rect(x0 + leaf, y + 2, 1, h - 4, '#9aa0ab');
+        this.rect(x0 + leaf + 1, y, leaf, h, '#1b1b1b');
+        this.rect(x0 + leaf + 2, y + 1, leaf - 2, h - 2, '#101523');
+        this.rect(x0 + leaf + 3, y + 2, leaf - 4, Math.max(1, Math.floor((h - 4) / 3)), shade(color, 0.15));
+        if (isTri) {
+          this.rect(x0 + leaf * 2 + 1, y + 2, 1, h - 4, '#9aa0ab');
+          this.rect(x0 + leaf * 2 + 2, y, leaf, h, '#1b1b1b');
+          this.rect(x0 + leaf * 2 + 3, y + 1, leaf - 2, h - 2, '#101523');
+        }
+      } else {
+        const bw = Math.max(5, Math.floor(w * 0.72));
+        const bh = h + 1;
+        const bx = x + Math.floor((w - bw) / 2);
+        this.rect(bx - 1, y, bw + 2, bh, '#1b1b1b');
+        this.rect(bx, y + 1, bw, bh - 2, color);
+        this.rect(bx, y + 1, 1, bh - 2, '#9aa0ab');
+        this.rect(bx + 2, y + 3, Math.max(2, bw - 4), Math.max(3, Math.floor(bh * 0.4)), '#101523');
+        this.rect(bx + bw - 3, y + 2, 2, 2, '#2a2c33');
+      }
+      return;
+    }
     this.rect(x, y, w, h, '#1b1b1b');
     this.rect(x + 1, y + 1, w - 2, h - 2, color);
     this.rect(x + 1, y + 1, w - 2, 1, shade(color, 0.3));
@@ -569,6 +602,9 @@ const SCENES = {
       s.text('VS', 155, y0 + 21, '#c0392b');
       s.rect(162, y0 - 1, 2, 2, '#e74c3c');
     }
+    if ((d.concepts || []).length) {
+      s.phone(214, 108, 12, 20, d.color || '#8fd3b6', { concepts: d.concepts, open: Math.sin(s.t * 0.9) > 0 ? 1 : 0 });
+    }
     s.cat(124, 2);
     // 事故层
     if (ev === 'leak' || ev === 'spyshot') {
@@ -620,7 +656,7 @@ const SCENES = {
       if (stage === 0) {
         s.rect(x, 76, 10, 8, '#1e7a46');
         s.rect(x + 3, 78, 4, 4, '#2b2e36');
-      } else s.phone(x, 74, 10, 10, stage === 2 ? d.color || '#8fd3b6' : '#95a5a6');
+      } else s.phone(x, 74, 10, 10, stage === 2 ? d.color || '#8fd3b6' : '#95a5a6', { concepts: d.concepts || [], open: 0 });
     }
     // 机械臂
     [70, 140].forEach((ax, i) => {
@@ -704,7 +740,7 @@ const SCENES = {
     g.lineTo(96, 96);
     g.lineTo(144, 96);
     g.fill();
-    if (!d.hidePhone) s.phone(110, 58 + Math.round(Math.sin(s.t * 2) * 2), 20, 34, d.color || '#5aa9d6');
+    if (!d.hidePhone) s.phone(110, 58 + Math.round(Math.sin(s.t * 2) * 2), 20, 34, d.color || '#5aa9d6', { concepts: d.concepts || [], open: Math.sin(s.t * 1.1) > 0 ? 1 : 0 });
     if (d.flop && Math.floor(s.t * 2) % 2) for (let i = 0; i < 2; i++) s.parts.push({ x: 120, y: 60, vx: (Math.random() - 0.5) * 10, vy: -10, life: 1, c: '#7f8c8d', g: -4, s: 2 });
     s.rect(20, 94, 200, 6, '#2c2433');
     for (let i = 0; i < 22; i++) {
