@@ -313,7 +313,8 @@ P.launch = () => ({
 P.score = () => {
   const W = state.wowResult || {};
   return {
-    scene: ['score', { color: state.design?.color, grade: W.grade, flop: state.launchFlop }],
+    scene: ['score', { color: state.design?.color, grade: W.grade, flop: state.launchFlop, hidePhone: !!state.lastCut }],
+    imgs: state.lastCut ? [{ src: state.lastCut, x: 50, y: 50, h: 52, cls: 'hero' }] : [],
     caption: state.launchFlop ? '现场 Demo 卡住了……' : '全场欢呼！',
     sheet: `<h2 class="sheet-h">📰 媒体评分</h2>
       <div class="score-big"><b>${state.mediaScore}</b><span>媒体</span><b class="sub">${state.userScore}</b><span>用户</span></div>
@@ -348,7 +349,8 @@ P.sales = () => {
   const r = state.salesResult;
   const queue = r.stockState === 'short' ? 1 : r.stockState === 'over' ? 0.15 : 0.55;
   return {
-    scene: ['sales', { month: state.month, color: state.design?.color, state: r.stockState, queue }],
+    scene: ['sales', { month: state.month, color: state.design?.color, state: r.stockState, queue, hidePhone: !!state.lastCut }],
+    imgs: state.lastCut ? [{ src: state.lastCut, x: 31, y: 41, h: 30 }] : [],
     caption: r.stockState === 'short' ? '门口排起长队，黄牛来了' : r.stockState === 'over' ? '店里有点冷清，仓库在吃灰' : '门店生意不错',
     sheet: `<h2 class="sheet-h">🛒 首月战报</h2>
       <div class="score-big"><b>${r.sold}</b><span>台售出</span><b class="sub ${r.profit < 0 ? 'neg' : ''}">${r.profit > 0 ? '+' : ''}${r.profit}</b><span>盈亏</span></div>
@@ -367,7 +369,8 @@ P.next = () => {
   return {
     scene: draft.showHQ
       ? ['hq', { office: state.office, month: state.month, color: state.design?.color || state.designDraft?.color }]
-      : ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length })) }],
+      : ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut })) }],
+    imgs: draft.showHQ ? [] : wallImgs(),
     caption: draft.showHQ ? `新家：${L.office(state).name}` : '年会：这一代进了机型墙',
     sheet: `<h2 class="sheet-h">🏛 规划下一代</h2>
       ${last ? `<div class="model-card">${last.thumb ? `<img src="${last.thumb}" alt="" />` : ''}<div><b>${esc(last.design.modelName)}</b>
@@ -397,7 +400,8 @@ P.next = () => {
 P.ending = () => {
   const E = endingTitles(state);
   return {
-    scene: ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length })), finale: true }],
+    scene: ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut })), finale: true }],
+    imgs: wallImgs(),
     caption: '三年过去了，年会大结算',
     sheet: `<h2 class="sheet-h">🏆 三年结算</h2>
       <div class="titles">${E.titles.map((t, i) => `<div class="title-card ${i === 0 ? 'main' : ''}"><b>${t.t}</b><small>${esc(t.d)}</small></div>`).join('')}</div>
@@ -485,6 +489,37 @@ function tutorial(phase) {
   });
 }
 
+/** 在像素场景上叠放你设计的那台手机（透明背景 3D 截图） */
+function sceneImgs(list) {
+  const host = $('#g-scene');
+  const key = list.map((i) => `${i.x},${i.y},${i.h},${i.src.length}`).join('|');
+  if (host.dataset.imgs === key) return;
+  host.dataset.imgs = key;
+  host.querySelectorAll('.scene-img').forEach((e) => e.remove());
+  for (const i of list) {
+    const im = document.createElement('img');
+    im.className = `scene-img ${i.cls || ''}`;
+    im.src = i.src;
+    im.alt = '';
+    im.style.left = `${i.x}%`;
+    im.style.top = `${i.y}%`;
+    im.style.height = `${i.h}%`;
+    host.appendChild(im);
+  }
+}
+
+/** 年会机型墙：每个相框里放对应那一代的真机截图 */
+function wallImgs() {
+  const ms = state.models;
+  const n = Math.min(8, ms.length);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const m = ms[ms.length - n + i];
+    if (m.cut) out.push({ src: m.cut, x: ((25 + i * 28) / 240) * 100, y: 33, h: 24 });
+  }
+  return out;
+}
+
 // ═════════════════════════ 渲染 ═════════════════════════
 
 export function render() {
@@ -512,6 +547,7 @@ export function render() {
   }
   const view = (P[phase] || P.title)();
   scene.set(...view.scene);
+  sceneImgs(view.imgs || []);
   $('#g-caption').textContent = view.caption || '';
   $('#g-sheet').innerHTML = view.sheet;
   $('#g-cta').innerHTML = view.cta;
@@ -609,6 +645,7 @@ async function playReveal() {
     try {
       state.lastThumb = stage ? stage.snapshot(140) : '';
       draft.shareShot = stage ? stage.snapshot(360) : '';
+      state.lastCut = stage ? stage.cutout(200) : '';
     } catch {
       state.lastThumb = '';
     }

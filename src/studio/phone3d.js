@@ -1414,7 +1414,7 @@ export class PhoneStage {
   constructor(host) {
     this.host = host;
     this.pixel = 0; // 只保留高清档
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
@@ -1884,6 +1884,50 @@ export class PhoneStage {
     g.fillStyle = vig;
     g.fillRect(0, 0, 256, 256);
     this.bgTex.needsUpdate = true;
+  }
+
+  /** 透明背景的机身截图（只有手机本身），用于在像素场景里展示你的设计 */
+  cutout(width = 220, rotY = Math.PI + 0.5) {
+    const keep = {
+      y: this.rotY, x: this.rotX, ex: this.explode, set: this.stageSet.visible, mix: this.stageMix,
+      py: this.pivot.position.y, flash: this.postMat.uniforms.flash.value, cam: this.camera.position.clone(),
+      ped: this.pedestal.visible, dust: this.dust.visible, spark: this.sparkPts.visible,
+    };
+    this.explode = 0;
+    this._applyExplode();
+    this.stageSet.visible = false;
+    this.pedestal.visible = false;
+    this.dust.visible = false;
+    this.sparkPts.visible = false;
+    this._setStageMix(0);
+    this.pivot.rotation.set(-0.06, rotY, 0);
+    this.pivot.position.y = 0;
+    if (this.phone) this.phone.root.scale.set(1, 1, 1);
+    this.camera.position.set(0, 0, this.baseZ * 0.62);
+    this.camera.lookAt(0, 0, 0);
+    this.scene.background = null;
+    this.renderer.setClearColor(0x000000, 0);
+    this.renderer.setRenderTarget(null);
+    this.renderer.render(this.scene, this.camera);
+    const src = this.renderer.domElement;
+    const sh = src.height;
+    const sw = Math.min(src.width, sh * 0.62);
+    const sx = (src.width - sw) / 2;
+    const c = document.createElement('canvas');
+    c.width = width;
+    c.height = Math.round((width * sh) / sw);
+    c.getContext('2d').drawImage(src, sx, 0, sw, sh, 0, 0, c.width, c.height);
+    Object.assign(this, { rotY: keep.y, rotX: keep.x, explode: keep.ex });
+    this._applyExplode();
+    this.stageSet.visible = keep.set;
+    this.pedestal.visible = keep.ped;
+    this.dust.visible = keep.dust;
+    this.sparkPts.visible = keep.spark;
+    this._setStageMix(keep.mix);
+    this.postMat.uniforms.flash.value = keep.flash;
+    this.pivot.position.y = keep.py;
+    this.camera.position.copy(keep.cam);
+    return c.toDataURL('image/png');
   }
 
   /** 机型馆缩略图：背面斜侧 + 摄影棚光 */

@@ -597,6 +597,7 @@ export function enterNext(state) {
       media: state.mediaScore,
       sold: state.salesResult?.sold ?? 0,
       thumb: state.lastThumb || '',
+      cut: state.lastCut || '',
       gen: state.generation,
     });
     if (state.models.length > 12) state.models = state.models.slice(-12);
@@ -613,6 +614,7 @@ export function goNextGen(state) {
   state.archived = false;
   state.wowResult = null;
   state.lastThumb = '';
+  state.lastCut = '';
   state.generation += 1;
   state.product = null;
   state.supplierId = null;

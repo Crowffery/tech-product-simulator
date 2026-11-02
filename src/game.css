@@ -312,3 +312,8 @@ body.phase-design #app { max-width: 1240px; }
 .lo-fx { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .lo-fx i { position: absolute; width: 6px; height: 6px; animation: fw 1.5s steps(12) forwards; opacity: 0; }
 @keyframes fw { 0% { transform: none; opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 40px)); opacity: 0; } }
+
+/* 场景里叠放你设计的真机 */
+.scene-img { position: absolute; transform: translate(-50%, -50%); width: auto; max-width: none; pointer-events: none; z-index: 1; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+.scene-img.hero { animation: heroFloat 3s ease-in-out infinite; filter: drop-shadow(0 0 14px rgba(255,236,170,.55)) drop-shadow(0 4px 0 rgba(0,0,0,.4)); }
+@keyframes heroFloat { 50% { transform: translate(-50%, calc(-50% - 6px)); } }

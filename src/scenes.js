@@ -691,7 +691,7 @@ const SCENES = {
     g.lineTo(96, 96);
     g.lineTo(144, 96);
     g.fill();
-    s.phone(110, 58 + Math.round(Math.sin(s.t * 2) * 2), 20, 34, d.color || '#5aa9d6');
+    if (!d.hidePhone) s.phone(110, 58 + Math.round(Math.sin(s.t * 2) * 2), 20, 34, d.color || '#5aa9d6');
     if (d.flop && Math.floor(s.t * 2) % 2) for (let i = 0; i < 2; i++) s.parts.push({ x: 120, y: 60, vx: (Math.random() - 0.5) * 10, vy: -10, life: 1, c: '#7f8c8d', g: -4, s: 2 });
     s.rect(20, 94, 200, 6, '#2c2433');
     for (let i = 0; i < 22; i++) {
@@ -723,7 +723,7 @@ const SCENES = {
     s.rect(40, 42, 70, 50, '#d6eaf8');
     s.rect(130, 42, 70, 50, '#d6eaf8');
     // 橱窗海报
-    s.phone(64, 48, 16, 28, brand);
+    if (!d.hidePhone) s.phone(64, 48, 16, 28, brand);
     s.rect(110, 46, 20, 60, '#7f8c8d');
     s.rect(112, 48, 16, 58, d.state === 'short' ? '#c0392b' : '#5d6d7e');
     if (d.state === 'short') s.text('0', 117, 66, '#fff');
@@ -779,7 +779,7 @@ const SCENES = {
       s.rect(x + 2, 32, 18, 36, '#1b1b1b');
       if (i < n) {
         const m = ms[ms.length - n + i];
-        s.phone(x + 5, 38, 12, 22, m.color || '#5aa9d6');
+        if (!m.cut) s.phone(x + 5, 38, 12, 22, m.color || '#5aa9d6');
         s.text(m.grade || '', x + 9, 62, '#f1c40f');
         if (m.firsts) {
           s.rect(x + 16, 26, 6, 6, '#f1c40f');
