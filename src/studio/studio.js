@@ -32,11 +32,14 @@ import {
   chipName,
   chipSpec,
   rivalBench,
+  CATS,
+  hasAppeared,
   conceptsConflict,
   unlockStatus,
   buzzOf,
 } from './parts.js';
 import { sfx } from './sfx.js';
+import { term, installGlossary } from '../glossary.js';
 
 const MUSEUM_KEY = 'epdg-studio-museum';
 const DRAFT_KEY = 'epdg-studio-draft';
@@ -121,7 +124,7 @@ export function createStudio(root, opts = {}) {
       : `<div class="field"><span class="flabel">定位</span><div class="chips">${pos}</div></div>`;
     return `${posField}${parts}
       ${chipChart()}
-    <p class="hint">💡 悬停档位可预览差值；点「🔩 拆解」看内部元件</p>`;
+`;
   }
 
   /** 芯片跑分对比：本代三档 vs 竞品同期 */
@@ -144,7 +147,6 @@ export function createStudio(root, opts = {}) {
         (c) => `<button type="button" class="swatch ${cur.toLowerCase() === c.hex ? 'on' : ''}" style="--c:${c.hex}" data-${attr}="${c.hex}" title="${c.name}"></button>`,
       ).join('');
     return `
-      <p class="hint">🎨 配色、命名、布局样式<b>不计分</b>——想怎么表达就怎么表达</p>
       <div class="field"><span class="flabel">圆角</span><div class="chips">${opt(CORNERS, design.corner, 'corner', true)}</div></div>
       <div class="field"><span class="flabel">屏幕</span><div class="chips">${opt(SCREEN_FORMS, design.screenForm, 'form', true)}</div></div>
       <div class="field"><span class="flabel">镜头布局</span><div class="chips">${opt(LAYOUTS, design.layout, 'layout', true)}</div></div>
@@ -165,58 +167,67 @@ export function createStudio(root, opts = {}) {
   const maxC = () => opts.maxConcepts ?? MAX_CONCEPTS;
   const unlockCtx = () => (game ? { unlocked: opts.getUnlocked?.() || [], models: museum, rp: opts.getRp?.() ?? 0 } : null);
 
+  const appearCtx = () => (game ? opts.getAppearCtx?.() || null : null);
+  const ICON = { design: '🎨', camera: '📷', battery: '🔋', os: '⚙️' };
+
   function innovationTab() {
     const mem = marketMemory(museum);
     const sel = design.concepts;
     const ctx = unlockCtx();
+    const actx = appearCtx();
+    const isNew = (id) => opts.isNew?.(id);
     const status = (id) => {
       const m = mem[id];
-      if (!m) return ['first', '🏆 可首发'];
+      if (!m) return ['first', '可首发'];
       if (m.first >= 0 && m.rivals === 0) return ['mine', '你的独家'];
-      if (m.rivals === 1) return ['one', `${m.seed ? RIVALS.find((r) => r.concepts.includes(id))?.brand || '1 家' : m.copiedBy[0]} 在做`];
+      if (m.rivals === 1) return ['one', '有人在做'];
       return ['crowd', '烂大街'];
     };
+    const fxIcons = (c) =>
+      [
+        ...Object.entries(c.caps).map(([k, v]) => `${ICON[k] || ''}${v > 0 ? '↑' : '↓'}`),
+        c.thick > 0.3 ? '📏厚' : '',
+        c.weight > 8 ? '⚖️重' : '',
+        c.cost >= 8 ? '💰贵' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
     const card = (c) => {
       const us = unlockStatus(c.id, ctx);
+      const nw = isNew(c.id) ? '<em class="c-new">NEW</em>' : '';
       if (!us.unlocked) {
         const can = us.prereqOk && us.affordable;
         return `<div class="concept locked">
-          <span class="c-icon">🔒</span>
-          <span class="c-main"><b>${c.name}</b><small>${esc(c.desc)}</small><i>${us.prereqOk ? `需要研发点 ${us.cost}` : esc(us.prereqText)}</i></span>
-          ${can ? `<button type="button" class="c-unlock" data-unlock="${c.id}">🔓 解锁 · ${us.cost}</button>` : '<span class="c-tag t-crowd">未解锁</span>'}
+          <span class="c-icon">${c.icon}</span>
+          <span class="c-main"><b>${c.name}${nw}</b><small>${esc(c.desc)}</small></span>
+          ${can ? `<button type="button" class="c-unlock" data-unlock="${c.id}">🔓 ${us.cost} 研发点</button>` : `<span class="c-tag t-crowd">🔒 ${us.prereqOk ? `${us.cost} 研发点` : '条件未满足'}</span>`}
         </div>`;
       }
       const on = sel.includes(c.id);
       const clash = !on && sel.find((x) => conceptsConflict(c.id, x));
       const full = !on && sel.length >= maxC();
-      const why = minor() ? '小改款不能改概念件' : clash ? `与「${conceptName(clash)}」互斥` : full ? `设计部当前每代最多 ${maxC()} 个` : '';
+      const why = minor() ? '小改款不能改概念件' : clash ? `与「${conceptName(clash)}」冲突` : full ? `这一代最多 ${maxC()} 个` : '';
       const [cls, label] = status(c.id);
-      const fx = [
-        c.thick ? `厚 +${c.thick}` : '',
-        c.weight ? `重 +${c.weight}g` : '',
-        `成本 +${c.cost * 55}`,
-        ...Object.entries(c.caps).map(([k, v]) => `${{ design: '外观', camera: '影像', battery: '续航', os: '系统' }[k]} ${v > 0 ? '+' : ''}${v}`),
-      ].filter(Boolean);
       return `<button type="button" class="concept ${on ? 'on' : ''}" data-concept="${c.id}" ${minor() || clash || full ? 'disabled' : ''} title="${esc(why)}">
         <span class="c-icon">${c.icon}</span>
-        <span class="c-main"><b>${c.name}</b><small>${esc(c.desc)}</small><i>${fx.join(' · ')}</i></span>
-        <span class="c-tags"><span class="c-tag t-${cls}">${label}</span><span class="c-tag t-buzz">🔥${c.buzz}</span></span>
+        <span class="c-main"><b>${c.name}${nw}</b><small>${esc(c.desc)}</small><i>${fxIcons(c)}</i></span>
+        <span class="c-tags"><span class="c-tag t-${cls}">${label}</span>${c.buzz >= 8 ? '<span class="c-tag t-buzz">🔥</span>' : ''}</span>
       </button>`;
     };
-    const groups = TIERS.map((t) => {
-      const list = CONCEPTS.filter((c) => c.tier === t.tier);
-      const open = list.filter((c) => unlockStatus(c.id, ctx).unlocked).length;
-      return `<h4 class="tier-h">T${t.tier} · ${t.name} <small>${open}/${list.length}${ctx && t.cost ? ` · 每个 ${t.cost} 点` : ''}</small></h4>
-        <div class="concepts">${list.map(card).join('')}</div>`;
+    const visible = CONCEPTS.filter((c) => hasAppeared(c.id, actx));
+    const hidden = CONCEPTS.length - visible.length;
+    const groups = CATS.map((cat) => {
+      const list = visible.filter((c) => c.cat === cat.id);
+      if (!list.length) return '';
+      return `<h4 class="tier-h">${cat.icon} ${cat.name}</h4><div class="concepts">${list.map(card).join('')}</div>`;
     }).join('');
     const known = COMBOS.filter((c) => mem[c.id]);
-    return `<p class="hint">💡 首发最值钱，越夸张越容易出圈（🔥）。已选 <b>${sel.length}/${maxC()}</b>${ctx ? ` · 研发点 <b>${ctx.rp}</b>` : ' · 沙盒：全部解锁'}</p>
+    return `<p class="hint">${term('概念件')} 已选 <b>${sel.length}/${maxC()}</b>${ctx ? ` · ${term('研发点')} <b>${ctx.rp}</b>` : ''}</p>
       ${groups}
-      <h3 class="sub">品类组合 <small>不寻常的组合也算创新 · 已知 ${known.length}/${COMBOS.length}</small></h3>
-      <div class="combos">${
-        known.map((c) => `<span class="combo ${mem[c.id].first >= 0 && mem[c.id].rivals === 0 ? 'mine' : ''}">${c.name}${mem[c.id].first >= 0 ? ' · 你首创' : ' · 竞品在做'}</span>`).join('') ||
-        '<span class="muted">还没人发现。试试小尺寸 + 旗舰芯片这类「不该这么配」的组合？</span>'
-      }${COMBOS.length - known.length ? `<span class="combo unknown">？×${COMBOS.length - known.length}</span>` : ''}</div>`;
+      ${hidden ? `<p class="teaser">🔭 还有 ${hidden} 项技术尚未出现在行业里……</p>` : ''}
+      ${known.length ? `<h3 class="sub">品类组合</h3><div class="combos">${known
+        .map((c) => `<span class="combo ${mem[c.id].first >= 0 && mem[c.id].rivals === 0 ? 'mine' : ''}">${c.name}</span>`)
+        .join('')}<span class="combo unknown">？×${COMBOS.length - known.length}</span></div>` : ''}`;
   }
 
   function redesignBar() {
@@ -226,7 +237,7 @@ export function createStudio(root, opts = {}) {
       <span class="flabel">本代</span>
       <button type="button" class="chip ${m ? 'on' : ''}" data-redesign="major">${p ? '大改款' : '新品首发'}</button>
       <button type="button" class="chip ${!m ? 'on' : ''}" data-redesign="minor" ${p ? '' : 'disabled title="首代必须是新品"'}>小改款</button>
-      <small>${m ? (p ? '开放全部创作 · 模具费 ¥120 万 · 工期 +1 月' : '第一代：全部可改') : '只改配色和部件 · 快、稳、完成度高'}</small>
+      <small>${p ? `${term('大改款', '大改')}：全部可改，多花钱和时间 · ${term('小改款', '小改')}：只改配色和部件` : ''}</small>
     </div>`;
   }
 
@@ -237,7 +248,7 @@ export function createStudio(root, opts = {}) {
     const ap = appearanceScore(design, null, prevGen());
     const W = wow(design, museum);
     const g = wowGrade(W.score);
-    const gauge = (c) => `<div class="gauge mini"><div class="gauge-label"><span>${c.name}</span><span>上限 <b data-num="cap-${c.id}" data-v="${c.cap}">${c.cap}</b></span></div>
+    const gauge = (c) => `<div class="gauge mini"><div class="gauge-label"><span>${c.name}</span></div>
       <div class="gauge-track"><div class="gauge-fill ${c.cap < 60 ? 'hot' : c.cap < 80 ? 'warn' : ''}" style="width:${c.cap}%"></div></div></div>`;
     return `
       <div class="readouts">
@@ -246,26 +257,28 @@ export function createStudio(root, opts = {}) {
         <div class="ro"><span>蜂鸟实验室跑分</span><b><i data-num="bench" data-v="${p.bench}" data-sep="1">${p.bench.toLocaleString('en-US')}</i></b></div>
         <div class="ro"><span>单台成本</span><b>¥<i data-num="cost" data-v="${p.unitCost}">${p.unitCost}</i></b><em>建议 ${p.band}</em></div>
       </div>
-      <h3 class="sub">研发槽上限 <small>配置台定上限 · 研发决定做到多少</small></h3>
+      <h3 class="sub">${term('研发上限')}</h3>
       <div class="caps">${caps.map(gauge).join('')}</div>
-      <h3 class="sub">卖点承诺</h3>
+      <h3 class="sub">${term('卖点')}兑现</h3>
       <div class="checks">${checks
         .map((c) => `<span class="check ${c.ok ? 'ok' : 'no'}" title="${esc(c.why)}">${c.ok ? '✓' : '✗'} ${c.name}</span>`)
         .join('')}</div>
-      <h3 class="sub">惊艳度 <b class="ap-score" data-num="wow" data-v="${W.score}">${W.score}</b><em class="grade-mini g-${g}">${g}</em><small>= 新颖度 × 完成度</small></h3>
-      <div class="wow-bars">
-        <div class="gauge mini"><div class="gauge-label"><span>新颖度</span><span><b data-num="nov" data-v="${W.novelty.score}">${W.novelty.score}</b></span></div>
-          <div class="gauge-track"><div class="gauge-fill nov" style="width:${W.novelty.score}%"></div></div></div>
-        <div class="gauge mini"><div class="gauge-label"><span>完成度（预估）</span><span><b data-num="comp" data-v="${W.completeness.score}">${W.completeness.score}</b>%</span></div>
-          <div class="gauge-track"><div class="gauge-fill ${W.completeness.score < 80 ? 'warn' : ''}" style="width:${W.completeness.score}%"></div></div></div>
-      </div>
-      <p class="wow-head">📰 ${esc(W.headline)}</p>
+      <h3 class="sub">市场预判 <small>发布会上见真章</small></h3>
       ${(() => {
+        const n = W.novelty.score;
+        const stars = n >= 70 ? 5 : n >= 50 ? 4 : n >= 30 ? 3 : n >= 15 ? 2 : 1;
+        const c = W.completeness.score;
+        const risk = c >= 92 ? ['低', 'ok'] : c >= 78 ? ['中', 'mid'] : ['高', 'bad'];
         const bz = buzzOf(design, museum);
-        return bz ? `<p class="buzz-line">🔥 出圈度 <b>${bz}</b> <small>${bz >= 40 ? '会上热搜' : bz >= 20 ? '有人自发安利' : '小圈子讨论'}</small></p>` : '';
+        const flames = bz >= 40 ? '🔥🔥🔥' : bz >= 20 ? '🔥🔥' : bz > 0 ? '🔥' : '—';
+        const firsts = W.novelty.items.filter((i) => i.first);
+        return `<div class="forecast">
+          <div><span>${term('新颖度')}</span><b class="stars">${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</b></div>
+          <div><span>工艺风险</span><b class="risk ${risk[1]}">${risk[0]}</b></div>
+          <div><span>${term('出圈度')}</span><b>${flames}</b></div>
+        </div>
+        ${firsts.length ? `<p class="tags">${firsts.map((i) => `<span>🏆 ${esc(i.label.replace(/^.*「|」$/g, ''))}</span>`).join('')}</p>` : ''}`;
       })()}
-      <ul class="ap-items">${W.novelty.items.map((i) => `<li><span>${i.first ? '🏆 ' : ''}${esc(i.label)}</span><b class="${i.v >= 0 ? 'pos' : 'neg'}">${i.v >= 0 ? '+' : ''}${i.v}</b></li>`).join('')}
-        ${W.completeness.items.filter((i) => i.v).map((i) => `<li class="comp"><span>🔧 ${esc(i.label)}</span><b class="neg">${i.v}%</b></li>`).join('')}</ul>
       ${ap.tags.length ? `<p class="tags">${ap.tags.map((t) => `<span>${esc(t)}</span>`).join('')}</p>` : ''}`;
   }
 
@@ -860,6 +873,7 @@ export function createStudio(root, opts = {}) {
 
   async function init() {
     if (!game && !readJSON(DRAFT_KEY, null)) design.company = COMPANIES[Math.floor(Math.random() * COMPANIES.length)];
+    installGlossary();
     shell();
     bind();
     applyMinorLock();

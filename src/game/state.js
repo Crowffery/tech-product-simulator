@@ -54,6 +54,8 @@ export function createNewGame(companyName, chipSeries = '蜂鸟') {
     chip: { series: chipSeries, gen: 1, history: [{ gen: 1, bench: 720000, month: 1 }], research: null },
     tutorial: true,
     tutSeen: {},
+    seenConcepts: null,
+    newConcepts: [],
   };
 }
 

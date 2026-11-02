@@ -324,3 +324,15 @@ button:disabled.chip, button:disabled.tier { opacity: .4; }
 .cc-row.on span { font-weight: 900; }
 .cc-row.rival i { background: #95a5a6; }
 .cc-row b { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* v1.3 创新页 / 预判 */
+.c-new { font-style: normal; font-size: .58rem; background: var(--red); color: #fff; padding: 0 4px; margin-left: 4px; border: 1px solid #000; vertical-align: middle; animation: blinkcopy 1s steps(2) 4; }
+.teaser { font-size: .78rem; color: var(--muted); text-align: center; border: 2px dashed var(--border2); padding: 6px; margin: 8px 0; }
+.forecast { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.forecast div { background: var(--cream); border: 2px solid var(--border); padding: 4px 6px; text-align: center; }
+.forecast span { display: block; font-size: .7rem; color: var(--muted); }
+.forecast b { font-size: 1rem; }
+.stars { color: #d4ac0d; letter-spacing: 1px; }
+.risk.ok { color: var(--green); }
+.risk.mid { color: #b9770e; }
+.risk.bad { color: var(--red); }

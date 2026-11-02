@@ -342,37 +342,84 @@ export const TIERS = [
 
 export const CONCEPTS = [
   // ── 1 车库脑洞 ──
-  { id: 'lights', tier: 1, name: '灯效后盖', icon: '💡', desc: '会呼吸的灯带', cost: 3, thick: 0.1, weight: 3, caps: { battery: -3 }, buzz: 3, risk: 6, conflicts: ['wrap', 'eink'] },
-  { id: 'shutter', tier: 1, name: '机械快门键', icon: '📸', desc: '侧边橙色快门', cost: 1, thick: 0, weight: 2, caps: { camera: 5 }, buzz: 2, risk: 4, conflicts: [] },
-  { id: 'keyboard', tier: 1, name: '实体键盘', icon: '⌨️', desc: '正面下半是键盘', cost: 4, thick: 0.2, weight: 14, caps: { camera: -10, design: -5 }, buzz: 6, risk: 8, conflicts: ['fold', 'trifold', 'rollable', 'swivel', 'wrap'] },
-  { id: 'clear', tier: 1, name: '透明后盖', icon: '🔍', desc: '让内部元件当装饰', group: 'back', cost: 4, thick: 0, weight: 2, caps: { design: -5 }, buzz: 6, risk: 8, conflicts: [] },
-  { id: 'subscreen', tier: 1, name: '背部副屏', icon: '📟', desc: '背面一块小彩屏', cost: 5, thick: 0.3, weight: 8, caps: { battery: -5 }, buzz: 5, risk: 8, conflicts: ['eink', 'wrap', 'crystal', 'solar', 'modular', 'pet', 'watch'] },
+  { id: 'lights', cat: 'body', appear: {gen:1}, tier: 1, name: '灯效后盖', icon: '💡', desc: '会呼吸的灯带', cost: 3, thick: 0.1, weight: 3, caps: { battery: -3 }, buzz: 3, risk: 6, conflicts: ['wrap', 'eink'] },
+  { id: 'shutter', cat: 'cam', appear: {gen:1}, tier: 1, name: '机械快门键', icon: '📸', desc: '侧边橙色快门', cost: 1, thick: 0, weight: 2, caps: { camera: 5 }, buzz: 2, risk: 4, conflicts: [] },
+  { id: 'keyboard', cat: 'form', appear: {gen:1}, tier: 1, name: '实体键盘', icon: '⌨️', desc: '正面下半是键盘', cost: 4, thick: 0.2, weight: 14, caps: { camera: -10, design: -5 }, buzz: 6, risk: 8, conflicts: ['fold', 'trifold', 'rollable', 'swivel', 'wrap'] },
+  { id: 'clear', cat: 'body', appear: {gen:1}, tier: 1, name: '透明后盖', icon: '🔍', desc: '让内部元件当装饰', group: 'back', cost: 4, thick: 0, weight: 2, caps: { design: -5 }, buzz: 6, risk: 8, conflicts: [] },
+  { id: 'subscreen', cat: 'form', appear: {gen:2}, tier: 1, name: '背部副屏', icon: '📟', desc: '背面一块小彩屏', cost: 5, thick: 0.3, weight: 8, caps: { battery: -5 }, buzz: 5, risk: 8, conflicts: ['eink', 'wrap', 'crystal', 'solar', 'modular', 'pet', 'watch'] },
   // ── 2 工程魔改 ──
-  { id: 'eink', tier: 2, name: '墨水背屏', icon: '📜', desc: '整块墨水屏后盖', group: 'back', cost: 6, thick: 0.4, weight: 10, caps: { battery: 5 }, buzz: 5, risk: 10, conflicts: ['fan', 'pet'] },
-  { id: 'fan', tier: 2, name: '主动散热风扇', icon: '🌀', desc: '背面会转的风扇', cost: 4, thick: 1.2, weight: 16, caps: {}, buzz: 5, risk: 8, conflicts: ['wrap', 'solar', 'modular', 'watch'] },
-  { id: 'sat', tier: 2, name: '卫星天线', icon: '📡', desc: '顶部翻折小天线', cost: 5, thick: 0, weight: 6, caps: {}, buzz: 5, risk: 10, conflicts: [] },
-  { id: 'popup', tier: 2, name: '升降镜头', icon: '🎚️', desc: '前摄藏在顶部，用时弹出', cost: 5, thick: 0.4, weight: 8, caps: { design: 5 }, buzz: 6, risk: 12, conflicts: [] },
-  { id: 'battswap', tier: 2, name: '可换电池', icon: '🔋', desc: '后盖一推，电池拔下来', cost: 3, thick: 0.6, weight: 10, caps: { battery: 6 }, buzz: 5, risk: 8, conflicts: ['crystal', 'wrap'] },
-  { id: 'stylus', tier: 2, name: '内置手写笔', icon: '🖊️', desc: '底部抽出一支笔', cost: 4, thick: 0.2, weight: 6, caps: { os: 5 }, buzz: 4, risk: 8, conflicts: [] },
+  { id: 'eink', cat: 'form', appear: {gen:3}, tier: 2, name: '墨水背屏', icon: '📜', desc: '整块墨水屏后盖', group: 'back', cost: 6, thick: 0.4, weight: 10, caps: { battery: 5 }, buzz: 5, risk: 10, conflicts: ['fan', 'pet'] },
+  { id: 'fan', cat: 'power', appear: {gen:3}, tier: 2, name: '主动散热风扇', icon: '🌀', desc: '背面会转的风扇', cost: 4, thick: 1.2, weight: 16, caps: {}, buzz: 5, risk: 8, conflicts: ['wrap', 'solar', 'modular', 'watch'] },
+  { id: 'sat', cat: 'fun', appear: {gen:3}, tier: 2, name: '卫星天线', icon: '📡', desc: '顶部翻折小天线', cost: 5, thick: 0, weight: 6, caps: {}, buzz: 5, risk: 10, conflicts: [] },
+  { id: 'popup', cat: 'cam', appear: {gen:3}, tier: 2, name: '升降镜头', icon: '🎚️', desc: '前摄藏在顶部，用时弹出', cost: 5, thick: 0.4, weight: 8, caps: { design: 5 }, buzz: 6, risk: 12, conflicts: [] },
+  { id: 'battswap', cat: 'power', appear: {gen:3}, tier: 2, name: '可换电池', icon: '🔋', desc: '后盖一推，电池拔下来', cost: 3, thick: 0.6, weight: 10, caps: { battery: 6 }, buzz: 5, risk: 8, conflicts: ['crystal', 'wrap'] },
+  { id: 'stylus', cat: 'fun', appear: {gen:3}, tier: 2, name: '内置手写笔', icon: '🖊️', desc: '底部抽出一支笔', cost: 4, thick: 0.2, weight: 6, caps: { os: 5 }, buzz: 4, risk: 8, conflicts: [] },
   // ── 3 形态实验 ──
-  { id: 'slider', tier: 3, name: '滑盖', icon: '↕️', desc: '屏幕整片上滑，露出第二层', group: 'form', cost: 10, thick: 2.5, weight: 30, caps: { design: 5 }, buzz: 8, risk: 14, conflicts: [] },
-  { id: 'swivel', tier: 3, name: '旋转屏', icon: '🔄', desc: '屏幕转 90° 变成 T 字', group: 'form', cost: 12, thick: 3, weight: 40, caps: { design: 8, battery: -5 }, buzz: 9, risk: 16, conflicts: [] },
-  { id: 'fold', tier: 3, name: '折叠屏', icon: '📖', desc: '一折变平板', group: 'form', cost: 18, thick: 3.5, weight: 60, caps: { design: 15, battery: -10 }, buzz: 10, risk: 16, conflicts: [] },
-  { id: 'modular', tier: 3, name: '模块化背板', icon: '🧩', desc: '磁吸模块随便换', group: 'back', cost: 8, thick: 1, weight: 20, caps: { battery: 5 }, buzz: 7, risk: 12, conflicts: [] },
-  { id: 'solar', tier: 3, name: '太阳能背板', icon: '☀️', desc: '晒一晒多活两小时', group: 'back', cost: 5, thick: 0.3, weight: 6, caps: { battery: 10 }, buzz: 7, risk: 10, conflicts: [] },
-  { id: 'chrome', tier: 3, name: '变色后盖', icon: '🦎', desc: '电致变色，一键换皮', group: 'back', cost: 6, thick: 0.2, weight: 4, caps: {}, buzz: 8, risk: 12, conflicts: [] },
+  { id: 'slider', cat: 'form', appear: {month:16}, tier: 3, name: '滑盖', icon: '↕️', desc: '屏幕整片上滑，露出第二层', group: 'form', cost: 10, thick: 2.5, weight: 30, caps: { design: 5 }, buzz: 8, risk: 14, conflicts: [] },
+  { id: 'swivel', cat: 'form', appear: {month:16}, tier: 3, name: '旋转屏', icon: '🔄', desc: '屏幕转 90° 变成 T 字', group: 'form', cost: 12, thick: 3, weight: 40, caps: { design: 8, battery: -5 }, buzz: 9, risk: 16, conflicts: [] },
+  { id: 'fold', cat: 'form', appear: {month:16}, tier: 3, name: '折叠屏', icon: '📖', desc: '一折变平板', group: 'form', cost: 18, thick: 3.5, weight: 60, caps: { design: 15, battery: -10 }, buzz: 10, risk: 16, conflicts: [] },
+  { id: 'modular', cat: 'body', appear: {month:18}, tier: 3, name: '模块化背板', icon: '🧩', desc: '磁吸模块随便换', group: 'back', cost: 8, thick: 1, weight: 20, caps: { battery: 5 }, buzz: 7, risk: 12, conflicts: [] },
+  { id: 'solar', cat: 'power', appear: {month:18}, tier: 3, name: '太阳能背板', icon: '☀️', desc: '晒一晒多活两小时', group: 'back', cost: 5, thick: 0.3, weight: 6, caps: { battery: 10 }, buzz: 7, risk: 10, conflicts: [] },
+  { id: 'chrome', cat: 'body', appear: {month:18}, tier: 3, name: '变色后盖', icon: '🦎', desc: '电致变色，一键换皮', group: 'back', cost: 6, thick: 0.2, weight: 4, caps: {}, buzz: 8, risk: 12, conflicts: [] },
   // ── 4 未来原型 ──
-  { id: 'trifold', tier: 4, name: '三折叠', icon: '🪭', desc: 'Z 字两折，展开是平板', group: 'form', cost: 28, thick: 5, weight: 90, caps: { design: 25, battery: -15 }, buzz: 14, risk: 22, conflicts: [], prereq: ['fold'] },
-  { id: 'wrap', tier: 4, name: '环绕屏', icon: '🌐', desc: '正面、侧边、背面全是屏幕', group: 'back', cost: 20, thick: 0.4, weight: 12, caps: { design: 20, battery: -15 }, buzz: 14, risk: 20, conflicts: ['popup'], prereq: ['subscreen', 'fold'] },
-  { id: 'rollable', tier: 4, name: '卷轴屏', icon: '📜', desc: '屏幕从侧边卷出来', group: 'form', cost: 22, thick: 2, weight: 40, caps: { design: 15 }, buzz: 13, risk: 20, conflicts: [], prereq: ['fold', 'slider'] },
-  { id: 'crystal', tier: 4, name: '全透明机身', icon: '💎', desc: '中框、后盖全透明', group: 'back', cost: 15, thick: 0, weight: 6, caps: { design: -5 }, buzz: 13, risk: 18, conflicts: [], prereq: ['clear'] },
-  { id: 'watch', tier: 4, name: '机械表芯后盖', icon: '⚙️', desc: '后盖里有齿轮在走', cost: 8, thick: 0.5, weight: 10, caps: {}, buzz: 9, risk: 12, conflicts: ['eink', 'solar', 'modular', 'wrap', 'pet'] },
-  { id: 'projector', tier: 4, name: '投影仪', icon: '📽️', desc: '顶部投出 80 寸', cost: 12, thick: 1, weight: 14, caps: { battery: -10 }, buzz: 11, risk: 16, conflicts: [] },
+  { id: 'trifold', cat: 'form', appear: {after:'fold'}, tier: 4, name: '三折叠', icon: '🪭', desc: 'Z 字两折，展开是平板', group: 'form', cost: 28, thick: 5, weight: 90, caps: { design: 25, battery: -15 }, buzz: 14, risk: 22, conflicts: [], prereq: ['fold'] },
+  { id: 'wrap', cat: 'form', appear: {after:'subscreen',month:22}, tier: 4, name: '环绕屏', icon: '🌐', desc: '正面、侧边、背面全是屏幕', group: 'back', cost: 20, thick: 0.4, weight: 12, caps: { design: 20, battery: -15 }, buzz: 14, risk: 20, conflicts: ['popup'], prereq: ['subscreen', 'fold'] },
+  { id: 'rollable', cat: 'form', appear: {after:'fold'}, tier: 4, name: '卷轴屏', icon: '📜', desc: '屏幕从侧边卷出来', group: 'form', cost: 22, thick: 2, weight: 40, caps: { design: 15 }, buzz: 13, risk: 20, conflicts: [], prereq: ['fold', 'slider'] },
+  { id: 'crystal', cat: 'body', appear: {after:'clear',gen:3}, tier: 4, name: '全透明机身', icon: '💎', desc: '中框、后盖全透明', group: 'back', cost: 15, thick: 0, weight: 6, caps: { design: -5 }, buzz: 13, risk: 18, conflicts: [], prereq: ['clear'] },
+  { id: 'watch', cat: 'body', appear: {month:24}, tier: 4, name: '机械表芯后盖', icon: '⚙️', desc: '后盖里有齿轮在走', cost: 8, thick: 0.5, weight: 10, caps: {}, buzz: 9, risk: 12, conflicts: ['eink', 'solar', 'modular', 'wrap', 'pet'] },
+  { id: 'projector', cat: 'fun', appear: {month:24}, tier: 4, name: '投影仪', icon: '📽️', desc: '顶部投出 80 寸', cost: 12, thick: 1, weight: 14, caps: { battery: -10 }, buzz: 11, risk: 16, conflicts: [] },
   // ── 5 科幻彩蛋 ──
-  { id: 'holo', tier: 5, name: '全息投影', icon: '🛸', desc: '屏幕上方浮出 3D 影像', cost: 30, thick: 1, weight: 20, caps: { battery: -15 }, buzz: 18, risk: 26, conflicts: [], prereq: ['projector'] },
-  { id: 'pet', tier: 5, name: '电子宠物背屏', icon: '🐣', desc: '背面养一只像素宠物', cost: 5, thick: 0.3, weight: 6, caps: {}, buzz: 12, risk: 10, conflicts: [], prereq: ['subscreen', 'eink'] },
+  { id: 'holo', cat: 'fun', appear: {after:'projector'}, tier: 5, name: '全息投影', icon: '🛸', desc: '屏幕上方浮出 3D 影像', cost: 30, thick: 1, weight: 20, caps: { battery: -15 }, buzz: 18, risk: 26, conflicts: [], prereq: ['projector'] },
+  { id: 'pet', cat: 'fun', appear: {after:'subscreen',month:20}, tier: 5, name: '电子宠物背屏', icon: '🐣', desc: '背面养一只像素宠物', cost: 5, thick: 0.3, weight: 6, caps: {}, buzz: 12, risk: 10, conflicts: [], prereq: ['subscreen', 'eink'] },
+  // ── v1.3 行业部件 ──
+  { id: 'fastcharge', cat: 'power', appear: {gen:1}, tier: 1, name: '百瓦快充', icon: '⚡', desc: '十分钟充一半', cost: 2, thick: 0, weight: 2, caps: { battery: 4 }, buzz: 4, risk: 4, conflicts: [] },
+  { id: 'jack', cat: 'fun', appear: {gen:1}, tier: 1, name: '3.5mm 耳机孔', icon: '🎧', desc: '有线耳机党的执念', cost: 1, thick: 0, weight: 1, caps: {}, buzz: 3, risk: 3, conflicts: [] },
+  { id: 'ip68', cat: 'body', appear: {gen:2}, tier: 1, name: 'IP68 防水', icon: '💧', desc: '泡水半小时没事', cost: 2, thick: 0, weight: 2, caps: { battery: 2 }, buzz: 2, risk: 4, conflicts: ['battswap'] },
+  { id: 'ir', cat: 'fun', appear: {gen:2}, tier: 1, name: '红外遥控', icon: '📺', desc: '顶部一颗红外灯', cost: 1, thick: 0, weight: 1, caps: {}, buzz: 2, risk: 2, conflicts: [] },
+  { id: 'haptics', cat: 'fun', appear: {gen:2}, tier: 1, name: '超大线性马达', icon: '📳', desc: '震感清脆', cost: 2, thick: 0.1, weight: 4, caps: { os: 4 }, buzz: 2, risk: 3, conflicts: [] },
+  { id: 'sdcard', cat: 'fun', appear: {gen:2}, tier: 1, name: '存储卡槽', icon: '💾', desc: '容量自己加', cost: 1, thick: 0, weight: 1, caps: {}, buzz: 3, risk: 3, conflicts: [] },
+  { id: 'ultrasonic', cat: 'fun', appear: {gen:2}, tier: 1, name: '超声波指纹', icon: '👆', desc: '湿手也能解锁', cost: 3, thick: 0, weight: 1, caps: { os: 3 }, buzz: 3, risk: 5, conflicts: [] },
+  { id: 'reverse', cat: 'power', appear: {gen:2}, tier: 1, name: '无线反向充电', icon: '🔁', desc: '给耳机救急', cost: 2, thick: 0.1, weight: 3, caps: {}, buzz: 3, risk: 4, conflicts: [] },
+  { id: 'periscope', cat: 'cam', appear: {gen:3}, tier: 2, name: '潜望长焦', icon: '🔭', desc: '10 倍光学变焦', cost: 6, thick: 0.4, weight: 8, caps: { camera: 8 }, buzz: 6, risk: 10, conflicts: [] },
+  { id: 'gimbal', cat: 'cam', appear: {gen:3}, tier: 2, name: '微云台防抖', icon: '🎥', desc: '跑着拍也不晃', cost: 4, thick: 0.3, weight: 4, caps: { camera: 6 }, buzz: 5, risk: 8, conflicts: [] },
+  { id: 'titanium', cat: 'body', appear: {gen:3}, tier: 2, name: '钛金属中框', icon: '🛡️', desc: '轻又硬，冷冷的灰', cost: 6, thick: 0, weight: -8, caps: { design: 6 }, buzz: 5, risk: 8, conflicts: ['crystal'] },
+  { id: 'ceramic', cat: 'body', appear: {gen:3}, tier: 2, name: '陶瓷后盖', icon: '🏺', desc: '温润如玉，也更重', group: 'back', cost: 6, thick: 0.2, weight: 12, caps: { design: 8 }, buzz: 4, risk: 8, conflicts: [] },
+  { id: 'sicarbon', cat: 'power', appear: {gen:3}, tier: 2, name: '硅碳电池', icon: '🔋', desc: '同样厚度多装 20% 电', cost: 4, thick: -0.3, weight: -4, caps: { battery: 8 }, buzz: 4, risk: 8, conflicts: [] },
+  { id: 'magcharge', cat: 'power', appear: {gen:3}, tier: 2, name: '磁吸无线充', icon: '🧲', desc: '啪一下吸上去', cost: 3, thick: 0.2, weight: 6, caps: {}, buzz: 4, risk: 6, conflicts: ['wrap'] },
+  { id: 'facelock', cat: 'fun', appear: {gen:3}, tier: 2, name: '3D 结构光', icon: '🙂', desc: '刷脸比指纹快', cost: 4, thick: 0, weight: 2, caps: { os: 4 }, buzz: 4, risk: 8, conflicts: ['udc'] },
+  { id: 'paper', cat: 'form', appear: {month:14}, tier: 2, name: '类纸护眼屏', icon: '📄', desc: '磨砂屏，像纸一样', cost: 4, thick: 0, weight: 0, caps: { design: -3, battery: 3 }, buzz: 5, risk: 6, conflicts: [] },
+  { id: 'privacy', cat: 'form', appear: {month:14}, tier: 2, name: '防窥屏', icon: '🕶️', desc: '一键防偷看', cost: 3, thick: 0, weight: 0, caps: {}, buzz: 4, risk: 6, conflicts: [] },
+  { id: 'oneinch', cat: 'cam', appear: {month:18}, tier: 3, name: '一英寸大底', icon: '📷', desc: '主摄大得像相机', cost: 10, thick: 0.6, weight: 14, caps: { camera: 14 }, buzz: 8, risk: 12, conflicts: [] },
+  { id: 'udc', cat: 'cam', appear: {month:20}, tier: 3, name: '屏下摄像头', icon: '🫥', desc: '前摄藏在屏幕下面', cost: 8, thick: 0, weight: 2, caps: { design: 8, camera: -4 }, buzz: 8, risk: 14, conflicts: ['popup'] },
+  { id: 'ai', cat: 'fun', appear: {chip:3}, tier: 3, name: '端侧 AI 芯片', icon: '🤖', desc: '离线大模型助手', cost: 8, thick: 0, weight: 2, caps: { os: 12, battery: -4 }, buzz: 9, risk: 12, conflicts: [] },
 ];
 export const MAX_CONCEPTS = 3;
+
+export const CATS = [
+  { id: 'cam', name: '影像', icon: '📷' },
+  { id: 'form', name: '屏幕与形态', icon: '📱' },
+  { id: 'power', name: '续航与充电', icon: '🔋' },
+  { id: 'body', name: '机身与材质', icon: '💎' },
+  { id: 'fun', name: '交互与黑科技', icon: '🧪' },
+];
+
+/**
+ * 是否已经「出现」在行业里（逐步揭示，避免一次性信息爆炸）
+ * ctx = { gen, month, models, chipGen }；ctx 为 null 表示沙盒（全部出现）
+ */
+export function hasAppeared(id, ctx) {
+  const c = CONCEPTS.find((x) => x.id === id);
+  if (!ctx || !c?.appear) return true;
+  const a = c.appear;
+  if (a.gen && (ctx.gen || 1) < a.gen) return false;
+  if (a.month && (ctx.month || 1) < a.month) return false;
+  if (a.chip && (ctx.chipGen || 1) < a.chip) return false;
+  if (a.after) {
+    const used = new Set((ctx.models || []).flatMap((m) => m.design.concepts || []));
+    if (!used.has(a.after) && !((ctx.month || 1) >= 30)) return false;
+  }
+  return true;
+}
 const CBYID = Object.fromEntries(CONCEPTS.map((c) => [c.id, c]));
 
 /** 两个概念是否互斥（同组或任一方声明冲突） */

@@ -450,7 +450,8 @@ export function buildPhone(design) {
     // 环绕屏：侧边也是发光的屏
     layers.frame.add(new THREE.Mesh(frameGeo, [new THREE.MeshBasicMaterial({ color: 0x0b0d14 }), new THREE.MeshBasicMaterial({ color: shade(design.color, 0.1), toneMapped: false })]));
   } else {
-    layers.frame.add(new THREE.Mesh(frameGeo, frameMaterial(matId, frameHex)));
+    const ti = (design.concepts || []).includes('titanium');
+    layers.frame.add(new THREE.Mesh(frameGeo, ti ? new THREE.MeshStandardMaterial({ color: 0x8d9096, metalness: 0.85, roughness: 0.45, envMapIntensity: 1.2 }) : frameMaterial(matId, frameHex)));
   }
   const mid = new THREE.Mesh(
     new THREE.ShapeGeometry(roundedRectShape(holeW - 0.5, holeH - 0.5, Math.max(0.6, corner.r - inset)), 16),
@@ -553,7 +554,7 @@ export function buildPhone(design) {
   glare.layers.set(FX);
   fa.add(glare);
   const holeMat = new THREE.MeshBasicMaterial({ color: 0x030304 });
-  if ((form.id === 'punch' || form.id === 'center') && !C.has('popup')) {
+  if ((form.id === 'punch' || form.id === 'center') && !C.has('popup') && !C.has('udc')) {
     const hc = new THREE.Mesh(new THREE.CircleGeometry(1.7, 16), holeMat);
     hc.position.set(form.id === 'punch' ? -dispW / 2 + 5.5 : 0, dispH / 2 + kbH / 2 - 5, 0.22);
     fa.add(hc);
@@ -601,7 +602,9 @@ export function buildPhone(design) {
     plate.renderOrder = 2;
     back.add(plate);
   } else {
-    plateMat = bodyMaterial(matId, backHex);
+    plateMat = C.has('ceramic')
+      ? new THREE.MeshPhysicalMaterial({ color: shade(backHex, 0.18), roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02, sheen: 0.4, envMapIntensity: 1.5 })
+      : bodyMaterial(matId, backHex);
     back.add(new THREE.Mesh(plateGeo, plateMat));
   }
   if (C.has('chrome') && plateMat) {
@@ -644,6 +647,7 @@ export function buildPhone(design) {
   back.add(decal);
 
   const lay = cameraLayout(design.layout, w, h, camT.lenses, design.parts.camera);
+  if (C.has('oneinch') && lay.lenses[0]) lay.lenses[0].r *= 1.4;
   const bump = camT.bump;
   const modHex = design.twoTone === 'band' ? design.color2 : design.color;
   const modMat = bodyMaterial(matId === 3 ? 2 : matId, shade(modHex, -0.07).getStyle());
@@ -835,6 +839,75 @@ export function buildPhone(design) {
     const tip = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 8), new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.4 }));
     tip.position.set(-w / 2 + 2.6, h / 2 + 17.5, -t * 0.1);
     layers.frame.add(stub, tip);
+  }
+
+  // —— v1.3 行业部件的小细节 ——
+  {
+    const dk = new THREE.MeshBasicMaterial({ color: 0x050507 });
+    if (C.has('jack')) {
+      const jk = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 1, 12), dk);
+      jk.position.set(-w * 0.25, h / 2 + 0.1, 0);
+      layers.frame.add(jk);
+    }
+    if (C.has('ir')) {
+      const irw = new THREE.Mesh(new THREE.BoxGeometry(3, 0.6, 1.8), new THREE.MeshBasicMaterial({ color: 0x3b0d0d }));
+      irw.position.set(w * 0.1, h / 2 + 0.1, 0);
+      layers.frame.add(irw);
+    }
+    if (C.has('sdcard')) {
+      const tray = new THREE.Mesh(new THREE.BoxGeometry(0.5, 16, Math.min(2.4, t * 0.3)), new THREE.MeshStandardMaterial({ color: shade(frameHex, -0.2) }));
+      tray.position.set(-w / 2 - 0.15, h * 0.18, 0);
+      layers.frame.add(tray);
+    }
+    if (C.has('fastcharge')) port.material = new THREE.MeshBasicMaterial({ color: 0xe67e22 });
+    if (C.has('magcharge') || C.has('reverse')) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(15, 16.4, 48), new THREE.MeshBasicMaterial({ color: shade(backHex, -0.25), transparent: true, opacity: 0.8 }));
+      ring.position.set(0, -h * 0.05, 0.17);
+      back.add(ring);
+    }
+    if (C.has('periscope') && lay.lenses[0]) {
+      const L0 = lay.lenses[lay.lenses.length - 1];
+      const [px, py] = toLocal(L0.x, L0.y + L0.r * 2.6);
+      const box = new THREE.Mesh(new THREE.BoxGeometry(L0.r * 1.8, L0.r * 1.8, 1.2), new THREE.MeshStandardMaterial({ color: 0x15161a, metalness: 0.6, roughness: 0.3 }));
+      box.position.set(px, py, surf + 0.6);
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(L0.r * 1.3, L0.r * 1.3), lensMat);
+      win.position.set(px, py, surf + 1.25);
+      back.add(box, win);
+    }
+    if (C.has('gimbal') && lay.lenses[0]) {
+      const [gx, gy] = toLocal(lay.lenses[0].x, lay.lenses[0].y);
+      const gr = new THREE.Mesh(new THREE.TorusGeometry(lay.lenses[0].r * 1.12, 0.45, 8, 32), new THREE.MeshStandardMaterial({ color: 0xc0392b, metalness: 0.7, roughness: 0.3 }));
+      gr.position.set(gx, gy, surf + 1.1);
+      back.add(gr);
+    }
+    if (C.has('facelock')) {
+      const bar = new THREE.Mesh(new THREE.ShapeGeometry(roundedRectShape(16, 3.2, 1.6)), dk);
+      bar.position.set(0, capH / 2 - form.bezel - 3, 0.25);
+      fa.add(bar);
+    }
+    if (C.has('paper')) {
+      const matte = new THREE.Mesh(new THREE.PlaneGeometry(dispW, dispH), new THREE.MeshBasicMaterial({ color: 0xf3e6c8, transparent: true, opacity: 0.22, depthWrite: false }));
+      matte.position.set(0, kbH / 2, 0.21);
+      fa.add(matte);
+    }
+    if (C.has('ai')) {
+      const badge = new THREE.Mesh(
+        new THREE.PlaneGeometry(12, 6),
+        new THREE.MeshBasicMaterial({
+          transparent: true,
+          map: canvasTex(48, 24, (g2) => {
+            g2.fillStyle = '#1b1c21';
+            g2.fillRect(0, 0, 48, 24);
+            g2.fillStyle = '#5ffbf1';
+            g2.font = 'bold 16px monospace';
+            g2.textAlign = 'center';
+            g2.fillText('AI', 24, 18);
+          }, { nearest: true }),
+        }),
+      );
+      badge.position.set(w * 0.22, -h * 0.32, 0.2);
+      back.add(badge);
+    }
   }
 
   // —— v0.9 概念件 ——

@@ -8,7 +8,8 @@ import { createNewGame, saveGame, loadGame, clearSave, hasSave } from './game/st
 import * as L from './game/logic.js';
 import { lsGet } from './game/storage.js';
 import { SceneView } from './scenes.js';
-import { physical, danmaku, paletteName, novelty, buzzOf, chipSpec, chipName, chipBench, rivalBench, CHIP_SERIES_SEEDS } from './studio/parts.js';
+import { term, installGlossary } from './glossary.js';
+import { physical, tier, CONCEPTS, hasAppeared, danmaku, paletteName, novelty, buzzOf, chipSpec, chipName, chipBench, rivalBench, CHIP_SERIES_SEEDS } from './studio/parts.js';
 import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, IDEAL } from './game/market.js';
 
 let state = null;
@@ -131,15 +132,16 @@ P.plan = () => {
     scene: ['plan', { office: state.office, month: state.month, positioning: p.positioningId, points: p.pointIds.length, price: p.priceId, color: state.designDraft?.color }],
     caption: `企划会：第 ${state.generation} 代要赌什么？`,
     sheet: `<h2 class="sheet-h">📋 企划</h2>
-      <div class="field-l">定位<div class="chips">${chips(POSITIONING, p.positioningId, 'plan-pos')}</div></div>
-      <div class="field-l">卖点（1～3）<div class="chips">${chips(SELL_POINTS, p.pointIds, 'toggle-point', true)}</div></div>
-      <div class="field-l">售价带<div class="chips">${chips(PRICE_BANDS, p.priceId, 'plan-price')}</div></div>
-      ${state.generation > 1 ? `<label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco ? 'checked' : ''}/> 绑定上代生态（信仰 +）</label>` : ''}
+      ${newsCard()}
+      <div class="field-l">${term('定位')}<div class="chips">${chips(POSITIONING, p.positioningId, 'plan-pos')}</div></div>
+      <div class="field-l">${term('卖点')} <small>选 1～3 个</small><div class="chips">${chips(SELL_POINTS, p.pointIds, 'toggle-point', true)}</div></div>
+      <div class="field-l">${term('售价带')}<div class="chips">${chips(PRICE_BANDS, p.priceId, 'plan-price')}</div></div>
+      ${state.generation > 1 ? `<label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco ? 'checked' : ''}/> 绑定上代生态</label>` : ''}
       ${(() => {
         const pf = priceFit(p.positioningId, p.priceId);
-        return pf.note ? `<p class="warn-line ${pf.user < 0 ? 'bad' : 'good'}">💬 ${pf.note}（用户分 ${pf.user > 0 ? '+' : ''}${pf.user}）</p>` : '';
+        return pf.note ? `<p class="warn-line ${pf.user < 0 ? 'bad' : 'good'}">💬 ${pf.note}</p>` : '';
       })()}
-      <div class="mini-gauges">${gauge('体验预期', tri.experience)}${gauge('成本压力', tri.costPressure, 'warn')}<span class="pill">工期约 ${tri.months} 月</span></div>
+      <p class="pill-row"><span class="pill">⏳ 工期约 ${tri.months} 月</span></p>
       ${calendar(state.month, state.month + tri.months + 1, p.positioningId)}`,
     cta: `<button type="button" class="primary big" data-act="confirm-plan">定了！去设计部 ▶</button>`,
   };
@@ -151,17 +153,17 @@ P.supply = () => ({
   sheet: `<h2 class="sheet-h">🤝 供应链</h2>
     <div class="cards3">${SUPPLIERS.map(
       (s) => `<button type="button" class="pick ${draft.supplierId === s.id ? 'on' : ''}" data-act="pick-sup" data-id="${s.id}">
-        <b>${s.name}</b><small>${s.desc}</small><i>事故 ${Math.round(s.eventChance * 100)}% · 成本 ×${s.costMul}</i></button>`,
+        <b>${s.name}</b><small>${s.desc}</small></button>`,
     ).join('')}</div>
     ${(() => {
       const d = state.design;
       const firsts = novelty(d, state.models).items.filter((i) => i.first).length;
       const bz = buzzOf(d, state.models);
-      const tip = firsts || bz >= 20 ? '🔥 话题度高：首发新概念容易卖断货，可以考虑激进备货' : state.design.redesign === 'minor' ? '小改款需求平稳，正常或保守备货更安全' : '';
+      const tip = firsts || bz >= 20 ? '🔥 这台很有话题，小心卖断货' : '';
       return tip ? `<p class="warn-line good">${tip}</p>` : '';
     })()}
-    <div class="field-l">首批备货<div class="chips">${STOCK_OPTS.map(
-      (s) => `<button type="button" class="chip ${draft.stockId === s.id ? 'on' : ''}" data-act="pick-stk" data-id="${s.id}">${s.name}<small> · ${s.note}</small></button>`,
+    <div class="field-l">首批${term('备货')}<div class="chips">${STOCK_OPTS.map(
+      (s) => `<button type="button" class="chip ${draft.stockId === s.id ? 'on' : ''}" data-act="pick-stk" data-id="${s.id}">${s.name}</button>`,
     ).join('')}</div></div>`,
   cta: `<button type="button" class="primary big" data-act="confirm-supply">签约，开工研发 ▶</button>`,
 });
@@ -171,8 +173,8 @@ P.dev = () => {
   const r = Math.round(L.devRatio(state) * 100);
   return {
     scene: ['dev', devSceneData()],
-    caption: `研发实验室 · 完成度 ${r}% · 还剩约 ${state.monthsLeft} 月`,
-    sheet: `<h2 class="sheet-h">🔬 研发 <small>每月 ${L.manpowerCap(state)} 点人力 · ${state.notes?.[state.product.positioningId] ? '📒 按企划笔记分配' : '团队凭直觉分配'} · ⭐ 设为重点</small></h2>
+    caption: `研发实验室 · 还剩约 ${state.monthsLeft} 月`,
+    sheet: `<h2 class="sheet-h">🔬 研发 <small>${state.notes?.[state.product.positioningId] ? `📒 ${term('企划笔记')}生效` : '⭐ 点星标出重点'}</small></h2>
       ${devTimeline()}
       ${onSaleBlock()}
       ${state.chip?.research ? `<p class="chip-line">🧪 ${esc(chipName(state.chip.series, state.chip.research.gen, 1).replace(/ Pro$/, ''))} 流片中：还剩 ${state.chip.research.months} 个月 <i style="--p:${Math.round((1 - state.chip.research.months / state.chip.research.total) * 100)}%"></i></p>` : ''}
@@ -182,16 +184,33 @@ P.dev = () => {
         const on = draft.focus.includes(s.id);
         return `<div class="slot ${sl.progress >= cap ? 'full' : ''}">
           <button type="button" class="star ${on ? 'on' : ''}" data-act="focus" data-id="${s.id}" aria-label="设为重点">⭐</button>
-          <div class="slot-main"><div class="slot-top"><b>${s.name}</b><span>${sl.progress}/${cap}</span></div>
+          <div class="slot-main"><div class="slot-top"><b>${s.name}</b>${sl.progress >= cap ? '<span>✓ 到顶</span>' : ''}</div>
             <div class="bar"><i style="width:${sl.progress}%"></i><em style="left:${cap}%"></em></div>
             <small>${esc(sl.comment)}</small></div>
         </div>`;
       }).join('')}</div>`,
     cta: `<button type="button" class="primary big" data-act="advance">⏩ 推进一个月</button>
       <button type="button" data-act="advance-all">⏭ 一直推进</button>
-      ${L.canEarlyLaunch(state) ? `<button type="button" class="early" data-act="early">🚀 提前量产</button>` : ''}`,
+      ${L.canEarlyLaunch(state) ? `<button type="button" class="early" data-act="early">🚀 ${'提前量产'}</button>` : ''}`,
   };
 };
+
+/** 行业新技术快讯：只在新部件出现时告诉玩家 */
+function appearCtx() {
+  return { gen: state.generation, month: state.month, models: state.models, chipGen: state.chip?.gen || 1 };
+}
+function refreshNews() {
+  const now = CONCEPTS.filter((c) => hasAppeared(c.id, appearCtx())).map((c) => c.id);
+  const seen = new Set(state.seenConcepts || []);
+  const fresh = now.filter((id) => !seen.has(id));
+  if (fresh.length && state.seenConcepts) state.newConcepts = [...new Set([...(state.newConcepts || []), ...fresh])];
+  state.seenConcepts = now;
+}
+function newsCard() {
+  const list = (state.newConcepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter(Boolean);
+  if (!list.length) return '';
+  return `<div class="news-card"><b>📰 行业新技术</b><span>${list.map((c) => `${c.icon} ${c.name}`).join(' · ')}</span><small>去设计部的「💡 创新」看看</small></div>`;
+}
 
 /** 档期日历：从 from 到 to，标出档期、竞品与预计上市月 */
 function calendar(from, launchAt, pos) {
@@ -204,7 +223,7 @@ function calendar(from, launchAt, pos) {
     cells.push(`<span class="cal ${w ? (w.mul > 1 ? 'hot' : 'cold') : ''} ${m === launchAt ? 'launch' : ''} ${clash ? 'clash' : ''}" title="${w ? w.name : ''}${r.map((x) => ` ${x.brand}发布`).join('')}">
       <b>${monthOfYear(m)}月</b>${w ? `<i>${w.name}</i>` : '<i>&nbsp;</i>'}${r.length ? `<em>${r.map((x) => x.brand.slice(0, 2)).join('/')}</em>` : ''}</span>`);
   }
-  return `<div class="calendar"><div class="cal-h">档期日历 <small>📦=预计上市 · 红框=同定位竞品撞档</small></div><div class="cal-row">${cells.join('')}</div></div>`;
+  return `<div class="calendar"><div class="cal-h">${term('档期')} <small>📦 预计上市 · 红框 ${term('撞档')}</small></div><div class="cal-row">${cells.join('')}</div></div>`;
 }
 
 function onSaleBlock() {
@@ -221,9 +240,9 @@ function devTimeline() {
   const nw = nextWindow(state.month);
   const clash = clashAt(launchAt, state.product.positioningId);
   const bits = [];
-  bits.push(`📦 预计 ${monthOfYear(launchAt)} 月上市${w ? `，赶上<b>${w.name}</b>（需求 ×${w.mul}）` : ''}`);
+  bits.push(`📦 预计 ${monthOfYear(launchAt)} 月上市${w ? `，${w.mul > 1 ? '赶上' : '撞上'}<b>${w.name}</b> ${w.mul > 1 ? '📈' : '📉'}` : ''}`);
   if (!w && nw) bits.push(`下个旺季：${nw.name}（${monthOfYear(nw.month)} 月）`);
-  if (clash) bits.push(`<span class="bad">⚠ ${clash.brand} 同期发布同定位新机</span>`);
+  if (clash) bits.push(`<span class="bad">⚠ ${clash.brand} 同期发新机</span>`);
   return `<p class="timeline">${bits.join(' · ')}</p>`;
 }
 
@@ -258,8 +277,8 @@ function effText(e) {
   const bits = [];
   if (e.cash) bits.push(`💰${e.cash > 0 ? '+' : ''}${e.cash}`);
   if (e.months) bits.push(`⏳+${e.months}月`);
-  if (e.hype) bits.push(`📣${e.hype > 0 ? '+' : ''}${e.hype}`);
-  if (e.faith) bits.push(`❤️${e.faith > 0 ? '+' : ''}${e.faith}`);
+  if (e.hype) bits.push(`📣${e.hype > 0 ? '↑' : '↓'}`);
+  if (e.faith) bits.push(`❤️${e.faith > 0 ? '↑' : '↓'}`);
   if (e.slotPenalty && Object.keys(e.slotPenalty).length) bits.push('🔧进度受损');
   if (e.gambleFail) bits.push('🎲赌');
   return bits.length ? `<i>${bits.join(' ')}</i>` : '';
@@ -286,9 +305,8 @@ P.launch = () => ({
   caption: '后台：观众已入场，选一种讲法',
   sheet: `<h2 class="sheet-h">🎤 发布会</h2>
     <div class="cards3">${L.LAUNCH_STYLES.map(
-      (s) => `<button type="button" class="pick" data-act="launch-style" data-id="${s.id}"><b>${s.label}</b><small>${s.desc}</small><i>翻车率 ${Math.round(s.risk * 100)}%</i></button>`,
-    ).join('')}</div>
-    <p class="muted">公关部 Lv${L.deptLevel(state, 'pr')}：发布会 +${L.prLaunchBonus(state)}</p>`,
+      (s) => `<button type="button" class="pick" data-act="launch-style" data-id="${s.id}"><b>${s.label}</b><small>${s.desc}</small><i>${s.risk >= 0.3 ? '⚠ 很冒险' : s.risk >= 0.1 ? '有点风险' : '稳'}</i></button>`,
+    ).join('')}</div>`,
   cta: '',
 });
 
@@ -301,12 +319,12 @@ P.score = () => {
       <div class="score-big"><b>${state.mediaScore}</b><span>媒体</span><b class="sub">${state.userScore}</b><span>用户</span></div>
       <div class="headline-g">${esc(state.headline)}</div>
       <div class="wow-row"><span class="grade-pill g-${W.grade}">${W.grade || '-'}</span>
-        <span>惊艳 <b>${W.score ?? '-'}</b></span><span>新颖 <b>${W.novelty ?? '-'}</b></span><span>完成 <b>${W.completeness ?? '-'}%</b></span><span>🔥 出圈 <b>${W.buzz ?? 0}</b></span></div>
-      ${W.firsts?.length ? `<div class="firsts">${W.firsts.map((f) => `<span>🏆 首发 ${esc(f)}</span>`).join('')}</div>` : ''}
+        <span>${term('惊艳度', '惊艳')} <b>${W.score ?? '-'}</b></span><span>${term('新颖度', '新颖')} <b>${W.novelty ?? '-'}</b></span><span>${term('完成度', '完成')} <b>${W.completeness ?? '-'}%</b></span><span>${term('出圈度', '🔥 出圈')} <b>${W.buzz ?? 0}</b></span></div>
+      ${W.firsts?.length ? `<div class="firsts">${W.firsts.map((f) => `<span>🏆 ${term('首发')} ${esc(f)}</span>`).join('')}</div>` : ''}
       ${W.buzz >= 40 ? `<p class="trend">📈 #${esc(state.design.modelName)}# 冲上热搜</p>` : ''}
       ${commentBlock()}
       ${reviewBlock()}
-      <p class="muted">研发点 +${state.lastRp}（现有 ${state.rp}）</p>`,
+      <p class="muted">🔬 ${term('研发点')} +${state.lastRp}</p>`,
     cta: `<button type="button" class="primary big" data-act="to-sales">看首月销量 ▶</button>
       <button type="button" data-act="share-launch">📤 分享卡</button>`,
   };
@@ -316,12 +334,13 @@ function reviewBlock() {
   const R = state.review;
   if (!R) return '';
   const tag = { more: ['多了', 'm'], less: ['少了', 'l'], ok: ['刚好', 'o'] };
-  return `<details class="review" open><summary>📋 复盘：体验 ${R.exp} vs 期望线 ${R.bar} ${R.exp >= R.bar ? '✅' : '⬇'}</summary>
-    <div class="rv-row"><span>配比匹配 ${R.match}%（体验 ×${R.mult.toFixed(2)}）</span></div>
+  const fit = R.match >= 85 ? '很到位' : R.match >= 70 ? '还差一点' : '跑偏了';
+  return `<details class="review" open><summary>📋 复盘 · ${R.exp >= R.bar ? '超出' : '低于'}${term('期望线')} ${R.exp >= R.bar ? '✅' : '⬇'}</summary>
+    <div class="rv-row"><span>${term('配比')}：${fit}</span></div>
     <div class="rv-chips">${R.verdict.map((v) => `<span class="rv rv-${tag[v.v][1]}">${v.name.slice(0, 2)} ${tag[v.v][0]}</span>`).join('')}</div>
     <div class="rv-chips">${R.promises.map((p) => `<span class="rv ${p.ok ? 'rv-o' : 'rv-l'}">${p.ok ? '✓' : '✗ 货不对板'} ${p.name}</span>`).join('')}</div>
     ${R.priceNote ? `<p class="warn-line ${R.priceUser < 0 ? 'bad' : 'good'}">💬 定价：${R.priceNote}</p>` : ''}
-    ${R.newNote ? '<p class="note-new">📒 摸清了这个定位的理想配比，已记入企划笔记：以后研发会自动按它分配</p>' : ''}
+    ${R.newNote ? `<p class="note-new">📒 这个定位摸透了，已记入${term('企划笔记')}</p>` : ''}
   </details>`;
 }
 
@@ -336,8 +355,8 @@ P.sales = () => {
       ${gauge('备货消化', (r.sold / Math.max(1, r.stocked)) * 100)}
       <p>${esc(r.stockNote)}</p>
       ${r.oldNote ? `<p class="warn-line good">♻ ${esc(r.oldNote)}</p>` : ''}
-      ${r.window ? `<p class="warn-line good">📅 赶上${r.window}：需求 ×${r.windowMul}</p>` : ''}
-      ${r.clash ? `<p class="warn-line bad">⚔ ${r.clash}（×${r.clashF.toFixed(2)}）</p>` : ''}
+      ${r.window ? `<p class="warn-line ${r.windowMul > 1 ? 'good' : 'bad'}">📅 ${r.windowMul > 1 ? '赶上' : '撞上'}${r.window}</p>` : ''}
+      ${r.clash ? `<p class="warn-line bad">⚔ ${r.clash}</p>` : ''}
       <p class="muted">售价 ¥${r.price} · 单台成本 ¥${r.unitCost}</p>`,
     cta: `<button type="button" class="primary big" data-act="to-next">${state.month >= RUN_MONTHS ? '三年结算 ▶' : '规划下一代 ▶'}</button>`,
   };
@@ -410,7 +429,7 @@ function chipLab() {
       <small>当前：<input id="chipseries" class="cl-name" maxlength="4" value="${esc(c.series)}" /> X${c.gen} · Pro 跑分 ${(chipBench(c.gen, 1) / 10000).toFixed(0)} 万</small></div>
       ${c.research ? `<span class="maxed">流片中 · 还剩 ${c.research.months} 月</span>` : `<button type="button" data-act="chip-research" ${state.cash < cost.cash ? 'disabled' : ''}>流片 X${cost.next}<small> ${cost.cash} · ${cost.months}月</small></button>`}</div>
     <div class="cl-chart">${bars}</div>
-    <p class="muted">橙色 = 你的芯片（Pro 档），灰色 = 竞品同期。流片会在下一代研发期间并行完成，再下一代就能用上。</p>
+    <p class="muted">🟧 你的芯片 · ⬜ 竞品同期 · ${term('流片')}与下一代研发同时进行</p>
   </div>`;
 }
 
@@ -430,16 +449,16 @@ function gauge(label, pct, cls = '') {
 // ═════════════════════════ 新手引导 ═════════════════════════
 
 const TUT = {
-  plan: '欢迎来到<b>电子产品发展国</b>！目标：<b>三年内</b>做出让人惊艳的手机，别破产。<br/>📋 第一步是企划：<b>定位</b>决定研发该偏向哪里；<b>售价</b>要和定位相配；<b>卖点</b>是对用户的承诺，说了就要做到。下面的<b>档期日历</b>标了旺季和竞品发布月，📦 是预计上市时间。',
-  design: '🎨 设计部：<br/>🔧 <b>配置</b>：选部件，芯片是你自研的系列，决定研发上限和成本；<br/>💡 <b>创新</b>：挑概念件，<b>首发最值钱</b>，越夸张越容易出圈；<br/>🎨 <b>外观</b>：随便玩，不计分。<br/>拖动手机可以旋转，「🔩 拆解」看内部。满意了点「定稿」。',
-  supply: '🤝 供应链：便宜的供应商事故多，贵的稳。<br/>备货是个赌注：话题高的新品容易<b>卖断货</b>，小改款就保守一点。',
-  dev: '🔬 研发：每推进一个月付一次工资，各研发槽朝<b>红线（上限）</b>推进。<br/>点 ⭐ 标重点槽。完成度到 60% 可以<b>「🚀 提前量产」</b>去赶档期，代价是做工。',
-  event: '⚠ 突发事件！每个选项都有代价，标了「稳妥」的是保守选择。慢慢来，没有标准答案。',
-  factory: '🏭 量产：等流水线跑完就能开发布会。如果有旧款还在卖，这里决定怎么处理它们。',
-  launch: '🎤 发布会：选一种讲法。<b>惊喜彩蛋</b>分数高，但更容易翻车。准备好了吗？',
-  score: '📰 评分：<b>惊艳度 = 新颖度 × 完成度</b>。<br/>往下翻：<b>评论区</b>是用户的真实吐槽，<b>复盘</b>告诉你哪一槽多了、少了，下一代照着改。',
-  sales: '🛒 首月销量：缺货伤口碑，积压压现金。这一代之后每月还会继续卖（长尾）。',
-  next: '🏛 规划下一代：升级部门、扩建办公室，或者让<b>芯片流片升级</b>（跑分每代 +28%）。研发点在设计部「💡 创新」里解锁新概念件。<br/>这就是一整轮，接下来靠你了！',
+  plan: '欢迎！你有<b>三年</b>，做出让人惊艳的手机，别破产。<br/>先定这一代卖给谁、卖多少钱、主打什么。带虚线的词都可以点开看解释。',
+  design: '这是设计部。<b>🔧 配置</b>选部件，<b>💡 创新</b>挑让人眼前一亮的东西，<b>🎨 外观</b>随你喜欢。<br/>拖动手机能转着看。满意了就「定稿」。',
+  supply: '选个供应商，决定先生产多少台。',
+  dev: '每推进一个月，团队就往前做一点。觉得哪项重要就点 ⭐。',
+  event: '出状况了！选一个你能接受的代价。',
+  factory: '工厂开工了，等流水线跑完。',
+  launch: '发布会是最高光的时刻。选一种讲法，然后好好欣赏。',
+  score: '媒体和用户打分了。往下翻看看<b>评论区</b>在说什么，<b>复盘</b>会告诉你下一代该往哪改。',
+  sales: '首月卖得怎么样？之后它还会继续卖一段时间。',
+  next: '一轮结束了。可以升级部门、扩建办公室、让芯片升级——也可以先攒着钱。<br/>剩下的，靠你自己摸索。',
 };
 const TUT_ORDER = ['plan', 'design', 'supply', 'dev', 'event', 'factory', 'launch', 'score', 'sales', 'next'];
 
@@ -487,6 +506,7 @@ export function render() {
   $('#g-scene').hidden = false;
   $('#g-sheet').hidden = false;
   $('#g-cta').hidden = false;
+  if (phase === 'plan' && state) refreshNews();
   const view = (P[phase] || P.title)();
   scene.set(...view.scene);
   $('#g-caption').textContent = view.caption || '';
@@ -523,6 +543,8 @@ async function mountStudio() {
     getUnlocked: () => state.unlocked,
     getRp: () => state.rp,
     getMonth: () => state.month,
+    getAppearCtx: () => appearCtx(),
+    isNew: (id) => (state.newConcepts || []).includes(id),
     getChipNote: () => (state.chip.research ? `X${state.chip.research.gen} 流片中` : `最新：${state.chip.series} X${state.chip.gen}`),
     onUnlock: (id) => {
       const r = L.unlockConcept(state, id);
@@ -536,6 +558,7 @@ async function mountStudio() {
       persist();
     },
     onConfirm: (d) => {
+      state.newConcepts = [];
       L.confirmDesign(state, d);
       draft.supplierId = 'balanced';
       draft.stockId = 'normal';
@@ -566,11 +589,16 @@ async function playReveal() {
   busy = true;
   const ov = document.createElement('div');
   ov.className = 'launch-overlay';
-  ov.innerHTML = '<div class="lo-stage"></div><div class="lo-dm"></div><div class="lo-react"></div><div class="lo-sub" hidden></div><button type="button" class="lo-skip">跳过 ▶▶</button>';
+  ov.innerHTML = `<div class="lo-stage"></div><div class="lo-dm"></div><div class="lo-react"></div><div class="lo-fx"></div>
+    <div class="lo-meter" hidden><span>现场热度</span><i><b></b></i><em></em></div>
+    <div class="lo-chapter" hidden></div><div class="lo-sub" hidden></div>
+    <button type="button" class="lo-skip">跳过 ▶▶</button>`;
   document.body.appendChild(ov);
   let stage;
   let done = false;
+  let heat = 30;
   const timers = [];
+  const at = (ms, fn) => timers.push(setTimeout(() => !done && fn(), ms));
   const finish = () => {
     if (done) return;
     done = true;
@@ -595,17 +623,53 @@ async function playReveal() {
     void el.offsetWidth;
     el.classList.add('pop');
   };
+  const chapter = (no, title) => {
+    const el = ov.querySelector('.lo-chapter');
+    el.hidden = false;
+    el.innerHTML = `<small>${no}</small><b>${title}</b>`;
+    el.classList.remove('in');
+    void el.offsetWidth;
+    el.classList.add('in');
+  };
+  const meter = (delta) => {
+    heat = Math.max(5, Math.min(100, heat + delta));
+    const m = ov.querySelector('.lo-meter');
+    m.hidden = false;
+    m.querySelector('b').style.width = `${heat}%`;
+    m.querySelector('em').textContent = heat >= 85 ? '🔥 沸腾' : heat >= 65 ? '👏 热烈' : heat >= 45 ? '🙂 还行' : '😶 冷场';
+  };
   const react = (words, mood = 'good') => {
     const host = ov.querySelector('.lo-react');
     words.forEach((w, i) => {
       const r = document.createElement('span');
       r.className = `rx ${mood}`;
       r.textContent = w;
-      r.style.left = `${8 + Math.random() * 78}%`;
+      r.style.left = `${6 + Math.random() * 78}%`;
       r.style.animationDelay = `${i * 0.18}s`;
       host.appendChild(r);
-      setTimeout(() => r.remove(), 2600 + i * 180);
+      setTimeout(() => r.remove(), 2800 + i * 180);
     });
+    meter(mood === 'good' ? 12 : mood === 'bad' ? -12 : 2);
+  };
+  const fireworks = (n = 5) => {
+    const host = ov.querySelector('.lo-fx');
+    for (let k = 0; k < n; k++) {
+      const x = 10 + Math.random() * 80;
+      const y = 10 + Math.random() * 35;
+      const col = ['#f5b041', '#5dade2', '#f1948a', '#82e0aa', '#fff'][k % 5];
+      for (let i = 0; i < 18; i++) {
+        const p = document.createElement('i');
+        const a = (i / 18) * Math.PI * 2;
+        p.style.left = `${x}%`;
+        p.style.top = `${y}%`;
+        p.style.background = col;
+        p.style.setProperty('--dx', `${Math.cos(a) * 90}px`);
+        p.style.setProperty('--dy', `${Math.sin(a) * 90}px`);
+        p.style.animationDelay = `${k * 0.25}s`;
+        host.appendChild(p);
+        setTimeout(() => p.remove(), 1800 + k * 250);
+      }
+    }
   };
   try {
     const { PhoneStage } = await import('./studio/phone3d.js');
@@ -614,57 +678,140 @@ async function playReveal() {
     const W = state.wowResult || {};
     const quick = state.models.length > 0 && !W.firsts?.length && !['S', 'A'].includes(W.grade);
     const d = state.design;
+    const phys = physical(d);
     const cs = chipSpec(d);
     const prevChip = state.models.length ? chipSpec(state.models[state.models.length - 1].design) : null;
     const price = { low: 1999, mid: 3999, high: 6999 }[state.product.priceId];
     const pf = state.review?.priceUser ?? 0;
     const rb = rivalBench(state.month);
+    const camCap = L.capsMap(state).camera;
+    const batCap = L.capsMap(state).battery;
+    const C = new Set(d.concepts || []);
+    const txt = (g, str, x, y, size, color = '#fff', align = 'center', font = 'sans-serif') => {
+      g.fillStyle = color;
+      g.font = `900 ${size}px ${font}`;
+      g.textAlign = align;
+      g.fillText(str, x, y);
+    };
 
-    // 幻灯片：每张 { wall, sub, react, mood, ms, act }
-    const slides = [];
+    // —— 节目单 ——
+    const seg = [];
+    let no = 0;
+    const chap = () => String(++no).padStart(2, '0');
+    seg.push({
+      chap: [chap(), '外观'],
+      wall: (g, Wd, Hd) => {
+        g.fillStyle = d.color;
+        g.fillRect(20, 14, 26, 46);
+        g.fillStyle = 'rgba(255,255,255,.35)';
+        g.fillRect(22, 16, 4, 42);
+        txt(g, paletteName(d.color), 56, 30, 12, '#ffd08a', 'left');
+        txt(g, `${phys.thickness}mm`, 56, 52, 20, '#fff', 'left', 'monospace');
+        txt(g, `${phys.weight}g`, Wd - 14, 52, 14, '#aab7b8', 'right', 'monospace');
+      },
+      sub: `${esc(paletteName(d.color))}，${esc(tier(d, 'material').label)}机身，薄至 <b>${phys.thickness}mm</b>`,
+      react: phys.thickness <= 8 ? ['好薄！', '颜值在线', '😍'] : ['有点厚', '手感应该扎实'],
+      mood: phys.thickness <= 8 ? 'good' : 'meh',
+      act: () => stage.view('hero'),
+    });
     if (!quick) {
       const up = prevChip ? Math.round((cs.bench / prevChip.bench - 1) * 100) : 0;
-      slides.push({
-        wall: (g, Wd, Hd) => {
-          g.fillStyle = '#ffd08a';
-          g.font = 'bold 11px sans-serif';
-          g.textAlign = 'left';
-          g.fillText(cs.label, 10, 16);
+      seg.push({
+        chap: [chap(), '芯片'],
+        wall: (g, Wd) => {
+          txt(g, cs.label, 10, 16, 11, '#ffd08a', 'left');
           const max = Math.max(cs.bench, rb);
           g.fillStyle = '#e67e22';
           g.fillRect(10, 24, Math.round(((Wd - 70) * cs.bench) / max), 14);
           g.fillStyle = '#7f8c8d';
           g.fillRect(10, 46, Math.round(((Wd - 70) * rb) / max), 14);
-          g.fillStyle = '#fff';
-          g.font = 'bold 10px monospace';
-          g.fillText(`${(cs.bench / 10000).toFixed(0)}万`, Wd - 56, 35);
-          g.fillText(`${(rb / 10000).toFixed(0)}万`, Wd - 56, 57);
-          g.fillStyle = '#aab7b8';
-          g.font = '8px sans-serif';
-          g.fillText('竞品同期', 12, 70);
+          txt(g, `${(cs.bench / 10000).toFixed(0)}万`, Wd - 56, 35, 10, '#fff', 'left', 'monospace');
+          txt(g, `${(rb / 10000).toFixed(0)}万`, Wd - 56, 57, 10, '#fff', 'left', 'monospace');
+          txt(g, '竞品同期', 12, 70, 8, '#aab7b8', 'left');
         },
-        sub: `<b>${esc(cs.label)}</b>，跑分 ${cs.bench.toLocaleString('en-US')}${up > 0 ? `，比上一代快 <b>${up}%</b>` : ''}${cs.bench > rb ? '，<b>超过竞品</b>' : ''}`,
-        react: cs.bench > rb ? ['哇——', '这么快？', '🔥'] : ['嗯……', '还行吧'],
+        sub: `<b>${esc(cs.label)}</b>，跑分 ${cs.bench.toLocaleString('en-US')}${up > 0 ? `，比上一代快 <b>${up}%</b>` : ''}`,
+        react: cs.bench > rb ? ['哇——', '这么快？', '🔥🔥'] : ['嗯……', '还行吧'],
         mood: cs.bench > rb ? 'good' : 'meh',
-        ms: 2400,
       });
+      if (d.parts.camera >= 1 || C.has('oneinch') || C.has('periscope') || C.has('gimbal')) {
+        seg.push({
+          chap: [chap(), '影像'],
+          wall: (g, Wd, Hd) => {
+            // 夜景样张：影像越强，噪点越少
+            const sky = g.createLinearGradient(0, 0, 0, Hd);
+            sky.addColorStop(0, '#0b1030');
+            sky.addColorStop(1, '#3a2a5e');
+            g.fillStyle = sky;
+            g.fillRect(0, 0, Wd, Hd);
+            for (let i = 0; i < 14; i++) {
+              const bh = 18 + ((i * 37) % 34);
+              g.fillStyle = '#111426';
+              g.fillRect(i * 18, Hd - bh, 16, bh);
+              for (let y = Hd - bh + 4; y < Hd - 3; y += 5) for (let x = i * 18 + 3; x < i * 18 + 14; x += 4) if ((x * y) % 7 < 3) { g.fillStyle = '#f7dc6f'; g.fillRect(x, y, 2, 2); }
+            }
+            g.fillStyle = '#f9e79f';
+            g.beginPath();
+            g.arc(Wd - 30, 16, 7, 0, Math.PI * 2);
+            g.fill();
+            const noise = Math.max(0, 110 - camCap) * 4;
+            for (let i = 0; i < noise; i++) {
+              const v = 80 + Math.random() * 120;
+              g.fillStyle = `rgba(${v},${v},${v},.6)`;
+              g.fillRect(Math.random() * Wd, Math.random() * Hd, 2, 2);
+            }
+            txt(g, '直出 · 未修图', 6, 10, 8, '#fff', 'left');
+          },
+          sub: `${C.has('oneinch') ? '一英寸大底' : C.has('periscope') ? '潜望长焦' : esc(tier(d, 'camera').label)}，夜景直出，<b>没有修图</b>`,
+          react: camCap >= 85 ? ['这是手机拍的？', '吊打相机', '📸'] : camCap >= 70 ? ['挺干净', '能发朋友圈'] : ['噪点有点多', '再练练'],
+          mood: camCap >= 85 ? 'good' : camCap >= 70 ? 'meh' : 'bad',
+          act: () => stage.view('back'),
+        });
+      }
+      if (d.parts.battery === 2 || C.has('sicarbon') || C.has('solar') || C.has('fastcharge') || batCap >= 85) {
+        const days = batCap >= 95 ? 2.5 : batCap >= 80 ? 2 : 1.5;
+        seg.push({
+          chap: [chap(), '续航'],
+          wall: (g, Wd, Hd) => {
+            g.strokeStyle = '#fff';
+            g.lineWidth = 3;
+            g.strokeRect(40, 18, 120, 38);
+            g.fillStyle = '#fff';
+            g.fillRect(160, 30, 6, 14);
+            g.fillStyle = '#2ecc71';
+            g.fillRect(44, 22, Math.round(112 * (days / 2.5)), 30);
+            txt(g, `${days} 天`, 196, 46, 16, '#fff', 'left', 'monospace');
+            if (C.has('fastcharge')) txt(g, '⚡ 10 分钟充一半', 40, 70, 9, '#f5b041', 'left');
+          },
+          sub: `重度使用，一次充电撑 <b>${days} 天</b>${C.has('fastcharge') ? '，十分钟充一半' : ''}`,
+          react: days >= 2 ? ['电量焦虑退散', '终于！', '🔋🔋'] : ['还行', '够一天'],
+          mood: days >= 2 ? 'good' : 'meh',
+        });
+      }
+      // 随机现场事件
+      const moments = [
+        { wall: (g, Wd, Hd) => { g.fillStyle = '#5d4037'; g.fillRect(Wd / 2 - 16, 14, 32, 32); g.fillStyle = '#f5cba7'; g.fillRect(Wd / 2 - 10, 20, 20, 18); g.fillStyle = '#2c3e50'; g.fillRect(Wd / 2 - 6, 26, 3, 3); g.fillRect(Wd / 2 + 4, 26, 3, 3); txt(g, '神秘嘉宾', Wd / 2, 62, 11, '#ffd08a'); }, sub: '有请神秘嘉宾——知名测评博主<b>「老喵」</b>！', react: ['老喵！！', '真人来了', '👋'], mood: 'good' },
+        { wall: (g, Wd, Hd) => txt(g, '能不能送一台！', Wd / 2, Hd / 2 + 6, 16, '#f5b041'), sub: '台下有人大喊：「<b>能不能送一台！</b>」主讲人：「……散会后找我。」', react: ['哈哈哈哈', '我也要！', '😂'], mood: 'good' },
+        { wall: (g, Wd, Hd) => txt(g, '最好的一代（之一）', Wd / 2, Hd / 2 + 6, 14, '#fff'), sub: '「这是我们有史以来最好的一代……之一。」', react: ['之一？？', '笑死', '🤣'], mood: 'meh' },
+        { wall: (g, Wd, Hd) => { for (let i = 0; i < 16; i++) { g.fillStyle = ['#f1948a', '#f5b041', '#5dade2'][i % 3]; g.fillRect(8 + i * 14, 20 + (i % 2) * 18, 12, 14); } txt(g, '粉丝应援', Wd / 2, 68, 9, '#fff'); }, sub: '粉丝举起了应援灯牌，全场一起倒数！', react: ['冲冲冲', '🌟🌟🌟', '爱了'], mood: 'good' },
+      ];
+      if (Math.random() < 0.55) {
+        const m = moments[Math.floor(Math.random() * moments.length)];
+        seg.push({ chap: null, ...m });
+      }
       if (state.launchFlop) {
-        slides.push({
+        seg.push({
+          chap: null,
           wall: (g, Wd, Hd) => {
             for (let i = 0; i < 300; i++) {
               const v = Math.floor(Math.random() * 255);
               g.fillStyle = `rgb(${v},${v},${v})`;
               g.fillRect(Math.random() * Wd, Math.random() * Hd, 3, 2);
             }
-            g.fillStyle = '#e74c3c';
-            g.font = 'bold 22px monospace';
-            g.textAlign = 'center';
-            g.fillText('ERROR', Wd / 2, Hd / 2 + 8);
+            txt(g, 'ERROR', Wd / 2, Hd / 2 + 8, 22, '#e74c3c', 'center', 'monospace');
           },
           sub: '呃……现场 Demo 好像<b>卡住了</b>。我们换一台！',
           react: ['哈哈哈哈', '翻车了！', '📸📸'],
           mood: 'bad',
-          ms: 2600,
           act: () => {
             play('boom');
             ov.classList.add('shake');
@@ -673,101 +820,152 @@ async function playReveal() {
         });
       }
       if (W.firsts?.length) {
-        slides.push({
-          wall: (g, Wd, Hd) => {
-            g.fillStyle = '#fff';
-            g.font = 'bold 18px sans-serif';
-            g.textAlign = 'center';
-            g.fillText('ONE MORE THING…', Wd / 2, Hd / 2 + 6);
-          },
+        seg.push({
+          chap: null,
+          wall: (g, Wd, Hd) => txt(g, 'ONE MORE THING…', Wd / 2, Hd / 2 + 6, 18),
           sub: '还有一件事……',
           react: ['？？？', '要来了', '屏住呼吸'],
           mood: 'meh',
-          ms: 1800,
           act: () => stage.view('back'),
+          ms: 2000,
         });
-        slides.push({
-          wall: (g, Wd, Hd) => {
-            const grd = g.createLinearGradient(0, 0, Wd, 0);
-            grd.addColorStop(0, '#e67e22');
-            grd.addColorStop(1, '#8e44ad');
-            g.fillStyle = grd;
-            g.fillRect(0, 0, Wd, Hd);
-            g.fillStyle = '#fff';
-            g.font = '900 22px "ZCOOL KuaiLe",sans-serif';
-            g.textAlign = 'center';
-            g.fillText(`首发 ${W.firsts[0]}`, Wd / 2, Hd / 2 + 8);
-          },
-          sub: `全球首发：<b>${W.firsts.map(esc).join('、')}</b>`,
-          react: ['！！！', '这也行？', '买爆！', '🤯', '冲上热搜'],
-          mood: 'good',
-          ms: 2600,
-          act: () => {
-            play('fanfare');
-            stage.burst(120, { speed: 2 });
-          },
+        W.firsts.slice(0, 2).forEach((f, i) => {
+          const c = CONCEPTS.find((x) => x.name === f);
+          seg.push({
+            chap: null,
+            wall: (g, Wd, Hd) => {
+              const grd = g.createLinearGradient(0, 0, Wd, 0);
+              grd.addColorStop(0, '#e67e22');
+              grd.addColorStop(1, '#8e44ad');
+              g.fillStyle = grd;
+              g.fillRect(0, 0, Wd, Hd);
+              txt(g, `全球首发`, Wd / 2, 24, 11, '#fff3d6');
+              txt(g, f, Wd / 2, 54, 24, '#fff', 'center', '"ZCOOL KuaiLe",sans-serif');
+            },
+            sub: `全球首发：<b>${esc(f)}</b>${c ? ` —— ${esc(c.desc)}` : ''}`,
+            react: ['！！！', '这也行？', '买爆！', '🤯', '冲上热搜'],
+            mood: 'good',
+            act: () => {
+              play('fanfare');
+              stage.burst(120, { speed: 2 });
+              stage.view(i % 2 ? 'hero' : 'back');
+              fireworks(3);
+            },
+            ms: 2800,
+          });
         });
       }
     }
-    slides.push({
+    // 价格：早鸟价划线
+    const listPrice = price + 1000;
+    seg.push({
+      chap: [chap(), '价格'],
       wall: (g, Wd, Hd) => {
-        g.fillStyle = pf > 0 ? '#2ecc71' : pf < 0 ? '#e74c3c' : '#f5b041';
-        g.font = 'bold 12px sans-serif';
-        g.textAlign = 'center';
-        g.fillText('售价', Wd / 2, 20);
-        g.fillStyle = '#fff';
-        g.font = '900 34px monospace';
-        g.fillText(`¥${price}`, Wd / 2, 56);
+        txt(g, `¥${listPrice}`, Wd / 2, 28, 16, '#7f8c8d', 'center', 'monospace');
+        g.fillStyle = '#e74c3c';
+        g.fillRect(Wd / 2 - 46, 22, 92, 3);
       },
-      sub: `售价——<b>¥${price}</b>`,
-      react: pf > 0 ? ['太良心了！', '买买买', '👏👏'] : pf < 0 ? ['啊？这么贵', '告辞', '😅'] : ['合理', '可以接受', '👍'],
-      mood: pf > 0 ? 'good' : pf < 0 ? 'bad' : 'meh',
-      ms: 2400,
+      sub: `售价……<b>¥${listPrice}</b>？`,
+      react: ['啊？', '这么贵'],
+      mood: 'meh',
+      ms: 1500,
+    });
+    seg.push({
+      chap: null,
+      wall: (g, Wd, Hd) => {
+        txt(g, `¥${listPrice}`, Wd / 2, 22, 12, '#7f8c8d', 'center', 'monospace');
+        g.fillStyle = '#e74c3c';
+        g.fillRect(Wd / 2 - 34, 17, 68, 2);
+        txt(g, `¥${price}`, Wd / 2, 60, 32, pf > 0 ? '#2ecc71' : pf < 0 ? '#f1948a' : '#f5b041', 'center', 'monospace');
+      },
+      sub: `不！早鸟价——<b>¥${price}</b>！`,
+      react: pf > 0 ? ['太良心了！', '买买买', '👏👏👏'] : pf < 0 ? ['还是贵', '等降价', '😅'] : ['可以！', '真香', '👍'],
+      mood: pf < 0 ? 'meh' : 'good',
+      act: () => play('boom'),
+    });
+    // 开售倒计时
+    seg.push({
+      chap: null,
+      wall: (g, Wd, Hd) => {
+        txt(g, '今晚 20:00 开售', Wd / 2, 26, 12, '#ffd08a');
+        txt(g, '3', Wd / 2, 62, 30, '#fff', 'center', 'monospace');
+      },
+      sub: '今晚八点，<b>正式开售</b>！',
+      react: ['定闹钟！', '手速准备'],
+      mood: 'good',
+      ms: 900,
+    });
+    ['2', '1'].forEach((n) =>
+      seg.push({ chap: null, wall: (g, Wd, Hd) => { txt(g, '今晚 20:00 开售', Wd / 2, 26, 12, '#ffd08a'); txt(g, n, Wd / 2, 62, 30, '#fff', 'center', 'monospace'); }, sub: null, react: [], ms: 700, act: () => play('click') }),
+    );
+    seg.push({
+      chap: null,
+      wall: (g, Wd, Hd) => {
+        const grd = g.createLinearGradient(0, 0, Wd, Hd);
+        grd.addColorStop(0, '#f5b041');
+        grd.addColorStop(1, '#e74c3c');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, Wd, Hd);
+        txt(g, d.modelName, Wd / 2, Hd / 2 + 10, 26, '#fff', 'center', '"ZCOOL KuaiLe",sans-serif');
+      },
+      sub: () => `谢谢大家！现场热度：<b>${heat >= 85 ? '🔥 沸腾' : heat >= 65 ? '👏 热烈' : heat >= 45 ? '🙂 还行' : '😶 冷场'}</b>`,
+      react: ['🎉🎉🎉', '太燃了', '安可！'],
+      mood: 'good',
+      act: () => {
+        play('fanfare');
+        play('applause', 2.5);
+        stage.burst(160, { speed: 2.6 });
+        stage.view('hero');
+        fireworks(6);
+      },
+      ms: 3200,
     });
 
-    const runSlides = () => {
-      let t = 600;
-      slides.forEach((sl) => {
-        timers.push(
-          setTimeout(() => {
-            if (done) return;
-            stage.wallSlide(sl.wall);
-            sub(sl.sub);
-            react(sl.react, sl.mood);
-            sl.act?.();
-            if (sl.mood === 'good') play('applause', 1.2);
-          }, t),
-        );
-        t += sl.ms;
+    const runShow = () => {
+      let t = 500;
+      seg.forEach((sl) => {
+        at(t, () => {
+          if (sl.chap) chapter(...sl.chap);
+          stage.wallSlide(sl.wall);
+          if (sl.sub !== null) sub(typeof sl.sub === 'function' ? sl.sub() : sl.sub);
+          if (sl.react?.length) react(sl.react, sl.mood);
+          sl.act?.();
+          if (sl.mood === 'good' && sl.react?.length) play('applause', 1);
+        });
+        t += sl.ms || 2500;
       });
-      timers.push(setTimeout(finish, t + 600));
+      at(t + 300, finish);
     };
 
     ov.querySelector('.lo-skip').onclick = () => (stage.reveal?.fired.boom ? finish() : stage.skipReveal());
     stage.playReveal(d, {
       quick,
       onBeat(b) {
-        if (b === 'drumroll') play('drumroll', quick ? 1.1 : 3);
-        else if (b === 'boom') {
+        if (b === 'drumroll') {
+          play('drumroll', quick ? 1.1 : 3);
+          if (!quick) ['3', '2', '1'].forEach((n, i) => at(100 + i * 700, () => stage.wallSlide((g, Wd, Hd) => txt(g, n, Wd / 2, Hd / 2 + 14, 40, '#f5b041', 'center', 'monospace'))));
+          meter(0);
+        } else if (b === 'boom') {
           play('boom');
           play('fanfare', 0.12);
           play('applause', 3, 0.3);
           sub(`今天，我们带来——<b>${esc(d.modelName)}</b>`);
           react(['哇！', '来了来了', '📸'], 'good');
+          fireworks(2);
           const dm = ov.querySelector('.lo-dm');
           danmaku(d, null)
             .sort(() => Math.random() - 0.5)
-            .slice(0, 10)
-            .forEach((t, i) => {
+            .slice(0, 12)
+            .forEach((tx, i) => {
               const el = document.createElement('span');
               el.className = 'dm';
-              el.textContent = t;
-              el.style.top = `${6 + ((i * 23) % 44)}%`;
-              el.style.animationDelay = `${0.3 + i * 0.9}s`;
+              el.textContent = tx;
+              el.style.top = `${10 + ((i * 23) % 36)}%`;
+              el.style.animationDelay = `${0.5 + i * 1.2}s`;
               dm.appendChild(el);
             });
         } else if (b === 'shutter') play('shutter');
-        else if (b === 'done') runSlides();
+        else if (b === 'done') runShow();
       },
     });
   } catch (e) {
@@ -1055,6 +1253,7 @@ function onChange(e) {
 }
 
 export function boot() {
+  installGlossary();
   const root = document.getElementById('app');
   root.addEventListener('click', onClick);
   root.addEventListener('change', onChange);
