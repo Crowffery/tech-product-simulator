@@ -566,7 +566,7 @@ export function buildKeynote(ctx) {
     sub: `<b>${paletteName(d.color)}</b> · ${matName}${kind === 'metal' ? '，每一道边都经过抛光' : kind === 'glass' ? '，光线在背面流动' : ''}`,
     react: phys.thickness <= 8 ? ['好薄！', '颜值在线', '😍'] : kind === 'metal' ? ['这光泽！', '高级感', '✨'] : ['颜色好看', '手感应该不错'],
     mood: phys.thickness <= 8.4 || kind === 'metal' ? 'good' : 'meh',
-    pose: ['hero', 'close'],
+    pose: ['hero', 'push', { spin: 0.08, push: 1.4 }],
     shine: kind === 'metal' || kind === 'glass',
     ms: 3600,
   });
@@ -580,7 +580,7 @@ export function buildKeynote(ctx) {
       sub: bad ? `我们说过要做最薄……它是 <b>${phys.thickness}mm</b>。` : `侧面看——只有 <b>${phys.thickness}mm</b>，比 ${Math.max(2, Math.round(phys.thickness / 1.85))} 枚硬币叠起来还薄。<br/><small>（比友商薄了整整 0.01mm）</small>`,
       react: bad ? ['说好的极致轻薄？', '就这？', '😅'] : ['薄如蝉翼', '0.01mm 也是领先', '🤏'],
       mood: bad ? 'bad' : 'good',
-      pose: ['side', 'close', { spin: 0 }],
+      pose: ['side', 'push', { spin: 0, push: 1.2 }],
       ms: 3000,
     });
   }
@@ -598,7 +598,7 @@ export function buildKeynote(ctx) {
       sub: `<b>${cs.label}</b>${up > 0 ? `，比上一代快 <b>${up}%</b>` : ''}${beat ? '，同期第一' : ''}${ctx.chipLag > 0 ? '<br/><small>（台下：友商都上新一代芯片了……）</small>' : bad ? '<br/><small>（性能调校没跟上，实际体验差点意思）</small>' : ''}`,
       react: ctx.chipLag > 0 ? ['老芯片？', '落后一代了', '🥱'] : bad ? ['发热呢？', '跑分没用', '😐'] : beat ? ['遥遥领先！', '这次真领先了', '🔥🔥'] : ['够用', '还行吧'],
       mood: bad ? 'bad' : beat ? 'good' : 'meh',
-      pose: ['back', 'wide'],
+      pose: ['back', 'orbit', { spin: 0.45 }],
       explode: true,
       ms: 3800,
     });
@@ -620,7 +620,7 @@ export function buildKeynote(ctx) {
         sub: '主讲人停顿了三秒，只说了四个字：<b>遥遥领先。</b>',
         react: ['遥遥领先！！', '燃起来了', '🚀🚀🚀'],
         mood: 'good',
-        pose: ['hero', 'close', { spin: 0.2 }],
+        pose: ['hero', 'dutch', { spin: 0.25, push: 1.0 }],
         shine: true,
         sfx: 'fanfare',
         ms: 2800,
@@ -637,7 +637,7 @@ export function buildKeynote(ctx) {
       sub: scr === 2 ? '烈日下也看得清：峰值亮度 <b>3000 nit</b>' : '<b>120Hz</b> 高刷，每一次滑动都跟手',
       react: ['好顺滑', '眼睛舒服', '👀'],
       mood: 'good',
-      pose: ['front', 'close', { spin: 0 }],
+      pose: ['front', 'push', { spin: 0, push: 1.5 }],
       ms: 3200,
     });
   }
@@ -655,7 +655,7 @@ export function buildKeynote(ctx) {
       sub: `${C.has('oneinch') ? '一英寸大底' : C.has('periscope') ? '潜望长焦' : tier(d, 'camera').label}，夜景直出，<b>没有修图</b>${bad ? '<br/><small>（不过噪点……大家都看到了）</small>' : ''}`,
       react: bad ? ['说好的影像叙事？', '糊了', '🤨'] : camCap >= 85 ? ['这是手机拍的？', '吊打相机', '📸'] : camCap >= 70 ? ['挺干净', '能发朋友圈'] : ['噪点有点多', '再练练'],
       mood: bad ? 'bad' : camCap >= 85 ? 'good' : camCap >= 70 ? 'meh' : 'bad',
-      pose: ['back', 'top', { spin: 0 }],
+      pose: ['back', 'macro', { spin: 0.05, push: 1.1 }],
       sfx: 'shutter',
       ms: 3600,
     });
@@ -674,7 +674,7 @@ export function buildKeynote(ctx) {
       sub: `重度使用，一次充电撑 <b>${days} 天</b>${bad ? '<br/><small>（实验室数据，仅供参考）</small>' : ''}`,
       react: bad ? ['实验室数据吧', '不信', '🙄'] : days >= 2 ? ['电量焦虑退散', '终于！', '🔋🔋'] : ['还行', '够一天'],
       mood: bad ? 'bad' : days >= 2 ? 'good' : 'meh',
-      pose: ['hero', 'wide'],
+      pose: ['hero', 'low', { spin: 0.15 }],
       ms: 3200,
     });
   }
@@ -687,7 +687,7 @@ export function buildKeynote(ctx) {
       sub: '十分钟充一半。换句话说——<b>充电五分钟，刷剧两小时</b>',
       react: ['这句好耳熟', '充电宝可以扔了', '⚡'],
       mood: 'good',
-      pose: ['front', 'bottom', { spin: 0 }],
+      pose: ['front', 'bottom', { spin: 0, push: 0.9 }],
       ms: 3200,
     });
   }
@@ -701,7 +701,7 @@ export function buildKeynote(ctx) {
       sub: bad ? '手机、手表、电脑、耳机……<b>理论上</b>都能一碰互传' : '手机、手表、电脑、耳机，<b>一碰互传</b>',
       react: bad ? ['理论上？', '又画饼', '🫓'] : ['全家桶安排', '丝滑', '🔗'],
       mood: bad ? 'bad' : 'good',
-      pose: ['front', 'wide'],
+      pose: ['front', 'orbit', { spin: 0.3 }],
       ms: 3000,
     });
   }
@@ -719,7 +719,7 @@ export function buildKeynote(ctx) {
         sub: `<b>${c.name}</b> —— ${c.desc}`,
         react: ['有点意思', '想试试', c.icon],
         mood: 'good',
-        pose: [c.cat === 'cam' ? 'back' : 'hero', c.cat === 'cam' ? 'top' : 'close'],
+        pose: [c.cat === 'cam' ? 'back' : 'hero', c.cat === 'cam' ? 'macro' : 'push', { spin: 0.1, push: 1.2 }],
         ms: 3000,
       });
     });
@@ -740,7 +740,7 @@ export function buildKeynote(ctx) {
         sub: `全球首发：<b>${c.name}</b> —— ${c.desc}`,
         react: ['！！！', '这也行？', '买爆！', '🤯', '冲上热搜'],
         mood: 'good',
-        pose: [i % 2 ? 'hero' : 'back', 'close'],
+        pose: [i % 2 ? 'hero' : 'back', i % 2 ? 'dutch' : 'push', { spin: 0.18, push: 1.3 }],
         fanfare: true,
         ms: 3400,
       });
@@ -757,7 +757,7 @@ export function buildKeynote(ctx) {
       sub: `「这件事，<b>Only ${company} can do.</b>」`,
       react: ['好熟悉的句式', '狂起来了', '😎'],
       mood: 'good',
-      pose: ['hero', 'wide', { spin: 0.25 }],
+      pose: ['hero', 'orbit', { spin: 0.4 }],
       ms: 2600,
     });
   }
@@ -783,7 +783,7 @@ export function buildKeynote(ctx) {
         sub: `不要 <b>¥${v}</b>！`,
         react: i === 0 ? ['来了来了', '熟悉的节奏'] : ['还降？', '😱'],
         mood: 'good',
-        pose: ['hero', 'wide'],
+        pose: ['hero', 'orbit', { spin: 0.35 }],
         ms: 1500,
         notap: true,
       }),
@@ -810,7 +810,7 @@ export function buildKeynote(ctx) {
     sub: `售价……<b>¥${list}</b>？`,
     react: ['啊？', '这么贵'],
     mood: 'meh',
-    pose: ['hero', 'wide'],
+    pose: ['hero', 'high', { spin: 0.2 }],
     ms: 1700,
   });
   const pricy = price >= fair * 1.12;

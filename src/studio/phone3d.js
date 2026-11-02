@@ -177,45 +177,172 @@ function frameMaterial(matId, hex, sub) {
 
 // ═════════════════════════ 贴图 ═════════════════════════
 
-function wallpaperTexture(accent) {
+/** 系统主题：按芯片系列 / 概念件切换锁屏与桌面气质 */
+const OS_THEMES = {
+  蜂鸟: { sky: ['#1a0f08', '#3d1f0a', '#e67e22'], accent: '#f5b041', ui: 'warm', clock: '#fff8e8' },
+  天枢: { sky: ['#060b18', '#12284a', '#5dade2'], accent: '#85c1e9', ui: 'cool', clock: '#eaf2ff' },
+  星火: { sky: ['#1a0505', '#4a1010', '#e74c3c'], accent: '#f1948a', ui: 'fire', clock: '#fff0f0' },
+  玄鸟: { sky: ['#12081c', '#2c1250', '#8e44ad'], accent: '#d2b4de', ui: 'mystic', clock: '#f5eef8' },
+  雷霆: { sky: ['#041018', '#0a2a36', '#1abc9c'], accent: '#48c9b0', ui: 'volt', clock: '#e8fff8' },
+  朱雀: { sky: ['#180808', '#5a1a10', '#e67e22'], accent: '#f5b041', ui: 'fire', clock: '#fff5e6' },
+  青龙: { sky: ['#061410', '#0d3b2e', '#27ae60'], accent: '#82e0aa', ui: 'cool', clock: '#eafaf1' },
+  白泽: { sky: ['#101218', '#2c3e50', '#bdc3c7'], accent: '#ecf0f1', ui: 'mono', clock: '#ffffff' },
+  鲲鹏: { sky: ['#08101c', '#1a3a6a', '#3498db'], accent: '#5dade2', ui: 'cool', clock: '#eaf2ff' },
+  烛龙: { sky: ['#140808', '#3d0a18', '#c0392b'], accent: '#e74c3c', ui: 'fire', clock: '#ffe8e8' },
+};
+function osTheme(design) {
+  const series = design?.chipSeries || '蜂鸟';
+  return OS_THEMES[series] || OS_THEMES['蜂鸟'];
+}
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < String(s || '').length; i++) h = Math.imul(h ^ String(s).charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** 设计台用低清；发布会用高清线性过滤桌面 */
+function wallpaperTexture(designOrAccent, { hd = false } = {}) {
+  const design = typeof designOrAccent === 'object' && designOrAccent ? designOrAccent : { color: designOrAccent };
+  const accent = design.color || '#e67e22';
+  const theme = osTheme(design);
+  const W = hd ? 384 : 96;
+  const H = hd ? 800 : 200;
   return canvasTex(
-    96,
-    200,
+    W,
+    H,
     (g, w, h) => {
-      const grd = g.createLinearGradient(0, 0, w, h);
-      grd.addColorStop(0, shade(accent, 0.22).getStyle());
-      grd.addColorStop(0.55, shade(accent, -0.05).getStyle());
-      grd.addColorStop(1, shade(accent, -0.35).getStyle());
+      const C = new Set(design.concepts || []);
+      // 背景：系列主题渐变 + 机身主色点缀
+      const grd = g.createLinearGradient(0, 0, w * 0.2, h);
+      const sky = theme.sky;
+      grd.addColorStop(0, sky[0]);
+      grd.addColorStop(0.55, sky[1]);
+      grd.addColorStop(1, sky[2]);
       g.fillStyle = grd;
       g.fillRect(0, 0, w, h);
-      g.globalAlpha = 0.22;
-      g.fillStyle = '#fff';
-      for (let i = 0; i < 3; i++) {
+      // 柔光球 / 光斑（高清更多细节）
+      const blobs = hd ? 7 : 3;
+      for (let i = 0; i < blobs; i++) {
+        const seed = hashStr(`${design.chipSeries}|${i}|${accent}`);
+        const cx = ((seed % 1000) / 1000) * w;
+        const cy = (((seed >> 10) % 1000) / 1000) * h * 0.75;
+        const r = (hd ? 90 : 40) + (seed % 60);
+        g.globalAlpha = hd ? 0.22 : 0.18;
+        g.fillStyle = shade(accent, 0.1).getStyle();
         g.beginPath();
-        g.ellipse(w * (0.2 + i * 0.35), h * (0.62 + i * 0.08), 60, 22, -0.5, 0, Math.PI * 2);
+        g.ellipse(cx, cy, r, r * 0.55, -0.4 + (i % 3) * 0.2, 0, Math.PI * 2);
         g.fill();
       }
       g.globalAlpha = 1;
-      g.fillStyle = '#fff';
-      g.textAlign = 'center';
-      g.font = 'bold 26px monospace';
-      g.fillText('10:24', w / 2, 54);
-      g.font = 'bold 8px sans-serif';
-      g.fillText('周五 · 发布会倒计时', w / 2, 68);
-      const icons = ['#ff7675', '#fdcb6e', '#55efc4', '#74b9ff', '#a29bfe', '#fab1a0', '#81ecec', '#ffeaa7'];
-      for (let i = 0; i < 8; i++) {
-        const x = 12 + (i % 4) * 20;
-        const y = 138 + Math.floor(i / 4) * 21;
-        g.fillStyle = icons[i];
-        g.fillRect(x, y, 13, 13);
-        g.fillStyle = 'rgba(255,255,255,.5)';
-        g.fillRect(x, y, 13, 3);
+      // 纸质护眼 / AI 氛围微调
+      if (C.has('paper')) {
+        g.fillStyle = 'rgba(245,230,200,0.18)';
+        g.fillRect(0, 0, w, h);
       }
-      g.fillStyle = 'rgba(255,255,255,.3)';
-      g.fillRect(8, 184, w - 16, 10);
+      if (C.has('privacy')) {
+        g.fillStyle = 'rgba(0,0,0,0.28)';
+        g.fillRect(0, 0, w * 0.18, h);
+        g.fillRect(w * 0.82, 0, w * 0.18, h);
+      }
+      // 状态栏
+      const pad = hd ? 18 : 6;
+      g.fillStyle = 'rgba(255,255,255,0.92)';
+      g.font = hd ? '600 13px "Noto Sans SC",sans-serif' : 'bold 7px sans-serif';
+      g.textAlign = 'left';
+      g.fillText((design.company || '回路').slice(0, 8), pad, hd ? 28 : 12);
+      g.textAlign = 'right';
+      g.fillText(C.has('ai') ? 'AI · 5G' : '5G · 100%', w - pad, hd ? 28 : 12);
+      // 时钟
+      g.textAlign = 'center';
+      g.fillStyle = theme.clock;
+      g.font = hd ? '200 92px "Noto Sans SC",system-ui,sans-serif' : 'bold 26px monospace';
+      g.fillText('10:24', w / 2, hd ? 160 : 54);
+      g.font = hd ? '500 20px "Noto Sans SC",sans-serif' : 'bold 8px sans-serif';
+      g.globalAlpha = 0.85;
+      const dayLine = C.has('ai') ? `${design.chipSeries || '蜂鸟'} 助理已就绪` : `周五 · ${(design.modelName || '新机').slice(0, 8)}`;
+      g.fillText(dayLine, w / 2, hd ? 196 : 68);
+      g.globalAlpha = 1;
+      // 通知卡（高清）
+      if (hd) {
+        g.fillStyle = 'rgba(255,255,255,0.14)';
+        roundRect(g, 28, 230, w - 56, 64, 16);
+        g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.92)';
+        g.font = '600 16px "Noto Sans SC",sans-serif';
+        g.textAlign = 'left';
+        g.fillText(C.has('fold') ? '多任务分屏已开启' : C.has('ai') ? '今日简报已生成' : '发布会倒计时 02:18', 48, 258);
+        g.font = '400 13px "Noto Sans SC",sans-serif';
+        g.fillStyle = 'rgba(255,255,255,0.65)';
+        g.fillText(theme.ui === 'cool' ? '清爽桌面 · 深色模式' : theme.ui === 'fire' ? '高能主题 · 动态壁纸' : '精选壁纸 · 玻璃拟态', 48, 280);
+      }
+      // 图标网格
+      const cols = 4;
+      const rows = hd ? 3 : 2;
+      const icons = theme.ui === 'cool'
+        ? ['#5dade2', '#85c1e9', '#48c9b0', '#aed6f1', '#5499c7', '#76d7c4', '#7fb3d5', '#1abc9c', '#3498db', '#5dade2', '#82e0aa', '#a9cce3']
+        : theme.ui === 'fire'
+          ? ['#e74c3c', '#f5b041', '#e67e22', '#f1948a', '#f39c12', '#c0392b', '#fad7a0', '#e59866', '#cd6155', '#f5b041', '#ec7063', '#dc7633']
+          : theme.ui === 'mystic'
+            ? ['#8e44ad', '#bb8fce', '#5dade2', '#d2b4de', '#af7ac5', '#a569bd', '#7d3c98', '#9b59b6', '#c39bd3', '#6c3483', '#d7bde2', '#5b2c6f']
+            : theme.ui === 'volt'
+              ? ['#1abc9c', '#48c9b0', '#f1c40f', '#76d7c4', '#16a085', '#f7dc6f', '#0e6655', '#58d68d', '#d4efdf', '#117a65', '#82e0aa', '#f9e79f']
+              : theme.ui === 'mono'
+                ? ['#ecf0f1', '#bdc3c7', '#85929e', '#d5dbdb', '#aab7b8', '#f4f6f7', '#7f8c8d', '#ccd1d1', '#cacfd2', '#e5e8e8', '#99a3a4', '#d0d3d4']
+                : ['#ff7675', '#fdcb6e', '#55efc4', '#74b9ff', '#a29bfe', '#fab1a0', '#81ecec', '#ffeaa7', '#f5b041', '#e67e22', '#82e0aa', '#85c1e9'];
+      const cell = hd ? (w - 56) / cols : 20;
+      const iconSize = hd ? cell * 0.58 : 13;
+      const startY = hd ? 340 : 138;
+      const startX = hd ? 28 : 12;
+      for (let i = 0; i < cols * rows; i++) {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const x = startX + c * (hd ? cell : 20) + (hd ? (cell - iconSize) / 2 : 0);
+        const y = startY + r * (hd ? cell * 1.05 : 21);
+        const rr = hd ? 14 : 2;
+        g.fillStyle = icons[i % icons.length];
+        if (hd) {
+          roundRect(g, x, y, iconSize, iconSize, rr);
+          g.fill();
+          g.fillStyle = 'rgba(255,255,255,0.35)';
+          roundRect(g, x + 4, y + 4, iconSize - 8, iconSize * 0.22, 6);
+          g.fill();
+        } else {
+          g.fillRect(x, y, iconSize, iconSize);
+          g.fillStyle = 'rgba(255,255,255,.5)';
+          g.fillRect(x, y, iconSize, 3);
+        }
+      }
+      // Dock
+      if (hd) {
+        g.fillStyle = 'rgba(255,255,255,0.16)';
+        roundRect(g, 36, h - 92, w - 72, 58, 22);
+        g.fill();
+        for (let i = 0; i < 4; i++) {
+          g.fillStyle = icons[i];
+          roundRect(g, 56 + i * 72, h - 80, 40, 40, 12);
+          g.fill();
+        }
+      } else {
+        g.fillStyle = 'rgba(255,255,255,.3)';
+        g.fillRect(8, 184, w - 16, 10);
+      }
+      // Home indicator
+      g.fillStyle = 'rgba(255,255,255,0.55)';
+      const iw = hd ? 96 : 28;
+      g.fillRect((w - iw) / 2, h - (hd ? 18 : 8), iw, hd ? 5 : 3);
     },
-    { nearest: true },
+    { nearest: !hd },
   );
+}
+function roundRect(g, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  g.beginPath();
+  g.moveTo(x + rr, y);
+  g.arcTo(x + w, y, x + w, y + h, rr);
+  g.arcTo(x + w, y + h, x, y + h, rr);
+  g.arcTo(x, y + h, x, y, rr);
+  g.arcTo(x, y, x + w, y, rr);
+  g.closePath();
 }
 
 function glareTexture() {
@@ -463,7 +590,7 @@ export const SPOT = {
   periscope: [0, 0, 'B', 'lens', 'back'], gimbal: [0, 0, 'B', 'lens', 'back'], oneinch: [0, 0, 'B', 'lens', 'back'],
 };
 
-export function buildPhone(design) {
+export function buildPhone(design, { hdScreen = false } = {}) {
   const phys = physical(design);
   const { w, h, thickness: t } = phys;
   const corner = CORNERS[design.corner] || CORNERS[1];
@@ -576,7 +703,7 @@ export function buildPhone(design) {
   const dispGeo = new THREE.ShapeGeometry(roundedRectShape(dispW, dispH, Math.max(0.5, capR - bez)), 24);
   const uv = dispGeo.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / dispW + 0.5, uv.getY(i) / dispH + 0.5);
-  const display = new THREE.Mesh(dispGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture(design.color), toneMapped: false }));
+  const display = new THREE.Mesh(dispGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture(design, { hd: hdScreen }), toneMapped: false }));
   display.position.set(0, kbH / 2, 0.17);
   fa.add(display);
   if (kbH) {
@@ -643,7 +770,7 @@ export function buildPhone(design) {
   plateGeo.translate(0, 0, -0.55);
   let plateMat = null;
   if (C.has('wrap')) {
-    const wp = new THREE.Mesh(plateGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture(shade(design.color, -0.1).getStyle()), toneMapped: false }));
+    const wp = new THREE.Mesh(plateGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture({ ...design, color: shade(design.color, -0.1).getStyle() }, { hd: hdScreen }), toneMapped: false }));
     const uvb = plateGeo.attributes.uv;
     for (let i = 0; i < uvb.count; i++) uvb.setXY(i, uvb.getX(i) / capW + 0.5, uvb.getY(i) / capH + 0.5);
     back.add(wp);
@@ -1052,7 +1179,7 @@ export function buildPhone(design) {
     body.geometry.translate(0, 0, -(st - 1) / 2);
     g.add(body);
     if (withScreen) {
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(sw - 3, sh - 3), new THREE.MeshBasicMaterial({ map: wallpaperTexture(design.color), toneMapped: false }));
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(sw - 3, sh - 3), new THREE.MeshBasicMaterial({ map: wallpaperTexture(design, { hd: hdScreen }), toneMapped: false }));
       scr.position.z = st / 2 + 0.05;
       g.add(scr);
     }
@@ -1243,7 +1370,7 @@ export function buildPhone(design) {
     layers.frame.add(beam);
     const img = new THREE.Mesh(
       new THREE.PlaneGeometry(46, 26),
-      new THREE.MeshBasicMaterial({ map: wallpaperTexture(design.color), transparent: true, opacity: 0.85, toneMapped: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ map: wallpaperTexture(design, { hd: hdScreen }), transparent: true, opacity: 0.85, toneMapped: false, side: THREE.DoubleSide }),
     );
     img.position.set(w * 0.22, h / 2 + 44, 0);
     img.layers.set(FX);
@@ -1553,6 +1680,11 @@ const SHOTS = {
   top: { z: 0.56, look: 0.24 },
   bottom: { z: 0.56, look: -0.28 },
   macro: { z: 0.4, look: 0.18 },
+  push: { z: 0.58, look: 0.04 },
+  orbit: { z: 0.88, look: 0.02, orbit: 0.55 },
+  dutch: { z: 0.7, look: 0.06, dutch: 0.14 },
+  low: { z: 0.82, look: -0.22 },
+  high: { z: 0.8, look: 0.32 },
 };
 
 export class PhoneStage {
@@ -1778,10 +1910,20 @@ export class PhoneStage {
     this.scene.add(set);
   }
 
-  _drawWall(mode, design, time = 0) {
+  /** LED 墙始终按 240×72 逻辑坐标绘制，物理分辨率可放大到高清 */
+  _wallCtx() {
     const g = this.wallCanvas.getContext('2d');
-    const W = this.wallCanvas.width;
-    const H = this.wallCanvas.height;
+    const LW = 240;
+    const LH = 72;
+    const sx = this.wallCanvas.width / LW;
+    const sy = this.wallCanvas.height / LH;
+    g.setTransform(sx, 0, 0, sy, 0, 0);
+    g.imageSmoothingEnabled = true;
+    return { g, W: LW, H: LH, sx, sy };
+  }
+
+  _drawWall(mode, design, time = 0) {
+    const { g, W, H } = this._wallCtx();
     g.fillStyle = '#07060b';
     g.fillRect(0, 0, W, H);
     g.textAlign = 'center';
@@ -1803,24 +1945,25 @@ export class PhoneStage {
       g.fillStyle = '#ffd08a';
       g.fillText(`${design.company || ''} · 发布会`, W / 2, H - 10);
     }
-    g.fillStyle = 'rgba(0,0,0,.35)';
-    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    // 高清模式下减弱扫描线，避免廉价感
+    if (!this._present) {
+      g.fillStyle = 'rgba(0,0,0,.35)';
+      for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    }
     this.wallTex.needsUpdate = true;
   }
 
   /** 发布会幻灯片：在 LED 大屏上自定义绘制 */
   wallSlide(draw) {
     this.wallFn = null;
-    const g = this.wallCanvas.getContext('2d');
-    const W = this.wallCanvas.width;
-    const H = this.wallCanvas.height;
-    g.save();
+    const { g, W, H } = this._wallCtx();
     g.fillStyle = '#07060b';
     g.fillRect(0, 0, W, H);
     draw(g, W, H);
-    g.restore();
-    g.fillStyle = 'rgba(0,0,0,.35)';
-    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    if (!this._present) {
+      g.fillStyle = 'rgba(0,0,0,.35)';
+      for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    }
     this.wallTex.needsUpdate = true;
     if (this.reveal) this.reveal.lastWall = 1e9; // 不让预告画面覆盖
   }
@@ -1836,10 +1979,7 @@ export class PhoneStage {
     if (!f) return;
     if (!force && now - f.last < 33) return;
     f.last = now;
-    const g = this.wallCanvas.getContext('2d');
-    const W = this.wallCanvas.width;
-    const H = this.wallCanvas.height;
-    g.save();
+    const { g, W, H } = this._wallCtx();
     g.fillStyle = '#07060b';
     g.fillRect(0, 0, W, H);
     try {
@@ -1847,9 +1987,10 @@ export class PhoneStage {
     } catch (e) {
       this.wallFn = null;
     }
-    g.restore();
-    g.fillStyle = 'rgba(0,0,0,.3)';
-    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    if (!this._present) {
+      g.fillStyle = 'rgba(0,0,0,.3)';
+      for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    }
     this.wallTex.needsUpdate = true;
     if (this.reveal) this.reveal.lastWall = 1e9;
   }
@@ -1858,10 +1999,18 @@ export class PhoneStage {
    * 发布会运镜：view = 机身朝向，shot = 景别
    *   wide 全景 · close 近景 · top 顶部特写（镜头模组）· bottom 底部特写（接口）· macro 大特写
    */
-  pose(view = 'hero', shot = 'wide', { spin = 0.12 } = {}) {
+  pose(view = 'hero', shot = 'wide', { spin = 0.12, push = 0 } = {}) {
     if (view) this.view(view);
-    this.camShot = SHOTS[shot] || SHOTS.wide;
-    this.showSpin = spin;
+    const s = SHOTS[shot] || SHOTS.wide;
+    this.camShot = { ...s };
+    this.showSpin = s.orbit != null ? s.orbit : spin;
+    this.camDutch = s.dutch || 0;
+    // 卖点页可做一次推近：push>0 时从更远缓推到目标景别
+    if (push > 0) {
+      this.camPush = { t0: performance.now(), ms: push * 1000, fromZ: Math.min(1.15, (s.z || 1) + 0.28), toZ: s.z || 1 };
+    } else {
+      this.camPush = null;
+    }
   }
 
   /**
@@ -1954,7 +2103,7 @@ export class PhoneStage {
       disposeObject(this.phone.root);
     }
     this.design = design;
-    this.phone = buildPhone(design);
+    this.phone = buildPhone(design, { hdScreen: !!this._present });
     this.dims = this.phone.dims;
     this.pivot.add(this.phone.root);
     this.pedestal.position.y = -this.dims.h / 2 - 14;
@@ -2059,18 +2208,37 @@ export class PhoneStage {
     this.renderer.setPixelRatio(Math.min(dpr, on ? 3 : 2));
     if (on) {
       this.key.shadow.mapSize.set(2048, 2048);
-      this.key.intensity = Math.max(this.key.intensity, 2.4);
-      this.rim.intensity = Math.max(this.rim.intensity, 1.6);
-      this.hemi.intensity = Math.max(this.hemi.intensity, 1.15);
-      this.scene.environmentIntensity = Math.max(this.scene.environmentIntensity, 1.05);
+      this.key.intensity = Math.max(this.key.intensity, 2.55);
+      this.rim.intensity = Math.max(this.rim.intensity, 1.85);
+      this.hemi.intensity = Math.max(this.hemi.intensity, 1.2);
+      this.scene.environmentIntensity = Math.max(this.scene.environmentIntensity, 1.15);
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.12;
+      this.renderer.toneMappingExposure = 1.15;
+      // LED 墙升到高清线性过滤，告别像素块
+      if (this.wallCanvas) {
+        this.wallCanvas.width = 960;
+        this.wallCanvas.height = 288;
+        this.wallTex.magFilter = THREE.LinearFilter;
+        this.wallTex.minFilter = THREE.LinearFilter;
+        this.wallTex.generateMipmaps = true;
+        this.wallTex.needsUpdate = true;
+      }
     } else {
       this.key.shadow.mapSize.set(1024, 1024);
       this.renderer.toneMapping = THREE.NoToneMapping;
       this.renderer.toneMappingExposure = 1;
+      if (this.wallCanvas) {
+        this.wallCanvas.width = 240;
+        this.wallCanvas.height = 72;
+        this.wallTex.magFilter = THREE.NearestFilter;
+        this.wallTex.minFilter = THREE.NearestFilter;
+        this.wallTex.generateMipmaps = false;
+        this.wallTex.needsUpdate = true;
+      }
     }
     this.renderer.shadowMap.needsUpdate = true;
+    // 重建机身以切换高清屏幕桌面
+    if (this.design) this.setDesign(this.design);
     this.resize();
   }
 
@@ -2339,14 +2507,22 @@ export class PhoneStage {
       camZ = this.baseZ - 34 * easeInOut(seg(t, 3.6, 6)) + this.explode * 150;
       camY = 14 - 28 * easeInOut(seg(t, 0.5, 3.6));
       if (r.done && this.camShot) {
-        camZ *= this.camShot.z;
+        let zMul = this.camShot.z;
+        if (this.camPush) {
+          const pk = Math.min(1, (now - this.camPush.t0) / this.camPush.ms);
+          const e = 1 - Math.pow(1 - pk, 3);
+          zMul = this.camPush.fromZ + (this.camPush.toZ - this.camPush.fromZ) * e;
+          if (pk >= 1) this.camPush = null;
+        }
+        camZ = this.baseZ * zMul + this.explode * 150;
         camY = -14 + this.camShot.look * this.dims.h;
       }
       fire('done', 4.8, () => {
         r.done = true;
         r.onBeat?.('done');
       });
-      this.pivot.rotation.set(this.rotX, this.rotY, 0);
+      const dutch = r.done ? (this.camDutch || 0) : 0;
+      this.pivot.rotation.set(this.rotX, this.rotY, dutch);
     } else {
       if (this.stageMix > 0) this._setStageMix(Math.max(0, this.stageMix - dt * 1.8));
       this.ledMat.color.lerp(new THREE.Color(0xff9a3c), 0.1);
@@ -2389,9 +2565,9 @@ export class PhoneStage {
       if (k >= 1) {
         this.shineFx = null;
         this.scene.environmentRotation.set(0, 0, 0);
-        this.scene.environmentIntensity = 0.85;
+        this.scene.environmentIntensity = this._present ? 1.15 : 0.85;
         this.key.position.set(150, 260, 280);
-        this.key.intensity = 2.0;
+        this.key.intensity = this._present ? 2.55 : 2.0;
       } else {
         const e = easeInOut(k);
         this.scene.environmentRotation.set(0, -1.2 + e * 2.4, 0);
