@@ -5,3 +5,5 @@ dist
 .vite
 .vercel
 .env*
+dist-artifact/
+dist-single/

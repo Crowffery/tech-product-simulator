@@ -1,0 +1,63 @@
+/**
+ * 术语点击解释：界面上只露出带虚线的词，点了才弹出一句话解释。
+ * 只解释「是什么」，不公布公式——数值关系留给玩家自己体会。
+ */
+export const TERMS = {
+  定位: '这一代卖给谁。不同定位的用户在意的东西不一样，研发该往哪里使劲，也跟着不一样。',
+  卖点: '发布会上对用户的承诺。说了就要做到，做不到会被骂「货不对板」。',
+  售价带: '卖多贵。贵了利润厚但买的人少；便宜走量但利润薄。和定位不配会被吐槽。',
+  档期: '一年里有些月份大家更愿意买手机，有些月份很冷清。上市时间踩得准，同样的手机卖得更多。',
+  撞档: '竞品和你同一时间发布同类手机，会分走一部分买家。',
+  备货: '首批生产多少台。备少了卖断货伤口碑，备多了堆在仓库里压钱。',
+  研发上限: '部件决定了每一项最多能做到多好（进度条上的红线），研发只能逼近它。',
+  概念件: '让手机与众不同的特殊部件。市场上没见过的最值钱，但新工艺也容易出问题。',
+  大改款: '推倒重来：形体和概念件都能改，要开新模具、多花一个月。',
+  小改款: '在上一代基础上微调，快而稳，但新鲜感有限。',
+  惊艳度: '媒体和用户觉得这台手机有多惊艳：既要新，也要做得好。',
+  新颖度: '这台手机有多少东西是市场上没见过的。竞品跟进以后，同样的东西就不新了。',
+  完成度: '想法落地得怎么样。研发做得越充分、工艺越成熟，完成度越高。',
+  出圈度: '会不会被路人自发转发。越夸张、越首发，越容易出圈。',
+  期望线: '大家对你下一代的期待。原地踏步的话，评分会越来越低。',
+  配比: '研发力气在各项之间的分配。每种定位都有自己最合适的配比，需要你慢慢摸索。',
+  企划笔记: '摸清某个定位的最佳配比后会自动记下来，以后团队就按它干。',
+  提前量产: '还没做完就开工生产，用做工换时间——比如为了赶上档期。',
+  长尾: '上一代手机在新品研发期间还会继续卖，一个月比一个月少。',
+  流片: '把新一代芯片设计变成实物。要花钱、要时间，成功后性能上一个台阶。',
+  研发点: '每次发布积累的技术经验，用来解锁新的概念件。',
+  扩建: '换更大的办公室：人更多、名气更大，房租也更贵。',
+  首发: '全世界第一个把它做出来的。首发的东西最能让人记住。',
+};
+
+/** 生成可点击的术语 */
+export function term(key, label = key) {
+  if (!TERMS[key]) return label;
+  return `<button type="button" class="term" data-term="${key}">${label}</button>`;
+}
+
+let installed = false;
+export function installGlossary() {
+  if (installed) return;
+  installed = true;
+  document.addEventListener(
+    'click',
+    (e) => {
+      const t = e.target.closest?.('.term');
+      document.querySelectorAll('.term-pop').forEach((p) => p.remove());
+      if (!t) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const key = t.dataset.term;
+      const pop = document.createElement('div');
+      pop.className = 'term-pop';
+      pop.innerHTML = `<b>${key}</b><p>${TERMS[key]}</p>`;
+      document.body.appendChild(pop);
+      const r = t.getBoundingClientRect();
+      const w = Math.min(280, window.innerWidth - 24);
+      pop.style.width = `${w}px`;
+      pop.style.left = `${Math.max(12, Math.min(window.innerWidth - w - 12, r.left + r.width / 2 - w / 2))}px`;
+      const below = r.bottom + 8 + pop.offsetHeight < window.innerHeight;
+      pop.style.top = `${below ? r.bottom + 8 : r.top - pop.offsetHeight - 8}px`;
+    },
+    true,
+  );
+}
