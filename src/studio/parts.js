@@ -3,7 +3,7 @@
 export const POSITIONS = [
   { id: 'flagship', name: '旗舰', weightMax: 230, thickMax: 9.2 },
   { id: 'mainstream', name: '主流', weightMax: 200, thickMax: 8.8 },
-  { id: 'minimal', name: '极简', weightMax: 180, thickMax: 8.2 },
+  { id: 'minimal', name: '轻巧', weightMax: 180, thickMax: 8.2 },
   { id: 'pro', name: '专业', weightMax: 240, thickMax: 9.6 },
 ];
 
@@ -62,6 +62,31 @@ export const PARTS = {
 
 export const PART_ORDER = ['chip', 'screen', 'camera', 'battery', 'material', 'size'];
 
+/**
+ * 材质子类：金属 / 素皮下面还有细分，成本、重量、散热、质感都不一样
+ *   cost 成本点（×70 元）· weight 克 · heat 续航上限修正（散热）· design 外观上限修正
+ */
+export const MAT_SUBS = {
+  2: [
+    { id: 'al', label: '铝合金', cost: 0, weight: 0, heat: 3, design: 0, note: '轻、散热好、最常见' },
+    { id: 'steel', label: '不锈钢', cost: 2, weight: 18, heat: 0, design: 3, note: '镜面光泽，结实但沉' },
+    { id: 'ti', label: '钛合金', cost: 5, weight: -10, heat: -4, design: 6, note: '轻又硬，最贵；导热差，散热不如铝' },
+  ],
+  3: [
+    { id: 'fiber', label: '纤维素皮', cost: 0, weight: 0, heat: 0, design: 0, note: '仿皮质感，耐脏好打理' },
+    { id: 'vegan', label: '硅胶素皮', cost: 1, weight: -2, heat: 0, design: 2, note: '更软更细腻，不易发黄' },
+    { id: 'leather', label: '真皮', cost: 4, weight: 4, heat: -1, design: 5, note: '真皮会随使用养出包浆，最贵' },
+  ],
+};
+export function matSub(design) {
+  const list = MAT_SUBS[design.parts?.material];
+  if (!list) return null;
+  return list.find((x) => x.id === design.matSub) || list[0];
+}
+
+/** 屏幕开孔形态：影响成本，属于硬件配置 */
+export const FORM_COST_NOTE = { bezel: '最便宜，边框宽', punch: '主流方案', center: '对称好看', full: '要更贵的屏幕和屏下方案' };
+
 export const CORNERS = [
   { id: 0, label: '方', r: 4.5, bevel: 0.7 },
   { id: 1, label: '圆', r: 9, bevel: 1.6 },
@@ -89,6 +114,9 @@ export const TWO_TONE = [
   { id: 'none', label: '纯色' },
   { id: 'frame', label: '边框撞色' },
   { id: 'band', label: '上下拼色' },
+  { id: 'vsplit', label: '左右拼色' },
+  { id: 'diag', label: '斜切拼色' },
+  { id: 'module', label: '镜头区异色' },
 ];
 
 /** 像素色板（虚构色名） */
@@ -192,6 +220,7 @@ export function chipSpec(design) {
 
 /** 形体与读数 */
 export function physical(design) {
+  const sub = matSub(design);
   const size = tier(design, 'size');
   const bat = tier(design, 'battery');
   const mat = tier(design, 'material');
@@ -205,12 +234,13 @@ export function physical(design) {
   const cCost = cs.reduce((a, c) => a + c.cost, 0);
   const thickness = +(6.6 + bat.thick + mat.thick + chip.heat * 0.15 + cThick).toFixed(1);
   const volume = (size.w * size.h * (thickness - cThick)) / 1000; // cm³
-  const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight);
-  const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost;
+  const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight + (sub?.weight || 0));
+  const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost + (sub?.cost || 0);
   // 外购芯片：不用自己流片，但每台都要给芯片厂交钱
   const extChip = design.chipSrc === 'ext' ? 6 + chip.id * 3 : 0;
-  const unitCost = (costPts + extChip) * 55;
-  const band = unitCost < 1300 ? '亲民带 ¥1999' : unitCost < 2300 ? '主流带 ¥3999' : '旗舰带 ¥6999';
+  // 真实 BOM 量级：部件 + 组装测试包装授权约 ¥250
+  const unitCost = Math.round((costPts + extChip) * 70 + 250);
+  const band = unitCost < 1700 ? '亲民带 ¥1999' : unitCost < 2900 ? '主流带 ¥3999' : '旗舰带 ¥6999';
   return { w: size.w, h: size.h, thickness, weight, bench: chip.bench, unitCost, band, bump: cam.bump };
 }
 
@@ -226,11 +256,12 @@ export function slotCaps(design) {
   const cs = (design.concepts || []).map((id) => CONCEPTS.find((x) => x.id === id)).filter(Boolean);
   const add = (k) => cs.reduce((a, x) => a + (x.caps[k] || 0), 0);
   const fan = cs.some((x) => x.id === 'fan');
+  const sub = matSub(design);
   return [
     { id: 'perf', name: '性能', cap: c(chip.cap) },
-    { id: 'design', name: '屏幕与外观', cap: c(mat.cap + scr.design - 10 + add('design')) },
+    { id: 'design', name: '屏幕与外观', cap: c(mat.cap + scr.design - 10 + add('design') + (sub?.design || 0)) },
     { id: 'camera', name: '影像', cap: c(cam.cap + (sz === 2 ? 5 : 0) + add('camera')) },
-    { id: 'battery', name: '续航与稳定', cap: c(bat.cap - (fan ? 0 : chip.heat * 5) + (sz === 2 ? 5 : sz === 0 ? -5 : 0) + add('battery')) },
+    { id: 'battery', name: '续航与稳定', cap: c(bat.cap - (fan ? 0 : chip.heat * 5) + (sz === 2 ? 5 : sz === 0 ? -5 : 0) + add('battery') + (sub?.heat || 0)) },
     { id: 'os', name: '系统与生态', cap: c(scr.os) },
   ];
 }
@@ -345,14 +376,14 @@ export const TIERS = [
 export const CONCEPTS = [
   // ── 1 车库脑洞 ──
   { id: 'lights', cat: 'body', appear: {gen:1}, tier: 1, name: '灯效后盖', icon: '💡', desc: '会呼吸的灯带', cost: 3, thick: 0.1, weight: 3, caps: { battery: -3 }, buzz: 3, risk: 6, conflicts: ['wrap', 'eink'] },
-  { id: 'shutter', cat: 'cam', appear: {gen:1}, tier: 1, name: '机械快门键', icon: '📸', desc: '侧边橙色快门', cost: 1, thick: 0, weight: 2, caps: { camera: 5 }, buzz: 2, risk: 4, conflicts: [] },
+  { id: 'shutter', cat: 'cam', appear: {gen:1}, tier: 1, name: '相机控制键', icon: '📸', desc: '侧边实体键：按压拍照、轻滑变焦，海外版兼作 AI 键', cost: 1, thick: 0, weight: 2, caps: { camera: 5 }, buzz: 2, risk: 4, conflicts: [] },
   { id: 'keyboard', cat: 'form', appear: {gen:1}, tier: 1, name: '实体键盘', icon: '⌨️', desc: '正面下半是键盘', cost: 4, thick: 0.2, weight: 14, caps: { camera: -10, design: -5 }, buzz: 6, risk: 8, conflicts: ['fold', 'trifold', 'rollable', 'swivel', 'wrap'] },
   { id: 'clear', cat: 'body', appear: {gen:1}, tier: 1, name: '透明后盖', icon: '🔍', desc: '让内部元件当装饰', group: 'back', cost: 4, thick: 0, weight: 2, caps: { design: -5 }, buzz: 6, risk: 8, conflicts: [] },
   { id: 'subscreen', cat: 'form', appear: {gen:2}, tier: 1, name: '背部副屏', icon: '📟', desc: '背面一块小彩屏', cost: 5, thick: 0.3, weight: 8, caps: { battery: -5 }, buzz: 5, risk: 8, conflicts: ['eink', 'wrap', 'crystal', 'solar', 'modular', 'pet', 'watch'] },
   // ── 2 工程魔改 ──
   { id: 'eink', cat: 'form', appear: {gen:3}, tier: 2, name: '墨水背屏', icon: '📜', desc: '整块墨水屏后盖', group: 'back', cost: 6, thick: 0.4, weight: 10, caps: { battery: 5 }, buzz: 5, risk: 10, conflicts: ['fan', 'pet'] },
   { id: 'fan', cat: 'power', appear: {gen:3}, tier: 2, name: '主动散热风扇', icon: '🌀', desc: '背面会转的风扇', cost: 4, thick: 1.2, weight: 16, caps: {}, buzz: 5, risk: 8, conflicts: ['wrap', 'solar', 'modular', 'watch'] },
-  { id: 'sat', cat: 'fun', appear: {gen:3}, tier: 2, name: '卫星天线', icon: '📡', desc: '顶部翻折小天线', cost: 5, thick: 0, weight: 6, caps: {}, buzz: 5, risk: 10, conflicts: [] },
+  { id: 'sat', cat: 'fun', appear: {gen:3}, tier: 2, name: '卫星通信', icon: '📡', desc: '没有基站信号也能发卫星短信，户外救命', cost: 5, thick: 0, weight: 6, caps: {}, buzz: 5, risk: 10, conflicts: [] },
   { id: 'popup', cat: 'cam', appear: {gen:3}, tier: 2, name: '升降镜头', icon: '🎚️', desc: '前摄藏在顶部，用时弹出', cost: 5, thick: 0.4, weight: 8, caps: { design: 5 }, buzz: 6, risk: 12, conflicts: [] },
   { id: 'battswap', cat: 'power', appear: {gen:3}, tier: 2, name: '可换电池', icon: '🔋', desc: '后盖一推，电池拔下来', cost: 3, thick: 0.6, weight: 10, caps: { battery: 6 }, buzz: 5, risk: 8, conflicts: ['crystal', 'wrap'] },
   { id: 'stylus', cat: 'fun', appear: {gen:3}, tier: 2, name: '内置手写笔', icon: '🖊️', desc: '底部抽出一支笔', cost: 4, thick: 0.2, weight: 6, caps: { os: 5 }, buzz: 4, risk: 8, conflicts: [] },
@@ -396,6 +427,10 @@ export const CONCEPTS = [
   { id: 'ai', cat: 'fun', appear: {chip:3}, tier: 3, name: '端侧 AI 芯片', icon: '🤖', desc: '离线大模型助手', cost: 8, thick: 0, weight: 2, caps: { os: 12, battery: -4 }, buzz: 9, risk: 12, conflicts: [] },
 ];
 export const MAX_CONCEPTS = 3;
+
+/** 实用功能：常规配置，不占「创新」名额 */
+export const PRACTICAL = new Set(['jack', 'ir', 'sdcard', 'ip68', 'haptics', 'ultrasonic', 'reverse', 'fastcharge', 'shutter', 'facelock', 'magcharge', 'paper', 'privacy', 'sicarbon']);
+export const innovCount = (ids = []) => ids.filter((id) => !PRACTICAL.has(id)).length;
 
 export const CATS = [
   { id: 'cam', name: '影像', icon: '📷' },
@@ -485,7 +520,7 @@ export function hasC(d, id) {
 export const RIVALS = [
   { brand: '蓝莓科技', style: '挤牙膏冠军', latest: '蓝莓 14 Pro Max Plus', concepts: [], combos: [], crowd: ['大底三摄', '方形模组'] },
   { brand: '方块数码', style: '电竞狂魔', latest: '方块 RedPlay 7', concepts: ['lights', 'fan'], combos: ['gamer'], crowd: ['灯效后盖', '散热风扇'] },
-  { brand: '极光移动', style: '户外硬汉', latest: '极光 Trek 3', concepts: ['sat', 'shutter'], combos: [], crowd: ['卫星天线'] },
+  { brand: '极光移动', style: '户外硬汉', latest: '极光 Trek 3', concepts: ['sat', 'shutter'], combos: [], crowd: ['卫星通信'] },
 ];
 
 export function conceptName(id) {
@@ -619,4 +654,23 @@ export function marketNews(museum) {
 
 export function wowGrade(score) {
   return score >= 70 ? 'S' : score >= 55 ? 'A' : score >= 40 ? 'B' : 'C';
+}
+
+/**
+ * 和上一代有多像（0～1）：配置、概念件、配色、造型都算
+ * 一模一样的手机再卖一次，用户会审美疲劳
+ */
+export function similarity(a, b) {
+  if (!a || !b) return 0;
+  const keys = PART_ORDER;
+  const parts = keys.filter((k) => a.parts?.[k] === b.parts?.[k]).length / keys.length;
+  const ca = new Set(a.concepts || []);
+  const cb = new Set(b.concepts || []);
+  const uni = new Set([...ca, ...cb]);
+  const concepts = uni.size ? [...ca].filter((x) => cb.has(x)).length / uni.size : 1;
+  const look =
+    [a.color?.toLowerCase() === b.color?.toLowerCase(), a.layout === b.layout, a.corner === b.corner, a.screenForm === b.screenForm, a.twoTone === b.twoTone, (a.matSub || '') === (b.matSub || '')].filter(Boolean)
+      .length / 6;
+  const chip = (a.chipGen || 1) === (b.chipGen || 1) ? 1 : 0;
+  return Math.round((parts * 0.3 + concepts * 0.3 + look * 0.25 + chip * 0.15) * 100) / 100;
 }
