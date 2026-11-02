@@ -352,3 +352,66 @@ button:disabled.chip, button:disabled.tier { opacity: .4; }
 .simbar.mid i b { background: #f39c12; } .simbar.bad i b { background: #e74c3c; }
 .simbar small { grid-column: 1 / -1; font-weight: 400; color: #6d5c4d; }
 .simbar.bad small { color: #c0392b; font-weight: 800; }
+.part-note.warn { color: #c0392b; font-weight: 800; }
+.c-unlock { display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 900; padding: 4px 6px; line-height: 1.1; }
+.c-unlock em { font-style: normal; font-size: .76rem; }
+.c-unlock .cost { display: inline-flex; align-items: center; gap: 2px; font-size: .64rem; color: #1f618d; background: #ebf5fb; border: 1px solid #5dade2; padding: 0 4px; }
+.pxi { display: inline-block; image-rendering: pixelated; vertical-align: -2px; }
+
+/* ═════ 设计台 v2：手机上「边看边改」 ═════ */
+.panel-top { background: var(--panel); }
+.summary .readouts { gap: 4px; margin: 0 0 6px; }
+.summary .ro { padding: 2px 4px; box-shadow: 1px 1px 0 var(--shadow); border-width: 2px; }
+.summary .ro b { font-size: .9rem; }
+.summary .ro span { font-size: .58rem; }
+.summary .ro em { display: none; }
+.summary .simbar { margin: 0 0 6px; font-size: .68rem; }
+.summary .simbar small { display: none; }
+.tabs { gap: 4px; margin-bottom: 6px; }
+.tab { padding: 7px 2px; font-size: .82rem; }
+.actions.quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 4px 0 8px; }
+.actions.quick button { padding: 5px 4px; font-size: .74rem; }
+.confirm-bar { position: sticky; bottom: 0; z-index: 6; margin: 10px -12px -14px; padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(180deg, rgba(255,248,232,0), var(--panel) 30%); }
+.confirm-bar .launch-btn { width: 100%; padding: 12px; font-size: 1.05rem; font-weight: 900; }
+.ifilter { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 4px; scrollbar-width: none; }
+.ifilter::-webkit-scrollbar { display: none; }
+.ifilter .chip { flex: 0 0 auto; white-space: nowrap; }
+details.museum-wrap > summary { cursor: pointer; list-style: none; }
+details.museum-wrap > summary::-webkit-details-marker { display: none; }
+details.chipchart > summary { cursor: pointer; }
+.eval .sub:first-child { margin-top: 0; }
+
+@media (max-width: 900px) {
+  /* 3D 预览钉在顶部，选部件时随时看得到 */
+  .viewport { position: sticky; top: var(--hud-top, 0px); height: clamp(180px, 28vh, 280px); min-height: 0; z-index: 7; margin-bottom: 0; }
+  .view-btns { top: 6px; left: 6px; gap: 3px; }
+  .view-btns button { padding: 2px 6px; font-size: .68rem; }
+  .plaque { transform: scale(.82); transform-origin: bottom center; }
+  .panel { padding-top: 0; }
+  .panel-top { position: sticky; top: calc(var(--hud-top, 0px) + clamp(180px, 28vh, 280px)); z-index: 6; margin: 0 -12px; padding: 6px 12px 0; border-bottom: 3px solid var(--border); box-shadow: 0 3px 0 rgba(0,0,0,.08); }
+  .studio { gap: 0; }
+  .part-row { grid-template-columns: 3.6em 1fr; gap: 4px; margin-top: 5px; }
+  .part-name { font-size: .76rem; }
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); gap: 3px; }
+  .tier { padding: 5px 2px; font-size: .74rem; }
+  .tier small { display: block; font-size: .6rem; }
+  .part-note { margin-left: 4.2em; font-size: .66rem; }
+  .studio-head { padding: 4px 10px; margin-bottom: 6px; gap: 6px; }
+  .studio-head h1 { font-size: 1.1rem; }
+  .studio-head .news { font-size: .7rem; padding: 2px 6px; flex: 1 1 100%; }
+  .studio-head .mute { display: none; }
+}
+body.phase-design { --hud-top: 50px; }
+body.phase-design .g-rail { display: none; }
+
+@media (max-width: 900px) {
+  .summary .readouts { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 4px; }
+  .summary .ro { display: flex; flex-direction: column; justify-content: center; padding: 1px 2px; }
+  .summary .ro span { font-size: .54rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .summary .ro b { font-size: .8rem; line-height: 1.1; }
+  .summary .simbar { margin-bottom: 4px; }
+  .tabs .tab { padding: 5px 2px; font-size: .76rem; }
+  .confirm-bar { padding-top: 6px; }
+  .confirm-bar .launch-btn { padding: 10px; font-size: .98rem; }
+}
+@media (max-width: 900px) { .part-row { align-items: start; } .part-name { padding-top: 6px; } }

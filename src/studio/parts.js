@@ -100,15 +100,27 @@ export const SCREEN_FORMS = [
   { id: 'full', label: '全面屏', bezel: 1.1, cost: 3 },
 ];
 
+/**
+ * 镜头模组：不只是造型。模组越大，能塞的东西越多，也越贵。
+ *   big: 能放下潜望长焦 / 一英寸大底 · cost 成本点 · cam 影像上限修正
+ */
 export const LAYOUTS = [
-  { id: 'vpill', label: '竖排胶囊' },
-  { id: 'square', label: '方形模组' },
-  { id: 'circle', label: '居中大圆' },
-  { id: 'hpill', label: '横向胶囊' },
-  { id: 'float', label: '悬浮独立' },
-  { id: 'glasses', label: '双圆眼镜' },
-  { id: 'diamond', label: '菱形模组' },
+  { id: 'vpill', label: '竖排胶囊', cost: 0, cam: 0, big: false, note: '最常见，空间够放三摄，但塞不下潜望和大底' },
+  { id: 'square', label: '方形模组', cost: 2, cam: 2, big: true, note: '空间大：潜望长焦、一英寸大底都放得下' },
+  { id: 'circle', label: '居中大圆', cost: 2, cam: 3, big: true, note: '影像旗舰的标志，最适合一英寸大底' },
+  { id: 'hpill', label: '横向胶囊', cost: 1, cam: 0, big: false, note: '横排设计，能放潜望长焦，大底放不下' },
+  { id: 'float', label: '悬浮独立', cost: 0, cam: -2, big: false, note: '每颗镜头单独开孔，最省空间也最省钱，堆不了料' },
+  { id: 'glasses', label: '双圆眼镜', cost: 1, cam: 0, big: false, note: '辨识度高，适合双摄' },
+  { id: 'diamond', label: '菱形模组', cost: 1, cam: 0, big: false, note: '小众造型，辨识度很高' },
 ];
+export const layoutOf = (d) => LAYOUTS.find((l) => l.id === d.layout) || LAYOUTS[0];
+
+/** 某些部件需要大模组才放得下 */
+export const NEEDS_BIG = { periscope: ['square', 'circle', 'hpill'], oneinch: ['square', 'circle'] };
+export function moduleFit(design) {
+  const bad = (design.concepts || []).filter((id) => NEEDS_BIG[id] && !NEEDS_BIG[id].includes(design.layout));
+  return bad;
+}
 
 export const TWO_TONE = [
   { id: 'none', label: '纯色' },
@@ -235,7 +247,7 @@ export function physical(design) {
   const thickness = +(6.6 + bat.thick + mat.thick + chip.heat * 0.15 + cThick).toFixed(1);
   const volume = (size.w * size.h * (thickness - cThick)) / 1000; // cm³
   const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight + (sub?.weight || 0));
-  const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost + (sub?.cost || 0);
+  const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost + (sub?.cost || 0) + layoutOf(design).cost;
   // 外购芯片：不用自己流片，但每台都要给芯片厂交钱
   const extChip = design.chipSrc === 'ext' ? 6 + chip.id * 3 : 0;
   // 真实 BOM 量级：部件 + 组装测试包装授权约 ¥250
@@ -260,7 +272,8 @@ export function slotCaps(design) {
   return [
     { id: 'perf', name: '性能', cap: c(chip.cap) },
     { id: 'design', name: '屏幕与外观', cap: c(mat.cap + scr.design - 10 + add('design') + (sub?.design || 0)) },
-    { id: 'camera', name: '影像', cap: c(cam.cap + (sz === 2 ? 5 : 0) + add('camera')) },
+    // 模组塞不下的部件，影像加成只剩一半
+    { id: 'camera', name: '影像', cap: c(cam.cap + (sz === 2 ? 5 : 0) + add('camera') + layoutOf(design).cam - moduleFit(design).reduce((a, id) => a + Math.round((CONCEPTS.find((x) => x.id === id)?.caps.camera || 0) / 2), 0)) },
     { id: 'battery', name: '续航与稳定', cap: c(bat.cap - (fan ? 0 : chip.heat * 5) + (sz === 2 ? 5 : sz === 0 ? -5 : 0) + add('battery') + (sub?.heat || 0)) },
     { id: 'os', name: '系统与生态', cap: c(scr.os) },
   ];
@@ -413,7 +426,7 @@ export const CONCEPTS = [
   { id: 'sdcard', cat: 'fun', appear: {gen:2}, tier: 1, name: '存储卡槽', icon: '💾', desc: '容量自己加', cost: 1, thick: 0, weight: 1, caps: {}, buzz: 3, risk: 3, conflicts: [] },
   { id: 'ultrasonic', cat: 'fun', appear: {gen:2}, tier: 1, name: '超声波指纹', icon: '👆', desc: '湿手也能解锁', cost: 3, thick: 0, weight: 1, caps: { os: 3 }, buzz: 3, risk: 5, conflicts: [] },
   { id: 'reverse', cat: 'power', appear: {gen:2}, tier: 1, name: '无线反向充电', icon: '🔁', desc: '给耳机救急', cost: 2, thick: 0.1, weight: 3, caps: {}, buzz: 3, risk: 4, conflicts: [] },
-  { id: 'periscope', cat: 'cam', appear: {gen:3}, tier: 2, name: '潜望长焦', icon: '🔭', desc: '10 倍光学变焦', cost: 6, thick: 0.4, weight: 8, caps: { camera: 8 }, buzz: 6, risk: 10, conflicts: [] },
+  { id: 'periscope', cat: 'cam', appear: {gen:3}, tier: 2, name: '潜望长焦', icon: '🔭', desc: '10 倍光学变焦（要方形 / 圆形 / 横向模组才放得下）', cost: 6, thick: 0.4, weight: 8, caps: { camera: 8 }, buzz: 6, risk: 10, conflicts: [] },
   { id: 'gimbal', cat: 'cam', appear: {gen:3}, tier: 2, name: '微云台防抖', icon: '🎥', desc: '跑着拍也不晃', cost: 4, thick: 0.3, weight: 4, caps: { camera: 6 }, buzz: 5, risk: 8, conflicts: [] },
   { id: 'titanium', cat: 'body', appear: {gen:3}, tier: 2, name: '钛金属中框', icon: '🛡️', desc: '轻又硬，冷冷的灰', cost: 6, thick: 0, weight: -8, caps: { design: 6 }, buzz: 5, risk: 8, conflicts: ['crystal'] },
   { id: 'ceramic', cat: 'body', appear: {gen:3}, tier: 2, name: '陶瓷后盖', icon: '🏺', desc: '温润如玉，也更重', group: 'back', cost: 6, thick: 0.2, weight: 12, caps: { design: 8 }, buzz: 4, risk: 8, conflicts: [] },
@@ -422,7 +435,7 @@ export const CONCEPTS = [
   { id: 'facelock', cat: 'fun', appear: {gen:3}, tier: 2, name: '3D 结构光', icon: '🙂', desc: '刷脸比指纹快', cost: 4, thick: 0, weight: 2, caps: { os: 4 }, buzz: 4, risk: 8, conflicts: ['udc'] },
   { id: 'paper', cat: 'form', appear: {month:14}, tier: 2, name: '类纸护眼屏', icon: '📄', desc: '磨砂屏，像纸一样', cost: 4, thick: 0, weight: 0, caps: { design: -3, battery: 3 }, buzz: 5, risk: 6, conflicts: [] },
   { id: 'privacy', cat: 'form', appear: {month:14}, tier: 2, name: '防窥屏', icon: '🕶️', desc: '一键防偷看', cost: 3, thick: 0, weight: 0, caps: {}, buzz: 4, risk: 6, conflicts: [] },
-  { id: 'oneinch', cat: 'cam', appear: {month:18}, tier: 3, name: '一英寸大底', icon: '📷', desc: '主摄大得像相机', cost: 10, thick: 0.6, weight: 14, caps: { camera: 14 }, buzz: 8, risk: 12, conflicts: [] },
+  { id: 'oneinch', cat: 'cam', appear: {month:18}, tier: 3, name: '一英寸大底', icon: '📷', desc: '主摄大得像相机（要方形或圆形模组）', cost: 10, thick: 0.6, weight: 14, caps: { camera: 14 }, buzz: 8, risk: 12, conflicts: [] },
   { id: 'udc', cat: 'cam', appear: {month:20}, tier: 3, name: '屏下摄像头', icon: '🫥', desc: '前摄藏在屏幕下面', cost: 8, thick: 0, weight: 2, caps: { design: 8, camera: -4 }, buzz: 8, risk: 14, conflicts: ['popup'] },
   { id: 'ai', cat: 'fun', appear: {chip:3}, tier: 3, name: '端侧 AI 芯片', icon: '🤖', desc: '离线大模型助手', cost: 8, thick: 0, weight: 2, caps: { os: 12, battery: -4 }, buzz: 9, risk: 12, conflicts: [] },
 ];

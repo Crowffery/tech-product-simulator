@@ -3,7 +3,7 @@
  * 布局：HUD → 阶段进度条 → 像素场景 → 操作面板 → 吸底主按钮
  * 设计阶段换成 3D 工作台；发布会换成全屏 3D 演出。
  */
-import { SLOTS, POSITIONING, SELL_POINTS, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, randomCompanyName } from './game/data.js';
+import { SLOTS, POSITIONING, SELL_POINTS, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, EXPANSIONS, randomCompanyName } from './game/data.js';
 import { createNewGame, saveGame, loadGame, clearSave, hasSave } from './game/state.js';
 import * as L from './game/logic.js';
 import { lsGet, lsSet } from './game/storage.js';
@@ -11,6 +11,7 @@ import { SceneView } from './scenes.js';
 import { term, installGlossary } from './glossary.js';
 import { buildComments } from './launch/crowd.js';
 import { money, moneyShort } from './game/money.js';
+import { icon } from './icons.js';
 import { physical, tier, CONCEPTS, hasAppeared, danmaku, paletteName, novelty, buzzOf, chipSpec, chipName, chipBench, rivalBench, CHIP_SERIES_SEEDS } from './studio/parts.js';
 import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, IDEAL, rivalPhones, marketChipGen, rivalPriceList, roundPrice } from './game/market.js';
 
@@ -81,18 +82,142 @@ function shell() {
   scene = new SceneView($('#g-scene'));
 }
 
+/** 花钱按钮：写清楚「做什么 · 扣什么 · 扣多少」，钱不够时说还差多少 */
+function costBtn(act, id, label, amount, extra = '') {
+  const ok = state.cash >= amount;
+  return `<div class="costwrap"><button type="button" class="costbtn" data-act="${act}" ${id ? `data-id="${id}"` : ''} data-cost="${amount}" ${ok ? '' : 'disabled'} ${extra}>
+      <em>${label}</em><span class="cost">${icon('coin', 13)}资金 ${money(amount)}</span></button>
+    ${ok ? '' : `<small class="short-by">还差 ${money(amount - state.cash)}</small>`}</div>`;
+}
+
+/** 扣钱 / 进账的飞字：从按钮飞向顶部资金 */
+function moneyFx(fromRect, amount) {
+  const to = document.querySelector('.hud-stat.s-cash')?.getBoundingClientRect();
+  if (!fromRect || !to || document.body.classList.contains('reduce-motion')) return;
+  const el = document.createElement('div');
+  el.className = `money-fx ${amount < 0 ? 'neg' : 'pos'}`;
+  el.innerHTML = `${icon('coin', 16)}${money(amount, { sign: true })}`;
+  el.style.left = `${fromRect.left + fromRect.width / 2}px`;
+  el.style.top = `${fromRect.top}px`;
+  el.style.setProperty('--dx', `${to.left + to.width / 2 - (fromRect.left + fromRect.width / 2)}px`);
+  el.style.setProperty('--dy', `${to.top - fromRect.top}px`);
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1100);
+}
+
+/** 顶部资源：像素图标 + 数值 + 名称，点了有解释 */
+const STATS = {
+  cash: { icon: 'coin', name: '资金' },
+  faith: { icon: 'heart', name: '信仰' },
+  rep: { icon: 'star', name: '口碑' },
+  rp: { icon: 'flask', name: '研发点' },
+};
+function statVal(id) {
+  return id === 'cash' ? `¥${moneyShort(state.cash)}` : id === 'faith' ? state.faith : id === 'rep' ? state.reputation : state.rp;
+}
 function hud() {
-  if (!state) return `<div class="hud-title">电子产品发展国</div><button type="button" class="hud-btn" data-act="mute">${sfx?.muted ? '🔇' : '🔊'}</button>`;
-  // (title screen hides the HUD via body.screen-title)
+  if (!state) return `<div class="hud-title">电子产品发展国</div><button type="button" class="hud-btn" data-act="settings">⚙</button>`;
   return `
-    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>${L.office(state).icon} 第${state.generation}代 · ${Math.floor((state.month - 1) / 12) + 1}年${monthOfYear(state.month)}月</small></div>
-    <button type="button" class="hud-stat cash ${state.cash < 60 ? 'low' : ''}" data-act="ledger" title="查看账本"><i>💰</i><b>${moneyShort(state.cash)}</b></button>
-    <div class="hud-stat"><i>❤️</i><b>${state.faith}</b></div>
-    <div class="hud-stat"><i>⭐</i><b>${state.reputation}</b></div>
-    <div class="hud-stat"><i>🔬</i><b>${state.rp}</b></div>
-    <button type="button" class="hud-btn ${sfx?.musicOn === false ? 'off' : ''}" data-act="music" title="背景音乐">🎵</button>
-    <button type="button" class="hud-btn" data-act="mute" title="全部声音">${sfx?.muted ? '🔇' : '🔊'}</button>
-    <button type="button" class="hud-btn ${draft.restartArmed ? 'armed' : ''}" data-act="restart" title="重开">${draft.restartArmed ? '确定?' : '↺'}</button>`;
+    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>第${state.generation}代 · ${Math.floor((state.month - 1) / 12) + 1}年${monthOfYear(state.month)}月</small></div>
+    ${Object.entries(STATS)
+      .map(([id, s]) => `<button type="button" class="hud-stat s-${id} ${id === 'cash' && state.cash < 60 ? 'low' : ''}" data-act="stat" data-id="${id}" aria-label="${s.name}">${icon(s.icon, 16)}<span><b>${statVal(id)}</b><small>${s.name}</small></span></button>`)
+      .join('')}
+    <button type="button" class="hud-btn ${draft.restartArmed ? 'armed' : ''}" data-act="settings" aria-label="设置">${draft.restartArmed ? '确定?' : '⚙'}</button>`;
+}
+
+/** 点资源图标：这是什么、怎么涨怎么掉、用在哪 */
+const STAT_HELP = {
+  cash: {
+    what: '公司账上的钱。所有花销都从这里扣，低于 0 就会破产（第一次有天使投资兜底）。',
+    up: ['每台手机卖出去的利润（首月 + 之后约 12 个月的生命周期）', '补货订单、旧款清仓'],
+    down: ['每月团队工资和海外 / 门店运营费', '升级部门、扩建、流片、战略投资', '突发事件、库存积压'],
+  },
+  faith: {
+    what: '老用户对你的忠诚度（0～100）。信仰高，用户打分更宽容，新品更好卖。',
+    up: ['用户口碑好的产品', '以旧换新、生态绑定', '开线下体验店'],
+    down: ['首发 3 个月内降价（背刺老用户）', '货不对板、断货', '处理事件时甩锅'],
+  },
+  rep: {
+    what: '大众和媒体对这个牌子的印象（0～100）。直接影响每一代的销量，也是进军欧美的门槛。',
+    up: ['媒体评分高的产品', '出事时诚恳处理（召回、道歉）'],
+    down: ['媒体差评、发布会翻车', '断货、降价清仓', '发热门、电池鼓包这类事故'],
+  },
+  rp: {
+    what: '每次发布积累的技术经验，用来在设计阶段的「💡 创新」页解锁新的概念件。',
+    up: ['每次发布会都会获得：评分越高、首发越多，获得越多', '研发部升级、搬进写字楼 / 科技园'],
+    down: ['解锁概念件时消耗'],
+  },
+};
+function showStat(id) {
+  document.querySelector('.stat-pop')?.remove();
+  const s = STATS[id];
+  const h = STAT_HELP[id];
+  const pop = document.createElement('div');
+  pop.className = 'stat-pop';
+  const extra =
+    id === 'cash'
+      ? `<div class="sp-extra"><span>本月固定支出约 <b>${money(L.monthlyCost(state))}</b></span>
+          ${(state.ledger || []).slice(-3).reverse().map((e) => `<span class="sp-led"><i>${esc(e.label)}</i><b class="${e.v < 0 ? 'neg' : 'pos'}">${money(e.v, { sign: true })}</b></span>`).join('')}
+          <button type="button" class="primary" data-pop="ledger">📒 查看完整账本</button></div>`
+      : '';
+  pop.innerHTML = `<div class="sp-card kbox">
+      <div class="sp-h">${icon(s.icon, 28)}<div><b>${s.name}</b><em>${id === 'cash' ? money(state.cash) : statVal(id)}</em></div><button type="button" data-pop="x">✕</button></div>
+      <p>${h.what}</p>
+      <div class="sp-cols"><div><small>⬆ 怎么涨</small>${h.up.map((t) => `<span>${t}</span>`).join('')}</div><div><small>⬇ 怎么掉</small>${h.down.map((t) => `<span>${t}</span>`).join('')}</div></div>
+      ${extra}
+    </div>`;
+  document.body.appendChild(pop);
+  play('click');
+  pop.addEventListener('click', (e) => {
+    const k = e.target.closest('[data-pop]')?.dataset.pop;
+    if (e.target === pop || k === 'x') pop.remove();
+    if (k === 'ledger') {
+      pop.remove();
+      showLedger();
+    }
+  });
+}
+
+/** 设置菜单：音乐 / 音效 / 重开 */
+function showSettings() {
+  document.querySelector('.stat-pop')?.remove();
+  const pop = document.createElement('div');
+  pop.className = 'stat-pop';
+  const paint = () => {
+    pop.innerHTML = `<div class="sp-card kbox"><div class="sp-h"><b>⚙ 设置</b><button type="button" data-pop="x">✕</button></div>
+      <label class="sp-set"><span>${icon('note', 18)} 背景音乐</span><button type="button" data-pop="music">${sfx?.musicOn === false ? '已关闭' : '已开启'}</button></label>
+      <label class="sp-set"><span>${icon(sfx?.muted ? 'mute' : 'speaker', 18)} 全部声音</span><button type="button" data-pop="mute">${sfx?.muted ? '已关闭' : '已开启'}</button></label>
+      <label class="sp-set"><span>✨ 减少动效</span><button type="button" data-pop="motion">${document.body.classList.contains('reduce-motion') ? '已开启' : '关闭'}</button></label>
+      ${state ? `<label class="sp-set danger"><span>${icon('restart', 18)} 放弃这家公司，重新开始</span><button type="button" data-pop="restart">${draft.restartArmed ? '再点一次确认' : '重开'}</button></label>` : ''}
+    </div>`;
+  };
+  paint();
+  document.body.appendChild(pop);
+  pop.addEventListener('click', (e) => {
+    const k = e.target.closest('[data-pop]')?.dataset.pop;
+    if (e.target === pop || k === 'x') return pop.remove();
+    if (k === 'music') sfx?.setMusic(!sfx.musicOn);
+    if (k === 'mute') sfx?.setMuted(!sfx.muted);
+    if (k === 'motion') {
+      const on = !document.body.classList.contains('reduce-motion');
+      document.body.classList.toggle('reduce-motion', on);
+      lsSet('epdg-reduce-motion', on ? '1' : '0');
+    }
+    if (k === 'restart') {
+      if (!draft.restartArmed) draft.restartArmed = true;
+      else {
+        draft.restartArmed = false;
+        pop.remove();
+        clearSave();
+        state = null;
+        screen = 'title';
+        unmountStudio();
+        render();
+        return;
+      }
+    }
+    paint();
+  });
 }
 
 function rail() {
@@ -107,7 +232,7 @@ function rail() {
 
 const P = {};
 
-const VERSION = 'v1.3';
+const VERSION = 'v1.4';
 function saveSummary() {
   const s = hasSave() ? loadGame() : null;
   if (!s) return '';
@@ -295,10 +420,10 @@ function marketEventCard() {
     const g = e.gamble;
     if (g) return `<i>🎲 ${Math.round(g.p * 100)}% 赢</i>`;
     const bits = [];
-    if (e.cash) bits.push(`💰${money(e.cash, { sign: true })}`);
-    if (e.cashPct) bits.push(`💰现金 ${Math.round(e.cashPct * 100)}%`);
-    if (e.rep) bits.push(`口碑 ${e.rep > 0 ? '+' : ''}${e.rep}`);
-    if (e.faith) bits.push(`信仰 ${e.faith > 0 ? '+' : ''}${e.faith}`);
+    if (e.cash) bits.push(`${icon('coin', 12)}资金 ${money(e.cash, { sign: true })}`);
+    if (e.cashPct) bits.push(`${icon('coin', 12)}资金 ${Math.round(e.cashPct * 100)}%`);
+    if (e.rep) bits.push(`${icon('star', 12)}口碑 ${e.rep > 0 ? '+' : ''}${e.rep}`);
+    if (e.faith) bits.push(`${icon('heart', 12)}信仰 ${e.faith > 0 ? '+' : ''}${e.faith}`);
     if (e.hype) bits.push(`热度 +${e.hype}`);
     if (e.mod) bits.push(e.mod.key === 'extBan' ? `外购芯片断供 ${e.mod.months} 月` : `持续 ${e.mod.months} 月`);
     if (e.priceWar) bits.push('价格战');
@@ -422,10 +547,10 @@ P.event = () => {
 
 function effText(e) {
   const bits = [];
-  if (e.cash) bits.push(`💰${money(e.cash, { sign: true })}`);
+  if (e.cash) bits.push(`${icon('coin', 12)}资金 ${money(e.cash, { sign: true })}`);
   if (e.months) bits.push(`⏳+${e.months}月`);
-  if (e.hype) bits.push(`📣${e.hype > 0 ? '↑' : '↓'}`);
-  if (e.faith) bits.push(`❤️${e.faith > 0 ? '↑' : '↓'}`);
+  if (e.hype) bits.push(`📣热度${e.hype > 0 ? '↑' : '↓'}`);
+  if (e.faith) bits.push(`${icon('heart', 12)}信仰${e.faith > 0 ? '↑' : '↓'}`);
   if (e.slotPenalty && Object.keys(e.slotPenalty).length) bits.push(Object.values(e.slotPenalty).some((v) => v > 0) ? '🔧进度受损' : '🔧研发进度↑');
   if (e.gambleFail) bits.push('🎲赌');
   return bits.length ? `<i>${bits.join(' ')}</i>` : '';
@@ -496,7 +621,7 @@ function pricingPanel() {
     </div>
     <div class="price-ref pp-dyn" data-k="ref">
       <div><small>💭 用户心理价位</small><b>≈ ¥${fair.toLocaleString('en-US')}</b><i>体验 · 新颖 · 品牌 ×${(state.brand || 1).toFixed(2)}${lag > 0 ? ` · 芯片落后 ${lag} 代` : ''}</i></div>
-      <div><small>🔩 单台成本</small><b>¥${cost.toLocaleString('en-US')}</b><i>低于它就是卖一台亏一台</i></div>
+      <div><small>🔩 单台成本</small><b>¥${cost.toLocaleString('en-US')}</b><i>${L.scaleDiscount(state) > 0.005 ? `规模效应已省 ${Math.round(L.scaleDiscount(state) * 100)}%` : '低于它就是卖一台亏一台'}</i></div>
       <div><small>⚔ 同档竞品</small><b>${same ? `${esc(same.model)} ¥${same.price}` : '—'}</b><i>${rivals.filter((r) => r !== same).slice(0, 2).map((r) => `${esc(r.brand)} ¥${r.price}`).join(' · ')}</i></div>
       <div><small>📜 上一代同定位</small><b>${last ? `¥${last}` : '首次定价'}</b><i>${last ? '涨太多老用户会不满' : '这次的价格会成为以后的锚'}</i></div>
     </div>
@@ -622,7 +747,9 @@ P.next = () => {
       : ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut })) }],
     imgs: draft.showHQ ? [] : wallImgs(),
     caption: draft.showHQ ? `新家：${L.office(state).name}` : '年会：这一代进了机型墙',
-    sheet: `<h2 class="sheet-h">🏛 规划下一代</h2>
+    sheet: `<h2 class="sheet-h">🏛 年终会</h2>
+      <div class="ntabs"><button type="button" class="${draft.nextTab !== 'invest' ? 'on' : ''}" data-act="next-tab" data-id="review">📊 年终复盘</button><button type="button" class="${draft.nextTab === 'invest' ? 'on' : ''}" data-act="next-tab" data-id="invest">🏗 投资与升级 <small>${money(state.cash)}</small></button></div>
+      ${draft.nextTab === 'invest' ? investTab() : `
       ${last ? `<div class="model-card">${last.thumb ? `<img src="${last.thumb}" alt="" />` : ''}<div><b>${esc(last.design.modelName)}</b>
         <small>惊艳 ${last.wow} ${last.grade} · 首月 ${last.sold} 万台 · 媒体 ${last.media}</small>
         ${(last.firsts || []).map((f) => `<span class="mini-first">🏆${esc(f)}</span>`).join('')}</div></div>` : ''}
@@ -635,27 +762,34 @@ P.next = () => {
           ${sums.map(([k, v]) => `<div class="rp-row"><span>${esc(k)}</span><i><u class="${v < 0 ? 'neg' : 'pos'}" style="width:${Math.round((Math.abs(v) / max) * 100)}%"></u></i><b class="${v < 0 ? 'neg' : 'pos'}">${money(v, { sign: true })}</b></div>`).join('')}
           <small class="muted">点顶部 💰 随时查看账本流水</small></div>`;
       })()}
-      ${(() => {
+      ${shareBlock()}
+      ${onSaleBlock(true)}
+      <button type="button" class="go-invest" data-act="next-tab" data-id="invest">下一步：花钱让公司变强 ▶</button>`}`,
+    cta: `<button type="button" class="primary big" data-act="next-gen">开新企划 ▶</button>`,
+  };
+};
+
+/** 年终会第二页：扩建、芯片、战略投资、部门 */
+function investTab() {
+  return `${(() => {
         const o = L.office(state);
         const n = L.nextOffice(state);
         return `<div class="office-card"><span class="o-icon">${o.icon}</span><div><b>${o.name}</b><small>${o.desc}</small>
           ${n ? `<small class="next">扩建到 ${n.icon} ${n.name}：${n.desc}</small>` : '<small class="next">已经是最大的园区了</small>'}</div>
-          ${n ? `<button type="button" data-act="office" ${state.cash < n.cost ? 'disabled' : ''}>扩建 ${money(n.cost)}</button>` : ''}</div>`;
+          ${n ? costBtn('office', '', `扩建成${n.name}`, n.cost) : ''}</div>`;
       })()}
-      ${onSaleBlock(true)}
       ${chipLab()}
-      <h3 class="sub-h">部门升级 <small>💰 ${money(state.cash)}</small></h3>
+      ${expansionBlock()}
+      <h3 class="sub-h">部门升级 <small class="have">${icon('coin', 13)} 现有资金 ${money(state.cash)}</small></h3>
       <div class="depts">${DEPTS.map((d) => {
         const lv = L.deptLevel(state, d.id);
         const cost = L.deptUpgradeCost(state, d.id);
         return `<div class="dept"><span class="d-icon">${d.icon}</span><div><b>${d.name} <em>Lv${lv}</em></b><small>${d.desc[lv - 1]}</small>
           ${cost != null ? `<small class="next">下一级：${d.desc[lv]}</small>` : ''}</div>
-          ${cost != null ? `<button type="button" data-act="upgrade" data-id="${d.id}" ${state.cash < cost ? 'disabled' : ''}>升级 ${money(cost)}</button>` : '<span class="maxed">满级</span>'}</div>`;
+          ${cost != null ? costBtn('upgrade', d.id, `升到 Lv${lv + 1}`, cost) : '<span class="maxed">满级</span>'}</div>`;
       }).join('')}</div>
-      <p class="muted">🔬 研发点 ${state.rp}：在设计阶段的「💡 创新」页解锁新概念件。</p>`,
-    cta: `<button type="button" class="primary big" data-act="next-gen">开新企划 ▶</button>`,
-  };
-};
+      <p class="muted">🔬 研发点 ${state.rp}：在设计阶段的「💡 创新」页解锁新概念件。</p>`;
+}
 
 P.ending = () => {
   const E = endingTitles(state);
@@ -669,11 +803,35 @@ P.ending = () => {
         <div><b>${E.stats.gens}</b><span>代产品</span></div><div><b>${E.stats.firsts}</b><span>项首创</span></div>
         <div><b>${E.stats.avgWow}</b><span>平均惊艳</span></div><div><b>${E.stats.sold}</b><span>总销量(万台)</span></div>
       </div>
+      ${shareBlock(true)}
       <div class="ending-wall">${state.models.map((m) => `<span title="${esc(m.design.modelName)}">${m.thumb ? `<img src="${m.thumb}" alt="" />` : '📱'}<i>${m.grade || ''}</i></span>`).join('')}</div>`,
     cta: `<button type="button" class="primary big" data-act="hard-restart">再来一局</button>
       <button type="button" data-act="share-ending">📤 分享结局</button>`,
   };
 };
+
+/** 市场份额：你和四家竞品最近三个月的出货量 */
+function shareBlock(final = false) {
+  const t = L.shareTable(state);
+  if (!t) return '';
+  const move = state.lastRank && state.rank ? state.lastRank - state.rank : 0;
+  return `<div class="share"><div class="sh-h"><b>📊 国内手机出货量排名</b><small>最近三个月</small>
+      <span class="sh-rank">第 <b>${t.rank}</b> 名${move > 0 ? `<em class="up">▲${move}</em>` : move < 0 ? `<em class="down">▼${-move}</em>` : ''}</span></div>
+    ${t.rows.map((r, i) => `<div class="sh-row ${r.me ? 'me' : ''}"><span>${i + 1}</span><b>${r.me ? esc(state.companyName) : esc(r.name)}</b><i><u style="width:${Math.max(2, r.pct)}%;background:${r.color}"></u></i><em>${r.pct.toFixed(1)}%</em></div>`).join('')}
+    ${final ? '' : `<small class="muted">${t.rank === 1 ? '你已经是第一了！' : `离第 ${t.rank - 1} 名还差 ${Math.round(t.rows[t.rank - 2].v - t.rows[t.rank - 1].v)} 万台。爆款、出海、多款同时在售都能把份额拉上去。`}</small>`}</div>`;
+}
+
+/** 战略投资：后期的钱往哪花 */
+function expansionBlock() {
+  return `<h3 class="sub-h">🌐 战略投资 <small class="have">${icon('coin', 13)} 现有资金 ${money(state.cash)}</small></h3><p class="muted sm">一次投入 + 每月运营费，长期收益。</p>
+    <div class="expand">${EXPANSIONS.map((e) => {
+      const own = L.hasAsset(state, e.id);
+      const ok = !e.need || e.need(state);
+      return `<div class="ex ${own ? 'own' : ok ? '' : 'lock'}"><span class="ex-i">${e.icon}</span><div><b>${e.name}</b><small>${e.desc}</small>
+        <small class="muted">${own ? `已拥有 · 每月运营 ${money(e.upkeep)}` : ok ? `每月运营 ${money(e.upkeep)}` : `🔒 ${e.needText}`}</small></div>
+        ${own ? '<span class="maxed">✓</span>' : ok ? costBtn('expand', e.id, '投资', e.cost) : `<span class="locked-tag">🔒 未解锁</span>`}</div>`;
+    }).join('')}</div>`;
+}
 
 /** 芯片实验室：流片升级 + 跑分走势 */
 function chipLab() {
@@ -691,7 +849,7 @@ function chipLab() {
   return `<div class="chiplab">
     <div class="cl-head"><span class="o-icon">🧪</span><div><b>芯片实验室</b>
       <small>当前：<input id="chipseries" class="cl-name" maxlength="4" value="${esc(c.series)}" /> X${c.gen} · Pro 跑分 ${(chipBench(c.gen, 1) / 10000).toFixed(0)} 万</small></div>
-      ${c.research ? `<span class="maxed">流片中 · 还剩 ${c.research.months} 月</span>` : `<button type="button" data-act="chip-research" ${state.cash < cost.cash ? 'disabled' : ''}>研发 X${cost.next}<small>${term('流片')} ${money(cost.cash)} · ${cost.months}月</small></button>`}</div>
+      ${c.research ? `<span class="maxed">流片中 · 还剩 ${c.research.months} 月</span>` : costBtn('chip-research', '', `研发 X${cost.next}（${cost.months} 个月）`, cost.cash)}</div>
     <div class="cl-chart">${bars}</div>
     ${(() => {
       const mg = marketChipGen(state.month);
@@ -1610,11 +1768,21 @@ function onClick(e) {
   if (!btn || busy) return;
   const { act, id } = btn.dataset;
   const i = Number(btn.dataset.i);
+  const spendRect = btn.dataset.cost ? btn.getBoundingClientRect() : null;
+  const cashBefore = state?.cash;
 
   if (act === 'mute') {
     sfx?.setMuted(!sfx.muted);
     $('#g-hud').innerHTML = hud();
     if (screen === 'title') keepSettingsOpen();
+    return;
+  }
+  if (act === 'stat' && state) {
+    showStat(id);
+    return;
+  }
+  if (act === 'settings') {
+    showSettings();
     return;
   }
   if (act === 'music') {
@@ -1852,6 +2020,19 @@ function onClick(e) {
       if (r.ok) play('keep');
       break;
     }
+    case 'expand': {
+      const r = L.buyExpansion(state, id);
+      toast(r.msg);
+      if (r.ok) {
+        play('level-up');
+        scene.pulse('confetti');
+      }
+      break;
+    }
+    case 'next-tab':
+      draft.nextTab = id;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      break;
     case 'cut-price': {
       const r = L.cutPrice(state, i);
       toast(r.msg, Math.min(12000, Math.max(5500, 2000 + String(r.msg || '').length * 90)));
@@ -1880,6 +2061,7 @@ function onClick(e) {
     }
     case 'next-gen':
       draft.showHQ = false;
+      draft.nextTab = 'review';
       L.goNextGen(state);
       draft.plan = { ...L.recommendedPlan(), positioningId: state.designDraft?.position || 'mainstream' };
       flash(`第 ${state.generation} 代`);
@@ -1889,6 +2071,12 @@ function onClick(e) {
   }
   persist();
   render();
+  // 现金有变化：飞字 + 顶部资金闪一下
+  if (state && cashBefore != null && state.cash !== cashBefore) {
+    moneyFx(spendRect || btn.getBoundingClientRect(), state.cash - cashBefore);
+    const c = document.querySelector('.hud-stat.s-cash');
+    c?.classList.add(state.cash < cashBefore ? 'flash' : 'gain');
+  }
 }
 
 function onChange(e) {
