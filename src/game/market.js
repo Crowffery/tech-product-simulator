@@ -44,7 +44,7 @@ export const POINT_RULES = {
   battery: { name: '续航焦虑终结者', test: (st) => st.slots.battery.progress >= 70 },
   thin: { name: '极致轻薄', test: (st, phys) => phys.thickness <= 7.8 },
   eco: { name: '生态闭环', test: (st) => st.product.bindEco && st.slots.os.progress >= 60 },
-  price: { name: '性价比刺客', test: (st) => st.product.priceId === 'low' },
+  price: { name: '性价比刺客', test: (st) => (st.product.price && st.product.fair ? st.product.price <= st.product.fair * 0.92 : st.product.priceId === 'low') },
 };
 
 export function promiseCheck(state, phys) {
@@ -154,3 +154,34 @@ export function rivalPhones(month) {
     { n: `青橙 ${9 + year}`, v: Math.round(rb * 0.42) },
   ];
 }
+
+// ═════════════════════════ 定价 / 芯片竞争 ═════════════════════════
+
+/** 各定位的基准心理价位（体验、新颖度、品牌、芯片会在此基础上浮动） */
+export const POS_BASE_PRICE = { flagship: 5999, pro: 6499, mainstream: 3799, minimal: 2799 };
+
+/** 价格尾数取 99 */
+export const roundPrice = (v) => Math.max(999, Math.round(v / 100) * 100 - 1);
+
+/** 价格越低，愿意掏钱的人群越大 */
+export function marketSize(price) {
+  return Math.max(0.45, Math.min(2.4, Math.pow(3999 / price, 0.9)));
+}
+
+/** 行业主流芯片代数：约 10 个月进一代 */
+export const marketChipGen = (month) => 1 + Math.floor((month - 1) / 10);
+
+/** 竞品在售机型价格（价格战期间友商降价） */
+export function rivalPriceList(month, priceWar = false) {
+  const year = Math.floor((month - 1) / 12);
+  const k = Math.pow(1.03, year) * (priceWar ? 0.92 : 1);
+  return [
+    { brand: '蓝莓', model: `蓝莓 ${15 + year}`, pos: 'flagship', price: roundPrice(6999 * k) },
+    { brand: '方块', model: `方块 ${7 + year} Pro`, pos: 'pro', price: roundPrice(6499 * k) },
+    { brand: '极光', model: `极光 ${4 + year}`, pos: 'mainstream', price: roundPrice(3299 * k) },
+    { brand: '青橙', model: `青橙 ${9 + year}`, pos: 'minimal', price: roundPrice(1999 * k) },
+  ];
+}
+
+/** 实际售价 → 价位带（兼容旧逻辑） */
+export const bandOf = (price) => (price < 2800 ? 'low' : price < 5200 ? 'mid' : 'high');

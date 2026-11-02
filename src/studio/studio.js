@@ -733,7 +733,11 @@ export function createStudio(root, opts = {}) {
         else design.concepts.push(id);
         sfx.part(i >= 0 ? 0 : 2);
         update({ panel: true });
-        if (!exploded) stage?.view(['keyboard'].includes(id) ? 'front' : ['shutter', 'sat'].includes(id) ? 'hero' : 'back');
+        if (!exploded && i < 0) {
+          const c = CONCEPTS.find((x) => x.id === id);
+          // 等新机身建好再指给玩家看
+          requestAnimationFrame(() => stage?.spotlight(id, c ? `${c.icon} ${c.name}` : ''));
+        }
       } else if (d.tab) {
         sfx.click();
         tab = d.tab;

@@ -9,8 +9,9 @@ import * as L from './game/logic.js';
 import { lsGet, lsSet } from './game/storage.js';
 import { SceneView } from './scenes.js';
 import { term, installGlossary } from './glossary.js';
+import { buildComments } from './launch/crowd.js';
 import { physical, tier, CONCEPTS, hasAppeared, danmaku, paletteName, novelty, buzzOf, chipSpec, chipName, chipBench, rivalBench, CHIP_SERIES_SEEDS } from './studio/parts.js';
-import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, IDEAL, rivalPhones } from './game/market.js';
+import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, IDEAL, rivalPhones, marketChipGen, rivalPriceList, roundPrice } from './game/market.js';
 
 let state = null;
 let screen = 'title'; // title | create | game
@@ -159,9 +160,10 @@ P.plan = () => {
     caption: `企划会：第 ${state.generation} 代要赌什么？`,
     sheet: `<h2 class="sheet-h">📋 企划</h2>
       ${newsCard()}
+      ${marketNotice()}
       <div class="field-l">${term('定位')}<div class="chips">${chips(POSITIONING, p.positioningId, 'plan-pos')}</div></div>
       <div class="field-l">${term('卖点')} <small>选 1～3 个</small><div class="chips">${chips(SELL_POINTS, p.pointIds, 'toggle-point', true)}</div></div>
-      <div class="field-l">${term('售价带')}<div class="chips">${chips(PRICE_BANDS, p.priceId, 'plan-price')}</div></div>
+      <div class="field-l">${term('售价带')} <small>决定备货规模；具体售价发布会前再定</small><div class="chips">${chips(PRICE_BANDS, p.priceId, 'plan-price')}</div></div>
       ${state.generation > 1 ? `<label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco ? 'checked' : ''}/> 绑定上代生态</label>` : ''}
       ${(() => {
         const pf = priceFit(p.positioningId, p.priceId);
@@ -188,11 +190,31 @@ P.supply = () => ({
       const tip = firsts || bz >= 20 ? '🔥 这台很有话题，小心卖断货' : '';
       return tip ? `<p class="warn-line good">${tip}</p>` : '';
     })()}
+    ${chipSourcePick()}
     <div class="field-l">首批${term('备货')}<div class="chips">${STOCK_OPTS.map(
       (s) => `<button type="button" class="chip ${draft.stockId === s.id ? 'on' : ''}" data-act="pick-stk" data-id="${s.id}">${s.name}</button>`,
     ).join('')}</div></div>`,
   cta: `<button type="button" class="primary big" data-act="confirm-supply">签约，开工研发 ▶</button>`,
 });
+
+/** 供应链：芯片用自研还是外购 */
+function chipSourcePick() {
+  const mg = marketChipGen(state.month);
+  const own = state.chip.gen;
+  const lag = mg - own;
+  const tierId = state.design?.parts?.chip ?? 1;
+  const extCost = (6 + tierId * 3) * 55;
+  const cur = draft.chipSrc || 'own';
+  return `<div class="field-l">芯片来源 <small>行业主流已到第 ${mg} 代</small>
+    <div class="cards2">
+      <button type="button" class="pick ${cur === 'own' ? 'on' : ''}" data-act="pick-chip" data-id="own">
+        <b>🧪 自研 ${esc(state.chip.series)} X${own}</b>
+        <small>${lag > 0 ? `<span class="bad">落后 ${lag} 代</span>：性能上限、口碑、心理价位都吃亏` : lag < 0 ? '<span class="good">领先行业</span>：媒体加分，成本最低' : '和行业同代，成本最低'}</small></button>
+      <button type="button" class="pick ${cur === 'ext' ? 'on' : ''}" data-act="pick-chip" data-id="ext">
+        <b>🛒 外购 ${L.EXT_CHIP} S${mg}</b>
+        <small>永远是最新一代，但每台成本 +¥${extCost}，也没有「自研」光环</small></button>
+    </div></div>`;
+}
 
 P.dev = () => {
   const caps = L.capsMap(state);
@@ -237,6 +259,18 @@ function newsCard() {
   const list = (state.newConcepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter(Boolean);
   if (!list.length) return '';
   return `<div class="news-card"><b>📰 行业新技术</b><span>${list.map((c) => `${c.icon} ${c.name}`).join(' · ')}</span><small>去设计部的「💡 创新」看看</small></div>`;
+}
+
+/** 行业动态：芯片代差、价格战 */
+function marketNotice() {
+  const bits = [];
+  const mg = marketChipGen(state.month);
+  const lag = mg - state.chip.gen;
+  if (lag > 0) bits.push(`<p class="warn-line bad">🧪 行业主流芯片已到第 ${mg} 代，你的 ${esc(state.chip.series)} X${state.chip.gen} 落后 ${lag} 代：性能上限、口碑和心理价位都会吃亏。年终可以流片，或者在供应链环节外购芯片。</p>`);
+  else if (lag < 0) bits.push(`<p class="warn-line good">🧪 你的 ${esc(state.chip.series)} X${state.chip.gen} 领先行业一代，媒体会买账。</p>`);
+  if (state.priceWar && state.month <= state.priceWar.until) bits.push(`<p class="warn-line bad">⚔ 价格战进行中（到 ${monthOfYear(state.priceWar.until)} 月）：友商都在降价，用户心理价位被压低。</p>`);
+  if ((state.brand || 1) !== 1) bits.push(`<p class="warn-line ${state.brand > 1 ? 'good' : 'bad'}">🏷 品牌溢价 ×${state.brand.toFixed(2)}：${state.brand > 1 ? '同样的东西，你能卖得更贵' : '用户觉得你就该卖便宜'}</p>`);
+  return bits.join('');
 }
 
 /** 档期日历：从 from 到 to，标出档期、竞品与预计上市月 */
@@ -325,11 +359,7 @@ function effText(e) {
 }
 
 const FAC_STAGES = ['🔧 试产', '📈 良率爬坡', '⚙️ 满产', '📦 装箱发货'];
-function stockedUnits() {
-  const price = PRICE_BANDS.find((p) => p.id === state.product.priceId);
-  const stock = STOCK_OPTS.find((s) => s.id === state.stockId);
-  return Math.round(30 * stock.mul * (0.5 + price.demand * 0.5));
-}
+const stockedUnits = () => L.stockedUnits(state);
 
 P.factory = () => {
   const p = physical(state.design);
@@ -360,15 +390,75 @@ const QC = {
   bad: ['屏幕排线松了——这批要返工几台', '按键手感松垮，产线连夜调整'],
 };
 
-P.launch = () => ({
-  scene: ['launch', {}],
-  caption: '后台：观众已经入场，主讲人还在背稿',
-  sheet: `<h2 class="sheet-h">🎤 发布会</h2>
+/** 定价台：参考信息 + 实时预测 */
+function pricingPanel() {
+  const fair = L.fairPrice(state);
+  const pos = state.product.positioningId;
+  if (draft.priceFor !== state.generation) {
+    draft.priceFor = state.generation;
+    draft.price = fair;
+  }
+  const price = draft.price;
+  const f = L.salesForecast(state, price);
+  const cost = f.unitCost;
+  const min = Math.max(999, roundPrice(cost * 0.7));
+  const max = Math.max(fair * 2, 9999);
+  const pct = (v) => Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100));
+  const rivals = rivalPriceList(state.month, !!state.priceWar && state.month <= state.priceWar.until);
+  const same = rivals.find((r) => r.pos === pos);
+  const last = state.lastPrices?.[pos];
+  const mood = f.pe.ratio <= 0.85 ? ['🤩', '买爆', 'good'] : f.pe.ratio <= 0.95 ? ['😊', '很值', 'good'] : f.pe.ratio <= 1.08 ? ['🙂', '合理', 'ok'] : f.pe.ratio <= 1.2 ? ['🤔', '有点贵', 'meh'] : ['😠', '劝退', 'bad'];
+  const lag = L.chipLag(state);
+  return `<h2 class="sheet-h">🏷 定价 <small>发布会上要念出这个数字</small></h2>
+    <div class="price-big pp-dyn" data-k="big"><button type="button" data-act="price-step" data-d="-500">−500</button><button type="button" data-act="price-step" data-d="-100">−</button>
+      <b>¥${price.toLocaleString('en-US')}</b>
+      <button type="button" data-act="price-step" data-d="100">+</button><button type="button" data-act="price-step" data-d="500">+500</button></div>
+    <div class="price-track">
+      <i class="pt-loss" style="width:${pct(cost)}%"></i>
+      <i class="pt-sweet" style="left:${pct(fair * 0.9)}%;width:${pct(fair * 1.08) - pct(fair * 0.9)}%"></i>
+      <em class="pt-mark fair" style="left:${pct(fair)}%"><span>心理价位</span></em>
+      <em class="pt-mark cost" style="left:${pct(cost)}%"><span>成本</span></em>
+      ${same ? `<em class="pt-mark rival" style="left:${pct(same.price)}%"><span>${esc(same.brand)}</span></em>` : ''}
+      <input type="range" id="price-range" min="${min}" max="${max}" step="100" value="${price}" />
+    </div>
+    <div class="price-ref pp-dyn" data-k="ref">
+      <div><small>💭 用户心理价位</small><b>≈ ¥${fair.toLocaleString('en-US')}</b><i>体验 · 新颖 · 品牌 ×${(state.brand || 1).toFixed(2)}${lag > 0 ? ` · 芯片落后 ${lag} 代` : ''}</i></div>
+      <div><small>🔩 单台成本</small><b>¥${cost.toLocaleString('en-US')}</b><i>低于它就是卖一台亏一台</i></div>
+      <div><small>⚔ 同档竞品</small><b>${same ? `${esc(same.model)} ¥${same.price}` : '—'}</b><i>${rivals.filter((r) => r !== same).slice(0, 2).map((r) => `${esc(r.brand)} ¥${r.price}`).join(' · ')}</i></div>
+      <div><small>📜 上一代同定位</small><b>${last ? `¥${last}` : '首次定价'}</b><i>${last ? '涨太多老用户会不满' : '这次的价格会成为以后的锚'}</i></div>
+    </div>
+    <div class="price-fc pp-dyn" data-k="fc">
+      <div class="fc-row">
+        <div class="fc-mood ${mood[2]}"><div class="fc-emo">${mood[0]}</div><b>${mood[1]}</b></div>
+        <div class="fc-nums">
+          <div><small>预计首月需求</small><b>${Math.round(f.units * 0.85)}~${Math.round(f.units * 1.15)} 万台</b></div>
+          <div><small>首批备货</small><b>${f.stocked} 万台${f.units > f.stocked * 1.05 ? ' · 会断货' : f.stocked > f.units * 1.25 ? ' · 会积压' : ''}</b></div>
+          <div><small>单台毛利</small><b class="${price < cost ? 'neg' : ''}">¥${(price - cost).toLocaleString('en-US')}</b></div>
+          <div><small>预计首月利润</small><b class="${f.profit < 0 ? 'neg' : ''}">${f.profit > 0 ? '+' : ''}${f.profit}</b></div>
+        </div>
+      </div>
+      <p class="fc-note">💬 ${esc(f.pe.note)}${f.pe.anchorNote ? `<br/>📜 ${esc(f.pe.anchorNote)}` : ''}${f.pe.ratio <= 0.8 ? '<br/>⚠ 价格太狠会引发价格战，品牌溢价也会掉' : f.pe.ratio >= 1 ? '<br/>✨ 卖得贵且口碑好，品牌溢价会上升' : ''}</p>
+    </div>`;
+}
+
+P.launch = () => {
+  if (!state.product.price)
+    return {
+      scene: ['launch', {}],
+      caption: '后台：市场部和财务在为价格吵架',
+      sheet: pricingPanel(),
+      cta: `<button type="button" class="primary big" data-act="set-price">就这个价！▶</button>`,
+    };
+  return {
+    scene: ['launch', {}],
+    caption: '后台：观众已经入场，主讲人还在背稿',
+    sheet: `<h2 class="sheet-h">🎤 发布会 <small>首销价 ¥${state.product.price} <button type="button" class="link-btn" data-act="re-price">改价</button></small></h2>
     <div class="cards3">${L.LAUNCH_STYLES.map(
       (s) => `<button type="button" class="pick" data-act="launch-style" data-id="${s.id}"><b>${s.label}</b><small>${s.desc}</small><i>${s.risk >= 0.3 ? '⚠ 很冒险' : s.risk >= 0.1 ? '有点风险' : '稳'}</i></button>`,
     ).join('')}</div>`,
-  cta: '',
-});
+    cta: '',
+  };
+};
 
 P.score = () => {
   const W = state.wowResult || {};
@@ -433,6 +523,7 @@ P.sales = () => {
         ${r.oldNote ? `<p class="warn-line good">♻ ${esc(r.oldNote)}</p>` : ''}
         ${r.window ? `<p class="warn-line ${r.windowMul > 1 ? 'good' : 'bad'}">📅 ${r.windowMul > 1 ? '赶上' : '撞上'}${r.window}</p>` : ''}
         ${r.clash ? `<p class="warn-line bad">⚔ ${r.clash}</p>` : ''}
+        ${(r.chain || []).map((c) => `<p class="chain">🔗 ${esc(c)}</p>`).join('')}
         <p class="muted">售价 ¥${r.price} · 单台成本 ¥${r.unitCost} · 之后它还会继续卖几个月</p>
       </div>`,
     cta: `<button type="button" class="primary big" data-act="to-next">${state.month >= RUN_MONTHS ? '三年结算 ▶' : '年终总结，规划下一代 ▶'}</button>`,
@@ -508,6 +599,11 @@ function chipLab() {
       <small>当前：<input id="chipseries" class="cl-name" maxlength="4" value="${esc(c.series)}" /> X${c.gen} · Pro 跑分 ${(chipBench(c.gen, 1) / 10000).toFixed(0)} 万</small></div>
       ${c.research ? `<span class="maxed">流片中 · 还剩 ${c.research.months} 月</span>` : `<button type="button" data-act="chip-research" ${state.cash < cost.cash ? 'disabled' : ''}>流片 X${cost.next}<small> ${cost.cash} · ${cost.months}月</small></button>`}</div>
     <div class="cl-chart">${bars}</div>
+    ${(() => {
+      const mg = marketChipGen(state.month);
+      const lag = mg - c.gen;
+      return `<p class="warn-line ${lag > 0 ? 'bad' : 'good'}">行业主流第 ${mg} 代 · 你 X${c.gen}${lag > 0 ? `，落后 ${lag} 代` : lag < 0 ? '，领先' : '，同代'}。约每 10 个月行业进一代。</p>`;
+    })()}
     <p class="muted">🟧 你的芯片 · ⬜ 竞品同期 · ${term('流片')}与下一代研发同时进行</p>
   </div>`;
 }
@@ -549,7 +645,7 @@ const TUT = {
   dev: '每推进一个月，团队就往前做一点，觉得哪项重要就点 ⭐。<br/>性能调校过半以后，可以拿工程机<b>跑个分</b>，成绩好会在论坛刷屏。',
   event: '出状况了！选一个你能接受的代价。',
   factory: '流水线开工了。等它跑完的时候，可以随手<b>抽检</b>一台。',
-  launch: '发布会是最高光的时刻。选一种讲法，然后上台——<b>轻点屏幕就能翻页</b>。<br/>企划里承诺的卖点会被重点介绍，做没做到，台下一清二楚。',
+  launch: '先<b>定价</b>：参考用户心理价位、成本和竞品，下面会实时预测销量和利润。<br/>然后选一种讲法上台——<b>轻点屏幕就能翻页</b>。承诺的卖点做没做到，台下一清二楚。',
   score: '媒体和用户打分了。往下翻看看<b>评论区</b>在说什么，<b>复盘</b>会告诉你下一代该往哪改。',
   sales: '首月卖得怎么样？之后它还会继续卖一段时间。',
   next: '一轮结束了。可以升级部门、扩建办公室、让芯片升级——也可以先攒着钱。<br/>剩下的，靠你自己摸索。',
@@ -617,6 +713,7 @@ let revealRun = null;
 function runReveal(key) {
   const sheet = $('#g-sheet');
   const steps = [...sheet.querySelectorAll('.rv-step')].sort((a, b) => a.dataset.step - b.dataset.step);
+  const live = sheet.querySelector('.comments.live');
   const showAll = () => {
     steps.forEach((el) => {
       el.classList.remove('rv-hide');
@@ -630,13 +727,22 @@ function runReveal(key) {
   }
   if (!steps.length || draft.revealed?.[key] || document.body.classList.contains('reduce-motion')) {
     showAll();
+    if (live) liveComments(live, true);
     return;
   }
   draft.revealed = { ...(draft.revealed || {}), [key]: true };
   steps.forEach((el) => el.classList.add('rv-hide'));
   $('#g-cta')?.classList.add('rv-wait');
-  const timers = [];
   let cancelled = false;
+  let liveRun = null;
+  let wake = null;
+  const wait = (ms) => new Promise((r) => {
+    const id = setTimeout(r, ms);
+    wake = () => {
+      clearTimeout(id);
+      r();
+    };
+  });
   const countUp = (b) => {
     const to = Number(b.dataset.count);
     const sign = b.dataset.sign;
@@ -652,30 +758,46 @@ function runReveal(key) {
     };
     requestAnimationFrame(step);
   };
-  let t = 250;
-  steps.forEach((el, i) => {
-    const big = el.querySelector('[data-count]');
-    timers.push(
-      setTimeout(() => {
-        el.classList.remove('rv-hide');
-        el.classList.add('rv-in');
-        el.querySelectorAll('[data-w]').forEach((x) => requestAnimationFrame(() => (x.style.width = `${x.dataset.w}%`)));
-        if (big) {
-          countUp(big);
-          play('add-points');
-        } else play('part', 1);
-        if (i === steps.length - 1) $('#g-cta')?.classList.remove('rv-wait');
-      }, t),
-    );
-    t += big ? 1100 : el.querySelector('.comments') ? 1300 : 700;
-  });
   const skip = () => {
+    if (cancelled) return;
     cancelled = true;
-    timers.forEach(clearTimeout);
+    wake?.();
     showAll();
+    if (liveRun) liveRun.skip();
+    else if (live && !live.querySelector('.cm')) liveComments(live, true);
     sheet.removeEventListener('click', skip);
     revealRun = null;
   };
+  (async () => {
+    await wait(250);
+    for (const el of steps) {
+      if (cancelled) return;
+      el.classList.remove('rv-hide');
+      el.classList.add('rv-in');
+      el.querySelectorAll('[data-w]').forEach((x) => requestAnimationFrame(() => (x.style.width = `${x.dataset.w}%`)));
+      const big = el.querySelector('[data-count]');
+      const cm = el.querySelector('.comments.live');
+      if (big) {
+        countUp(big);
+        play('add-points');
+        await wait(1100);
+      } else if (cm) {
+        // 评论区要「看一会儿」：等热评形成
+        liveRun = liveComments(cm, false);
+        await liveRun.promise;
+        liveRun = null;
+        await wait(300);
+      } else {
+        play('part', 1);
+        await wait(700);
+      }
+    }
+    if (!cancelled) {
+      $('#g-cta')?.classList.remove('rv-wait');
+      sheet.removeEventListener('click', skip);
+      revealRun = null;
+    }
+  })();
   sheet.addEventListener('click', skip);
   revealRun = { cancel: skip };
 }
@@ -808,6 +930,7 @@ async function mountStudio() {
       L.confirmDesign(state, d);
       draft.supplierId = 'balanced';
       draft.stockId = 'normal';
+      draft.chipSrc = marketChipGen(state.month) > state.chip.gen ? 'ext' : 'own';
       play('keep');
       persist();
       render();
@@ -960,6 +1083,7 @@ async function playReveal() {
   try {
     const { PhoneStage } = await import('./studio/phone3d.js');
     const { buildKeynote, txt } = await import('./launch/keynote.js');
+    const { danmakuLines } = await import('./launch/crowd.js');
     stage = new PhoneStage(ov.querySelector('.lo-stage'));
     stage.setDesign(state.design);
     const W = state.wowResult || {};
@@ -974,7 +1098,8 @@ async function playReveal() {
       rivals: rivalPhones(state.month).slice(0, 3),
       camCap: caps.camera,
       batCap: caps.battery,
-      price: PRICE_BANDS.find((p) => p.id === state.product.priceId)?.price || 3999,
+      price: state.product.price || PRICE_BANDS.find((p) => p.id === state.product.priceId)?.price || 3999,
+      chipLag: L.chipLag(state),
       pf: state.review?.priceUser ?? 0,
       points: state.product.pointIds,
       promises: state.review?.promises,
@@ -1107,9 +1232,7 @@ async function playReveal() {
           react(['哇！', '来了来了', '📸'], 'good');
           fireworks(2);
           const dm = ov.querySelector('.lo-dm');
-          danmaku(d, null)
-            .sort(() => Math.random() - 0.5)
-            .slice(0, 7)
+          danmakuLines(d, { chipLag: L.chipLag(state), chipLead: L.chipLag(state) < 0 && d.chipSrc !== 'ext' }, 9)
             .forEach((tx, i) => {
               const el = document.createElement('span');
               el.className = 'dm';
@@ -1128,31 +1251,137 @@ async function playReveal() {
   }
 }
 
-/** 评论区：发布会结束后用户的吐槽 / 夸奖，留在评分页慢慢看 */
+/** 评论区：发布会结束后陆续涌进来的留言（数据，每代生成一次） */
 function comments() {
   if (draft.commentsFor === state.generation && draft.comments) return draft.comments;
-  const d = state.design;
   const R = state.review || {};
   const W = state.wowResult || {};
-  const pool = danmaku(d, null).map((t) => ({ t, like: 20 + Math.floor(Math.random() * 400) }));
-  (R.promises || []).filter((p) => !p.ok).forEach((p) => pool.push({ t: `说好的「${p.name}」呢？货不对板`, like: 900 + Math.floor(Math.random() * 500), hot: true }));
-  if (R.priceUser < 0) pool.push({ t: `${R.priceNote}，等降价`, like: 600 + Math.floor(Math.random() * 300), hot: true });
-  if (R.priceUser > 0) pool.push({ t: '这个价格是认真的吗？冲了', like: 500 + Math.floor(Math.random() * 300) });
-  if (state.launchFlop) pool.push({ t: '发布会翻车名场面已收藏', like: 1200 + Math.floor(Math.random() * 400), hot: true });
-  if ((W.buzz || 0) >= 40) pool.push({ t: `#${d.modelName}# 是今年最离谱的手机（褒义）`, like: 2000 + Math.floor(Math.random() * 800), hot: true });
-  if ((W.completeness || 100) < 70) pool.push({ t: '想法很好，做工像样机', like: 700, hot: true });
-  if ((W.novelty || 0) < 25) pool.push({ t: '又是挤牙膏，换个颜色就是新品？', like: 800 });
-  const names = ['数码老炮', '夜景党', '续航焦虑患者', '学生党', '极客阿杰', '发烧友小美', '路过的蓝莓用户', '测评博主'];
-  const uniq = [...new Map(pool.map((p) => [p.t, p])).values()].sort((a, b) => b.like - a.like).slice(0, 7);
-  draft.comments = uniq.map((c, i) => ({ ...c, who: names[(i * 3 + state.generation) % names.length] }));
+  draft.comments = buildComments({
+    design: state.design,
+    modelName: state.design.modelName,
+    promisesBroken: (R.promises || []).filter((p) => !p.ok).map((p) => p.name),
+    priceRatio: R.priceRatio ?? 1,
+    anchorLast: R.anchorLast || 0,
+    flop: state.launchFlop,
+    buzz: W.buzz || 0,
+    completeness: W.completeness ?? 100,
+    novelty: W.novelty ?? 50,
+    chipLag: R.chipLag || 0,
+    chipLead: (R.chipLag || 0) < 0 && state.design.chipSrc !== 'ext',
+    extChip: state.design.chipSrc === 'ext',
+    gen: state.generation,
+  });
   draft.commentsFor = state.generation;
   return draft.comments;
 }
 
 function commentBlock() {
-  return `<div class="comments"><div class="cm-h">🗨 评论区 <small>按点赞排序</small></div>${comments()
-    .map((c, i) => `<div class="cm ${c.hot ? 'hot' : ''}"><span class="cm-av">${'🧑👩🧔👨‍💻👩‍🎤🧑‍🔬👴👧'.match(/./gu)[i % 8]}</span><div><b>${esc(c.who)}</b><p>${esc(c.t)}</p></div><i>👍 ${c.like}</i></div>`)
-    .join('')}</div>`;
+  return `<div class="comments live"><div class="cm-h">🗨 评论区 <small class="cm-status">● 实时</small><em class="cm-count"></em></div><div class="cm-list"></div></div>`;
+}
+
+const cmRow = (c) => `<div class="cm-av">${c.av}</div><div><b>${esc(c.who)}</b><span class="cm-badge"></span><p>${esc(c.t)}</p><small class="cm-reply"></small></div><i>👍 <span class="cm-like">0</span></i>`;
+
+/** 评论慢慢涌进来，点赞往上涨，按点赞重新排序；最后形成热评 */
+function liveComments(box, instant) {
+  const list = box.querySelector('.cm-list');
+  const status = box.querySelector('.cm-status');
+  const count = box.querySelector('.cm-count');
+  const data = comments().map((c, i) => ({ ...c, i, cur: 0, el: null }));
+  const total = data.reduce((a, c) => a + c.reply, 0) + data.length * 23;
+  const finalize = () => {
+    data.forEach((c) => {
+      if (!c.el) add(c, false);
+      c.cur = c.like;
+    });
+    paint(true);
+    reorder(false);
+    [...data].sort((a, b) => b.like - a.like).slice(0, 3).forEach((c) => {
+      c.el.classList.add('hot');
+      c.el.querySelector('.cm-badge').textContent = '🔥 热评';
+    });
+    status.textContent = '热评已形成';
+    status.classList.add('done');
+    count.textContent = `${total} 条讨论`;
+  };
+  const add = (c, anim = true) => {
+    const el = document.createElement('div');
+    el.className = `cm ${anim ? 'new' : ''}`;
+    el.innerHTML = cmRow(c);
+    c.el = el;
+    list.prepend(el);
+  };
+  const paint = (final) =>
+    data.forEach((c) => {
+      if (!c.el) return;
+      c.el.querySelector('.cm-like').textContent = Math.round(c.cur);
+      const r = final ? c.reply : Math.round(c.reply * (c.cur / c.like));
+      c.el.querySelector('.cm-reply').textContent = r > 0 ? `💬 ${r} 条回复` : '';
+    });
+  const reorder = (anim = true) => {
+    const shown = data.filter((c) => c.el);
+    const before = new Map(shown.map((c) => [c, c.el.getBoundingClientRect().top]));
+    shown.sort((a, b) => b.cur - a.cur).forEach((c) => list.appendChild(c.el));
+    if (!anim) return;
+    shown.forEach((c) => {
+      const dy = before.get(c) - c.el.getBoundingClientRect().top;
+      if (!dy) return;
+      c.el.style.transition = 'none';
+      c.el.style.transform = `translateY(${dy}px)`;
+      requestAnimationFrame(() => {
+        c.el.style.transition = 'transform .45s cubic-bezier(.2,.9,.3,1)';
+        c.el.style.transform = '';
+      });
+    });
+  };
+  if (instant) {
+    finalize();
+    return { promise: Promise.resolve(), skip: () => {} };
+  }
+  const T = 7500;
+  const arrive = data.map((c, i) => 200 + i * 520 + Math.random() * 200);
+  const t0 = performance.now();
+  let lastSort = 0;
+  let done = false;
+  let resolve;
+  const promise = new Promise((r) => (resolve = r));
+  const tick = (now) => {
+    if (done || !box.isConnected) return resolve();
+    const t = now - t0;
+    data.forEach((c, k) => {
+      if (!c.el && t >= arrive[k]) {
+        add(c);
+        play('part', 0);
+      }
+      if (c.el) {
+        const p = Math.min(1, (t - arrive[k]) / (T - arrive[k]));
+        const curve = c.hot ? 1 - Math.pow(1 - p, 2.2) : Math.pow(p, 1.3);
+        c.cur = c.like * curve;
+      }
+    });
+    paint(false);
+    count.textContent = `${Math.round(total * Math.min(1, t / T))} 条讨论`;
+    if (t - lastSort > 900) {
+      lastSort = t;
+      reorder();
+    }
+    if (t >= T) {
+      done = true;
+      finalize();
+      play('add-points');
+      return resolve();
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return {
+    promise,
+    skip: () => {
+      if (done) return;
+      done = true;
+      finalize();
+      resolve();
+    },
+  };
 }
 
 // ═════════════════════════ 分享卡 ═════════════════════════
@@ -1357,8 +1586,11 @@ function onClick(e) {
     case 'pick-stk':
       draft.stockId = id;
       break;
+    case 'pick-chip':
+      draft.chipSrc = id;
+      break;
     case 'confirm-supply':
-      L.pickLogistics(state, draft.supplierId, draft.stockId);
+      L.pickLogistics(state, draft.supplierId, draft.stockId, draft.chipSrc || 'own');
       draft.focus = [];
       play('keep');
       flash('签约！');
@@ -1387,6 +1619,17 @@ function onClick(e) {
       break;
     case 'to-launch':
       L.toLaunch(state);
+      break;
+    case 'price-step':
+      draft.price = Math.max(999, Math.min(19999, draft.price + Number(btn.dataset.d)));
+      break;
+    case 'set-price':
+      L.setPrice(state, draft.price);
+      play('boom');
+      flash(`¥${draft.price}`);
+      break;
+    case 're-price':
+      state.product.price = null;
       break;
     case 'launch-style':
       L.resolveLaunchStyle(state, id);
@@ -1517,6 +1760,17 @@ export function boot() {
   root.addEventListener('click', onClick);
   root.addEventListener('change', onChange);
   root.addEventListener('input', (e) => {
+    if (e.target.id === 'price-range' && state) {
+      draft.price = Number(e.target.value);
+      // 只刷新数字和预测，不重建滑杆，拖动不断
+      const tmp = document.createElement('div');
+      tmp.innerHTML = pricingPanel();
+      tmp.querySelectorAll('.pp-dyn').forEach((el) => {
+        const cur = document.querySelector(`.pp-dyn[data-k="${el.dataset.k}"]`);
+        if (cur) cur.innerHTML = el.innerHTML;
+      });
+      return;
+    }
     if (e.target.id === 'chipname') {
       draft.chipSeries = e.target.value;
       const h = $('#chiphint');

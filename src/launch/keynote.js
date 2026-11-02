@@ -6,6 +6,7 @@
  * 幻灯片画布 240×72（像素风），draw(g, W, H, t) 中 t 为秒。
  */
 import { CONCEPTS, tier, paletteName, chipSpec } from '../studio/parts.js';
+import { roundPrice } from '../game/market.js';
 
 // ═════════════════════════ 画图小工具 ═════════════════════════
 
@@ -562,7 +563,7 @@ export function buildKeynote(ctx) {
 
   if (!quick || main.has('fast')) {
     const up = prevChip ? Math.round((cs.bench / prevChip.bench - 1) * 100) : 0;
-    const bad = broke.has('fast');
+    const bad = broke.has('fast') || ctx.chipLag > 0;
     const beat = cs.bench > Math.max(...rivals.map((r) => r.v));
     out.push({
       key: 'chip',
@@ -570,8 +571,8 @@ export function buildKeynote(ctx) {
       main: main.has('fast'),
       wall: SLIDES.bench(cs.bench, rivals, (d.modelName || '本机').slice(0, 6)),
       kpi: { label: `${cs.label} · 综合跑分`, from: 0, to: cs.bench, dec: 0, unit: '' },
-      sub: `<b>${cs.label}</b>${up > 0 ? `，比上一代快 <b>${up}%</b>` : ''}${beat ? '，同期第一' : ''}${bad ? '<br/><small>（性能调校没跟上，实际体验差点意思）</small>' : ''}`,
-      react: bad ? ['发热呢？', '跑分没用', '😐'] : beat ? ['遥遥领先？', '这么快？', '🔥🔥'] : ['够用', '还行吧'],
+      sub: `<b>${cs.label}</b>${up > 0 ? `，比上一代快 <b>${up}%</b>` : ''}${beat ? '，同期第一' : ''}${ctx.chipLag > 0 ? '<br/><small>（台下：友商都上新一代芯片了……）</small>' : bad ? '<br/><small>（性能调校没跟上，实际体验差点意思）</small>' : ''}`,
+      react: ctx.chipLag > 0 ? ['老芯片？', '落后一代了', '🥱'] : bad ? ['发热呢？', '跑分没用', '😐'] : beat ? ['遥遥领先？', '这么快？', '🔥🔥'] : ['够用', '还行吧'],
       mood: bad ? 'bad' : beat ? 'good' : 'meh',
       pose: ['back', 'wide'],
       explode: true,
@@ -700,7 +701,7 @@ export function buildKeynote(ctx) {
   }
 
   // —— 价格 ——
-  const list = price + 1000;
+  const list = roundPrice(price * 1.2 + 300);
   out.push({
     key: 'price-q',
     chap: '价格',

@@ -234,6 +234,22 @@ function backDecalTexture(design, w, h, bgHex) {
     g.font = `700 ${Math.round(2.6 * k)}px "Noto Sans SC",sans-serif`;
     g.globalAlpha = 0.7;
     g.fillText(`DESIGNED BY ${design.company || ''}`, cx, ch * 0.9);
+    // 看不见的黑科技：在后盖印上标识，让玩家一眼认出来
+    const C = new Set(design.concepts || []);
+    const tags = [C.has('ip68') && '💧 IP68', C.has('sicarbon') && '⚡ Si-C', C.has('haptics') && '〰 X-AXIS'].filter(Boolean);
+    if (tags.length) {
+      g.globalAlpha = 0.95;
+      g.font = `900 ${Math.round(4.4 * k)}px "Noto Sans SC",sans-serif`;
+      const widths = tags.map((t) => g.measureText(t).width + 3 * k);
+      let x = cx - (widths.reduce((a, b) => a + b, 0) + (tags.length - 1) * 2 * k) / 2;
+      const y = ch * 0.76;
+      tags.forEach((t, i) => {
+        g.lineWidth = 0.6 * k;
+        g.strokeRect(x, y - 5 * k, widths[i], 6.8 * k);
+        g.fillText(t, x + widths[i] / 2, y);
+        x += widths[i] + 2 * k;
+      });
+    }
   });
 }
 
@@ -404,6 +420,22 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
 
 // ═════════════════════════ 机型构建 ═════════════════════════
 
+/** 概念件聚焦：[x 占宽比, y 占高比, 面 F/B/E, 'lens'=跟随主摄, 视角] */
+export const SPOT = {
+  keyboard: [0, -0.3, 'F', 0, 'front'], slider: [0, 0.2, 'F', 0, 'front'], swivel: [0, 0, 'F', 0, 'front'], fold: [0, 0, 'F', 0, 'front'],
+  trifold: [0, 0, 'F', 0, 'front'], rollable: [0.45, 0, 'F', 0, 'front'], popup: [-0.18, 0.56, 'E', 0, 'topfront'], stylus: [0.39, -0.55, 'E', 0, 'bottom'],
+  projector: [0, 0.5, 'E', 0, 'top'], holo: [0, 0.35, 'F', 0, 'hero'], facelock: [0, 0.45, 'F', 0, 'front'], udc: [0, 0.42, 'F', 0, 'front'],
+  paper: [0, 0, 'F', 0, 'front'], privacy: [0, 0, 'F', 0, 'front'], ultrasonic: [0, -0.3, 'F', 0, 'front'],
+  shutter: [0.5, -0.28, 'E', 0, 'right'], titanium: [0.5, 0.1, 'E', 0, 'right'], sdcard: [-0.5, 0.18, 'E', 0, 'left'],
+  sat: [-0.45, 0.56, 'E', 0, 'top'], jack: [-0.25, 0.5, 'E', 0, 'top'], ir: [0.1, 0.5, 'E', 0, 'top'], fastcharge: [0, -0.5, 'E', 0, 'bottom'],
+  lights: [0, 0, 'B', 0, 'back'], clear: [0, 0, 'B', 0, 'back'], subscreen: [0, -0.1, 'B', 0, 'back'], eink: [0, 0, 'B', 0, 'back'],
+  fan: [0, 0, 'B', 0, 'back'], battswap: [0, -0.1, 'B', 0, 'back'], modular: [0, -0.15, 'B', 0, 'back'], solar: [0, 0, 'B', 0, 'back'],
+  chrome: [0, 0, 'B', 0, 'back'], crystal: [0, 0, 'B', 0, 'back'], watch: [0, -0.05, 'B', 0, 'back'], pet: [0, -0.1, 'B', 0, 'back'],
+  ceramic: [0, 0, 'B', 0, 'back'], magcharge: [0, -0.05, 'B', 0, 'back'], reverse: [0, -0.05, 'B', 0, 'back'], wrap: [0, 0, 'B', 0, 'back'],
+  ai: [-0.22, -0.32, 'B', 0, 'back'], ip68: [0, -0.26, 'B', 0, 'back'], sicarbon: [0, -0.26, 'B', 0, 'back'], haptics: [0, -0.26, 'B', 0, 'back'],
+  periscope: [0, 0, 'B', 'lens', 'back'], gimbal: [0, 0, 'B', 'lens', 'back'], oneinch: [0, 0, 'B', 'lens', 'back'],
+};
+
 export function buildPhone(design) {
   const phys = physical(design);
   const { w, h, thickness: t } = phys;
@@ -419,6 +451,7 @@ export function buildPhone(design) {
 
   const root = new THREE.Group();
   const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
+  const ctl = { id: null, t0: 0, until: 0 };
   Object.values(layers).forEach((g) => root.add(g));
   const anchors = {};
 
@@ -910,10 +943,64 @@ export function buildPhone(design) {
     }
   }
 
+  // —— 屏幕里的黑科技：超声波指纹 / 防窥屏 ——
+  if (C.has('ultrasonic')) {
+    const fp = new THREE.Mesh(
+      new THREE.PlaneGeometry(12, 12),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false,
+        map: canvasTex(64, 64, (g2) => {
+          g2.strokeStyle = 'rgba(120,230,255,.95)';
+          g2.lineWidth = 2.4;
+          for (let r = 6; r < 30; r += 5) {
+            g2.beginPath();
+            g2.ellipse(32, 36, r * 0.8, r, 0, Math.PI * 1.05, Math.PI * 1.95);
+            g2.stroke();
+          }
+          g2.beginPath();
+          g2.arc(32, 36, 28, 0, Math.PI * 2);
+          g2.stroke();
+        }),
+      }),
+    );
+    fp.position.set(0, -dispH * 0.32 + kbH / 2, 0.24);
+    fa.add(fp);
+    anim.push((now) => (fp.material.opacity = 0.55 + 0.4 * Math.sin(now * 0.004)));
+  }
+  if (C.has('privacy')) {
+    const lv = new THREE.Mesh(
+      new THREE.PlaneGeometry(dispW, dispH),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        depthWrite: false,
+        map: canvasTex(64, 64, (g2) => {
+          for (let x = 0; x < 64; x += 4) {
+            g2.fillStyle = 'rgba(0,0,0,.55)';
+            g2.fillRect(x, 0, 2, 64);
+          }
+        }),
+      }),
+    );
+    lv.position.set(0, kbH / 2, 0.23);
+    fa.add(lv);
+    // 正面看得清，斜着看变黑：按机身转角调透明度
+    anim.push(() => {
+      const yaw = Math.abs(Math.sin(root.parent ? root.parent.rotation.y : 0));
+      lv.material.opacity = 0.15 + 0.8 * yaw;
+    });
+  }
+
   // —— v0.9 概念件 ——
   const accentM = new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.35, metalness: 0.3 });
   const darkM = new THREE.MeshStandardMaterial({ color: 0x1b1c21, roughness: 0.45 });
-  const cyc = (now, period, a, b) => {
+  const cyc = (now, period, a, b, id) => {
+    // 聚焦（玩家刚选中这个部件）时保持展开
+    if (id && ctl.id === id && now < ctl.until) {
+      const k = Math.min(1, Math.max(0, (now - ctl.t0) / 600));
+      return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    }
     // 0→1→0 的循环：停 a 秒，过渡 b 秒
     const T = (now / 1000) % period;
     const half = period / 2;
@@ -958,9 +1045,9 @@ export function buildPhone(design) {
       root.add(hingeR);
     }
     anim.push((now) => {
-      const k = cyc(now, 9, 2.6, 1.4);
+      const k = cyc(now, 9, 2.6, 1.4, 'fold');
       hingeL.rotation.y = -Math.PI * k * 0.98;
-      if (hingeR) hingeR.rotation.y = Math.PI * cyc(now + 450, 9, 2.6, 1.4) * 0.98;
+      if (hingeR) hingeR.rotation.y = Math.PI * cyc(now + 450, 9, 2.6, 1.4, 'fold') * 0.98;
     });
   }
   if (C.has('rollable')) {
@@ -970,7 +1057,7 @@ export function buildPhone(design) {
     roller.position.set(w * 0.275, 0, 0);
     ext.position.set(w / 2 - w * 0.3, 0, t * 0.2);
     root.add(ext);
-    anim.push((now) => (ext.position.x = w / 2 - w * 0.3 + cyc(now, 7, 1.8, 1.2) * w * 0.55));
+    anim.push((now) => (ext.position.x = w / 2 - w * 0.3 + cyc(now, 7, 1.8, 1.2, 'rollable') * w * 0.55));
   }
   if (C.has('slider')) {
     // 滑盖：屏幕上滑，露出第二层（手柄面板）
@@ -994,11 +1081,11 @@ export function buildPhone(design) {
     );
     deck.position.set(0, -h / 2 + h * 0.18 + 2, t / 2 - 0.2);
     front.add(deck);
-    anim.push((now) => (fa.position.y = cyc(now, 7, 2, 0.8) * h * 0.34));
+    anim.push((now) => (fa.position.y = cyc(now, 7, 2, 0.8, 'slider') * h * 0.34));
   }
   if (C.has('swivel')) {
     anim.push((now) => {
-      const k = cyc(now, 8, 2, 1.2);
+      const k = cyc(now, 8, 2, 1.2, 'swivel');
       fa.rotation.z = (-Math.PI / 2) * k;
       fa.position.z = k * 2.5;
     });
@@ -1010,7 +1097,7 @@ export function buildPhone(design) {
     pl.position.set(0, 1, Math.min(5, t - 1.5) / 2 + 0.05);
     pop.add(pb, pl);
     layers.frame.add(pop);
-    anim.push((now) => pop.position.set(-w * 0.18, h / 2 - 5 + cyc(now, 6, 1.6, 0.4) * 8.5, 0));
+    anim.push((now) => pop.position.set(-w * 0.18, h / 2 - 5 + cyc(now, 4, 1.2, 0.4, 'popup') * 8.5, 0));
   }
   if (C.has('stylus')) {
     const pen = new THREE.Group();
@@ -1020,7 +1107,7 @@ export function buildPhone(design) {
     cap.position.y = -1;
     pen.add(shaft, cap);
     layers.frame.add(pen);
-    anim.push((now) => pen.position.set(w / 2 - 8, -h / 2 - cyc(now, 7, 3, 0.6) * 22, 0));
+    anim.push((now) => pen.position.set(w / 2 - 8, -h / 2 - cyc(now, 7, 3, 0.6, 'stylus') * 22, 0));
   }
   if (C.has('battswap')) {
     const seam = roundedRectShape(capW - 8, capH * 0.6, 4, 0, -capH * 0.15).getPoints(24);
@@ -1048,7 +1135,7 @@ export function buildPhone(design) {
       mods.push(m);
     }
     anim.push((now) => {
-      const k = cyc(now, 6, 2, 0.4);
+      const k = cyc(now, 6, 2, 0.4, 'modular');
       mods[1].position.z = 0.7 + k * 6;
     });
   }
@@ -1280,7 +1367,21 @@ export function buildPhone(design) {
   root.traverse((o) => {
     if (o.isMesh) o.castShadow = true;
   });
-  return { root, layers, anchors, anim, dims: { w, h, t } };
+  // 聚焦锚点：每个概念件一个，供「选中即指给你看」
+  for (const id of C) {
+    const sp = SPOT[id];
+    if (!sp) continue;
+    const o = new THREE.Object3D();
+    let [fx, fy] = [sp[0] * w, sp[1] * h];
+    if (sp[3] === 'lens' && lay.lenses[0]) {
+      const [bx, by] = toLocal(lay.lenses[0].x, lay.lenses[0].y);
+      [fx, fy] = [-bx, by];
+    }
+    o.position.set(fx, fy, sp[2] === 'B' ? -t / 2 - 1 : sp[2] === 'F' ? t / 2 + 1 : 0);
+    layers.frame.add(o);
+    anchors[`c-${id}`] = o;
+  }
+  return { root, layers, anchors, anim, ctl, dims: { w, h, t } };
 }
 
 export function disposeObject(obj) {
@@ -1727,6 +1828,49 @@ export class PhoneStage {
     this.showSpin = spin;
   }
 
+  /**
+   * 选中概念件时「指给你看」：转到能看见它的角度，保持展开，并在旁边挂一个会呼吸的标签
+   * label 为空时只转视角不挂标签（发布会用）
+   */
+  spotlight(id, label = '', ms = 2600) {
+    const sp = SPOT[id];
+    if (!sp || !this.phone) return;
+    const now = performance.now();
+    this.phone.ctl.id = id;
+    this.phone.ctl.t0 = now;
+    this.phone.ctl.until = now + ms + 1200;
+    this.view(sp[4]);
+    this.lastInteract = now + ms; // 推迟自动旋转
+    this.spot = label ? { id, until: now + ms } : null;
+    if (label) {
+      if (!this.spotEl) {
+        this.spotEl = document.createElement('div');
+        this.spotEl.className = 'spot-tag';
+        if (getComputedStyle(this.host).position === 'static') this.host.style.position = 'relative';
+        this.host.appendChild(this.spotEl);
+      }
+      this.spotEl.innerHTML = `<i></i><b>${label}</b>`;
+      this.spotEl.hidden = true;
+    }
+  }
+
+  _tickSpot(now) {
+    const el = this.spotEl;
+    if (!el) return;
+    if (!this.spot || now > this.spot.until) {
+      el.hidden = true;
+      return;
+    }
+    const p = this.anchorScreen(`c-${this.spot.id}`);
+    if (!p) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px)`;
+    el.classList.toggle('flip', p.x > this.host.clientWidth * 0.6);
+  }
+
   /** 金属/玻璃高光扫过：环境反射旋转 + 主光扫场 */
   shine(ms = 1600) {
     this.shineFx = { t0: performance.now(), ms };
@@ -1808,8 +1952,13 @@ export class PhoneStage {
 
   view(name) {
     const base = Math.round(this.rotY / (Math.PI * 2)) * Math.PI * 2;
-    const map = { front: 0, back: Math.PI, side: Math.PI / 2, hero: 0.55 };
-    this.targetRot = { y: base + (map[name] ?? 0.55), x: name === 'hero' ? -0.06 : 0 };
+    const map = {
+      front: [0, 0], back: [Math.PI, 0], side: [Math.PI / 2, 0], hero: [0.55, -0.06],
+      left: [Math.PI / 2 - 0.25, 0], right: [-Math.PI / 2 + 0.25, 0],
+      top: [0.25, 0.72], topfront: [0.2, 0.32], bottom: [0.25, -0.72],
+    };
+    const [vy, vx] = map[name] || map.hero;
+    this.targetRot = { y: base + vy, x: vx };
     this.lastInteract = performance.now();
   }
 
@@ -2193,6 +2342,7 @@ export class PhoneStage {
       }
     }
     this._tickWall(now);
+    this._tickSpot(now);
 
     const dp = this.dust.geometry.attributes.position;
     for (let i = 0; i < dp.count; i++) {

@@ -207,7 +207,9 @@ export function physical(design) {
   const volume = (size.w * size.h * (thickness - cThick)) / 1000; // cm³
   const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight);
   const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost;
-  const unitCost = costPts * 55;
+  // 外购芯片：不用自己流片，但每台都要给芯片厂交钱
+  const extChip = design.chipSrc === 'ext' ? 6 + chip.id * 3 : 0;
+  const unitCost = (costPts + extChip) * 55;
   const band = unitCost < 1300 ? '亲民带 ¥1999' : unitCost < 2300 ? '主流带 ¥3999' : '旗舰带 ¥6999';
   return { w: size.w, h: size.h, thickness, weight, bench: chip.bench, unitCost, band, bump: cam.bump };
 }
@@ -321,9 +323,9 @@ export function danmaku(design, trend) {
     crystal: '全透明，像水晶', watch: '后盖里有表芯在走', projector: '直接投到墙上看电影', holo: '全息影像？？科幻成真',
     pet: '背面养了只小鸡！',
   };
-  for (const [k, v] of Object.entries(more)) if (C.has(k)) out.push(v, v);
+  for (const [k, v] of Object.entries(more)) if (C.has(k)) out.push(v);
   out.push('多少钱？', '等一个评测', '买了买了', '外观党狂喜', '再等等下一代');
-  return out;
+  return [...new Set(out)];
 }
 
 // ═════════════════════════ 创新层（v0.8）═════════════════════════
