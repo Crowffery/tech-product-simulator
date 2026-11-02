@@ -506,7 +506,10 @@ export function render() {
   $('#g-scene').hidden = false;
   $('#g-sheet').hidden = false;
   $('#g-cta').hidden = false;
-  if (phase === 'plan' && state) refreshNews();
+  if (phase === 'plan' && state) {
+    refreshNews();
+    persist();
+  }
   const view = (P[phase] || P.title)();
   scene.set(...view.scene);
   $('#g-caption').textContent = view.caption || '';
