@@ -129,7 +129,7 @@ function hud() {
 const STAT_HELP = {
   cash: {
     what: '公司账上的钱。所有花销都从这里扣，低于 0 就会破产（第一次有天使投资兜底）。',
-    up: ['每台手机卖出去的利润（首月 + 之后约 12 个月的生命周期）', '补货订单、旧款清仓'],
+    up: ['每台手机卖出去的利润（首月只结首月；之后约 24 个月按月续销）', '货架月 / 研发月的在售续销', '旧款清仓（一次性收尾，放弃后续月）'],
     down: ['每月团队工资和海外 / 门店运营费', '升级部门、扩建、流片、战略投资', '突发事件、库存积压'],
   },
   faith: {
@@ -766,13 +766,13 @@ P.sales = () => {
           const total = Math.round(r.sold + fc.reduce((a, b) => a + b, 0));
           const left = L.modelTailValue(m);
           const lifeP = Math.round((m.firstProfit || 0) + (m.profit || 0));
-          return `<div class="life-fc"><div class="lf-h"><b>📈 生命周期预测</b><small>首月只是开始：后面 ${fc.length} 个月还会继续卖</small></div>
+          return `<div class="life-fc"><div class="lf-h"><b>📈 生命周期预测</b><small>首月只结首月：后面约 ${fc.length} 个月按月续销（约两年）</small></div>
             ${spark([r.sold], fc)}
             <p>预计总销量约 <b>${total} 万台</b>，口碑${m.wom > 0.03 ? '<b class="pos">很好，后面几个月会越卖越多</b>' : m.wom < -0.03 ? '<b class="neg">一般，热度会掉得很快</b>' : '平稳'}。竞品发新机、出了下一代都会分走销量，可以随时降价续命。</p>
-            <div class="tail-callout"><b>🛒 持续收入</b>
-              <span>已入账（含首月） <b class="pos">${money(lifeP, { sign: true })}</b></span>
-              <span>预计剩余生命周期还能赚 <b class="pos">${money(left)}</b></span>
-              <small>下一代研发推进每个月都会自动结算「在售续销」，记在账本「在售·${esc(m.name)}」。</small></div></div>`;
+            <div class="tail-callout"><b>🛒 持续收入（按月进账，约 ${L.LIFE_MONTHS} 个月）</b>
+              <span>首月已入账 <b class="pos">${money(r.profit, { sign: true })}</b>（只结首月，不会一次结清终身）</span>
+              <span>预计后面还能再赚 <b class="pos">${money(left)}</b></span>
+              <small>点「年终总结」会先跑几个货架月续销；之后每推进一个月研发也会结算「在售·${esc(m.name)}」。只有清仓/以旧换新才会一次性收尾。</small></div></div>`;
         })()}
         <div class="unit-econ"><span>售价 <b>¥${r.price}</b></span><span>− 成本 <b>¥${r.unitCost}</b></span><span>− 渠道营销 <b>¥${r.channel}</b></span><span>= 每台赚 <b class="${r.perUnit < 0 ? 'neg' : ''}">¥${r.perUnit}</b></span></div>
       </div>`,
@@ -792,8 +792,9 @@ P.next = () => {
       <div class="ntabs"><button type="button" class="${draft.nextTab !== 'invest' ? 'on' : ''}" data-act="next-tab" data-id="review">📊 年终复盘</button><button type="button" class="${draft.nextTab === 'invest' ? 'on' : ''}" data-act="next-tab" data-id="invest">🏗 投资与升级 <small>${money(state.cash)}</small></button></div>
       ${draft.nextTab === 'invest' ? investTab() : `
       ${last ? `<div class="model-card">${last.thumb ? `<img src="${last.thumb}" alt="" />` : ''}<div><b>${esc(last.design.modelName)}</b>
-        <small>惊艳 ${last.wow} ${last.grade} · 首月 ${last.sold} 万台 · 终身 ${last.lifeSold ?? last.sold} 万台 · 终身利润 ${money(last.lifeProfit ?? 0)} · 媒体 ${last.media}</small>
-        ${(last.firsts || []).map((f) => `<span class="mini-first">🏆${esc(f)}</span>`).join('')}</div></div>` : ''}
+        <small>惊艳 ${last.wow} ${last.grade} · 首月 ${last.sold} 万台 · 至今 ${last.lifeSold ?? last.sold} 万台 · 至今利润 ${money(last.lifeProfit ?? 0)} · 媒体 ${last.media}</small>
+        ${(last.firsts || []).map((f) => `<span class="mini-first">🏆${esc(f)}</span>`).join('')}</div>
+        ${state.shelfResult?.income ? `<p class="shelf-note">🛒 上市后货架续销 ${state.shelfResult.months} 个月，又进账 <b class="pos">${money(state.shelfResult.income, { sign: true })}</b>（按月结算，不是一次结清）</p>` : ''}</div>` : ''}
       ${(() => {
         const sums = L.ledgerOf(state);
         if (!sums.length) return '';

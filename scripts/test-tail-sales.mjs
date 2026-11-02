@@ -2,7 +2,7 @@
  * 自测：在售续销会增加现金、写入账本、抬高 lifeProfit
  * 运行：node scripts/test-tail-sales.mjs
  */
-import { sellTail, advanceMonth, book, onSaleIncomeOf, balancedAllocation, LIFE_MONTHS } from '../src/game/logic.js';
+import { sellTail, advanceMonth, book, onSaleIncomeOf, balancedAllocation, LIFE_MONTHS, shelfSell, enterNext } from '../src/game/logic.js';
 import { createNewGame } from '../src/game/state.js';
 
 function assert(cond, msg) {
@@ -115,6 +115,14 @@ if (res.tail?.income > 0) {
     || state.cash > cashBeforeAdv + payrollOnly, '续销应进入现金');
 }
 
+// 货架月：首月后按月续销，不一次结清
+const shelfCash = state.cash;
+const shelf = shelfSell(state, 2);
+assert(shelf.months === 2, '应跑满 2 个货架月');
+assert(shelf.income > 0, '货架月应有收入');
+assert(state.cash > shelfCash, '货架月应增加现金');
+assert(LIFE_MONTHS >= 18, `生命周期应拉长到可感知的多年，got ${LIFE_MONTHS}`);
+
 console.log('OK tail sales:', {
   cashGain: state.cash - cash0,
   lifeProfit: state.models[0].lifeProfit,
@@ -122,4 +130,6 @@ console.log('OK tail sales:', {
   onSaleIncomeGen2: onSaleIncomeOf(state, 2),
   lastMonthDelta: state.monthDelta,
   onSaleLeft: (state.onSale || []).map((m) => m.name),
+  lifeMonths: LIFE_MONTHS,
+  shelf,
 });

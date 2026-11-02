@@ -399,24 +399,26 @@ export function advanceMonth(state, allocation) {
 
 /**
  * 每台在售机型都有自己的生命周期：
- *   爬坡（口碑好会越卖越多）→ 热销 → 成熟 → 衰退 → 退市（约 12 个月）
+ *   爬坡 → 热销 → 成熟 → 衰退 → 退市（约 24 个月 / 两年，跨多代研发）
+ * 首月只结首月销量；之后每个日历月靠 sellTail 续销进账。
+ * 清仓 / 以旧换新才会一次性收尾（放弃后续月续销）。
  * 每月销量 = 市场热度 × 生命周期曲线 × 口碑 × 竞品冲击 × 降价刺激，再加上排队补货，受产能限制。
  */
-export const LIFE_MONTHS = 12;
+export const LIFE_MONTHS = 24;
 
 export function lifeStage(m) {
   const a = m.age;
-  if (a <= 1) return { id: 'ramp', name: '首发爬坡', cls: 'ramp' };
-  if (a <= 3) return { id: 'hot', name: m.wom > 0.03 ? '口碑热销' : '热销期', cls: 'hot' };
-  if (a <= 6) return { id: 'mature', name: '成熟期', cls: 'mature' };
-  if (a < LIFE_MONTHS - 1) return { id: 'decline', name: '衰退期', cls: 'decline' };
+  if (a <= 2) return { id: 'ramp', name: '首发爬坡', cls: 'ramp' };
+  if (a <= 6) return { id: 'hot', name: m.wom > 0.03 ? '口碑热销' : '热销期', cls: 'hot' };
+  if (a <= 12) return { id: 'mature', name: '成熟期', cls: 'mature' };
+  if (a < LIFE_MONTHS - 2) return { id: 'decline', name: '衰退期', cls: 'decline' };
   return { id: 'eol', name: '即将退市', cls: 'eol' };
 }
 
-/** 这个月的自然需求（万台） */
+/** 这个月的自然需求（万台）——衰减放慢，拉成「能卖好多年」的长尾 */
 function naturalDemand(m) {
   const a = m.age;
-  const curve = (0.6 + m.wom * Math.min(a, 3)) * Math.pow(0.8, Math.max(0, a - 1));
+  const curve = (0.5 + m.wom * Math.min(a, 4)) * Math.pow(0.88, Math.max(0, a - 1));
   return Math.max(0, m.d0 * curve * m.comp * m.boost);
 }
 
@@ -469,7 +471,7 @@ export function sellTail(state) {
       book(state, tag, lineInc, m.gen ? `第${m.gen}代` : '', { productGen: m.gen });
     }
   }
-  const retired = (state.onSale || []).filter((m) => m.age >= LIFE_MONTHS || (naturalDemand({ ...m, age: m.age + 1 }) < 0.3 && (m.backlog || 0) < 0.3));
+  const retired = (state.onSale || []).filter((m) => m.age >= LIFE_MONTHS || (naturalDemand({ ...m, age: m.age + 1 }) < 0.15 && (m.backlog || 0) < 0.15));
   state.onSale = (state.onSale || []).filter((m) => !retired.includes(m));
   income = Math.round(income);
   state.tailTotal = (state.tailTotal || 0) + income;
@@ -1105,7 +1107,28 @@ function bumpName(name, n) {
   return `${name || '新机'} ${n}`.slice(0, 8);
 }
 
-/** 销售结束 → 入馆，进入「规划下一代」 */
+/**
+ * 货架月：首月战报之后、年终会之前，让在售机再卖几个月。
+ * 只跑 sellTail（不加研发工资），体现「持续收入」而不是一次结清。
+ */
+export function shelfSell(state, months = 2) {
+  const n = Math.max(0, Math.min(months, 6));
+  const out = [];
+  let income = 0;
+  for (let i = 0; i < n; i++) {
+    if (!(state.onSale || []).length) break;
+    if (state.month >= RUN_MONTHS) break;
+    const tail = sellTail(state);
+    state.month += 1;
+    income += tail.income || 0;
+    out.push(tail);
+  }
+  state.shelfResult = { months: out.length, income, lines: out.flatMap((t) => t.lines || []) };
+  state.monthDelta = income;
+  return state.shelfResult;
+}
+
+/** 销售结束 → 货架续销几月 → 入馆，进入「规划下一代」 */
 export function enterNext(state) {
   if (state.design && !state.archived) {
     const W = state.wowResult;
@@ -1128,6 +1151,15 @@ export function enterNext(state) {
     if (state.models.length > 12) state.models = state.models.slice(-12);
     state.archived = true;
   }
+  // 首月只结了首月；这里再跑货架月，把续销真正记进账本
+  shelfSell(state, 2);
+  // 货架月抬高了 lifeSold/lifeProfit，回写到刚入馆的机型卡
+  const last = state.models[state.models.length - 1];
+  const on = (state.onSale || []).find((m) => m.gen === last?.gen);
+  if (last && on) {
+    last.lifeSold = Math.round((last.sold || 0) + (on.total || 0));
+    last.lifeProfit = Math.round((on.firstProfit || 0) + (on.profit || 0));
+  }
   const sh = shareTable(state);
   if (sh) {
     state.lastRank = state.rank || sh.rank;
@@ -1138,6 +1170,7 @@ export function enterNext(state) {
 }
 
 export function goNextGen(state) {
+  // 在售旧机继续卖：绝不在换代时清空 onSale（清仓/以旧换新才清空）
   if (state.design) {
     state.designDraft = { ...structuredClone(state.design), redesign: 'major', modelName: bumpName(state.design.modelName, state.generation + 1) };
   }
