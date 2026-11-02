@@ -125,3 +125,29 @@
 ## 五、仍然开放的点（需要你们试玩判断）
 - 数值都是按模拟定的，真人玩会比模拟 AI 聪明，**难度可能偏低**；建议你们玩一局后告诉我「哪里太容易 / 太难」。
 - 音乐是合成器音色，风格偏「复古电子 / lo-fi」；如果想要真实乐器的质感，需要另外制作音频素材。
+
+## 本轮：发布会手机屏内动画节奏（迪士尼 12 Principles）
+
+来源：Ollie Johnston & Frank Thomas《The Illusion of Life》12 Principles（Adobe / Creative Bloq / frankandollie 综述）。
+
+**核心一句话：** 动画的核心是用时间与姿态让观众提前知道什么重要、相信重量与因果，并在高潮后有余韵（anticipation → action → follow-through），不是「一直在动」。
+
+落地文件：`src/studio/screenOS.js`（主），`phone3d.js` 屏纹理分辨率 540×1125。
+
+| 原则 | 屏内用法 |
+|---|---|
+| Squash & Stretch | 图标/卡片落地压扁再回弹，宽高反向补偿 |
+| Anticipation | `setScreenMode` 换场前 150–200ms 压暗+微缩，再 reveal |
+| Staging | 每 mode 只突出一个焦点（滑动/取景框/分数等） |
+| Pose to Pose | 入场 / 高潮 / 停留；中间曲线插值 |
+| Follow Through | dock 高光、通知卡、光晕滞后于主层；图标 stagger overlap |
+| Slow In/Out | 统一 easeOutCubic / easeInOut / easeOutBack / easeOutQuint |
+| Arcs | 通知滑入、图标落下、列表卡片微弧 |
+| Secondary | 壁纸呼吸、信号微闪、时钟轻跳、specular 扫光 |
+| Timing | 分数/亮度「重」；图标「脆」；高刷短位移高频 |
+| Exaggeration | 快门/充电弧/分数 overshoot，克制、发布会气质 |
+| Solid Drawing | 图标几何+内外高光+软阴影+统一光源 |
+| Appeal | 圆润亲和、品牌色、切场仪式感 |
+
+仅 presentation/keynote 走 LiveScreen；设计台仍静态低清。
+

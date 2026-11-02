@@ -2135,8 +2135,8 @@ export class PhoneStage {
     if (this._present) {
       const opts = this._launchOpts || {};
       this._liveScreen = createLiveScreen(design, {
-        width: 480,
-        height: 1000,
+        width: 540,
+        height: 1125,
         theme: opts.screenTheme || 'series',
         wallIntensity: opts.wallpaper === 'intense' ? 1.35 : opts.wallpaper === 'calm' ? 0.65 : 1,
       });
