@@ -33,7 +33,14 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const persist = () => state && saveGame(state);
 
 import('./studio/sfx.js').then((m) => (sfx = m.sfx));
-const play = (name, ...a) => sfx?.[name]?.(...a);
+const play = (name, ...a) => {
+  if (!sfx) return;
+  const fn = sfx[name] || sfx[name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+  if (typeof fn === 'function') return fn.apply(sfx, a);
+  // VO shortcuts
+  if (name === 'vo-start') return sfx.voStart?.();
+  if (name === 'vo-confirm') return sfx.voConfirm?.();
+};
 
 function toast(msg) {
   if (!msg) return;
@@ -561,6 +568,30 @@ export function render() {
       if (state?.phase === 'factory') render();
     }, 4600);
   }
+  // one-shot phase stingers + scene bed (office vs press)
+  if (phase === 'bust' && !draft._bustSfx) {
+    draft._bustSfx = true;
+    play('bankruptcy');
+  } else if (phase !== 'bust') {
+    draft._bustSfx = false;
+  }
+  if (phase === 'event' && draft._evtSfx !== (state?.pendingEvent || true)) {
+    draft._evtSfx = state?.pendingEvent || true;
+    play('event-popup');
+  } else if (phase !== 'event') {
+    draft._evtSfx = null;
+  }
+  if (phase === 'score' && draft._scoreSfx !== state?.generation) {
+    draft._scoreSfx = state?.generation;
+    play('media-score');
+  }
+  if (phase === 'sales' && draft._salesSfx !== state?.generation) {
+    draft._salesSfx = state?.generation;
+    const sold = state?.salesResult?.sold || 0;
+    if (sold >= 40) play('first-month-sales-big-number');
+    else play('cheer');
+  }
+  sfx?.syncBgm?.(phase);
 }
 
 async function mountStudio() {
@@ -1139,12 +1170,15 @@ function onClick(e) {
   if (act === 'new') {
     draft.companyName = randomCompanyName();
     screen = 'create';
+    play('vo-start');
+    play('page-turn');
     render();
     return;
   }
   if (act === 'continue') {
     const s = loadGame();
     if (!s) return toast('没有存档');
+    play('save');
     startGame(s);
     return;
   }
@@ -1162,8 +1196,11 @@ function onClick(e) {
   if (act === 'confirm-create') {
     const name = ($('#cname')?.value || draft.companyName).trim() || randomCompanyName();
     const chip = ($('#chipname')?.value || draft.chipSeries || '蜂鸟').trim().slice(0, 4) || '蜂鸟';
+    play('confirm');
+    play('vo-confirm');
     startGame(createNewGame(name, chip));
     persist();
+    play('save');
     flash('开张大吉');
     return;
   }
@@ -1230,6 +1267,7 @@ function onClick(e) {
     case 'launch-style':
       L.resolveLaunchStyle(state, id);
       persist();
+      play('press-reveal');
       playReveal();
       return;
     case 'to-sales':
@@ -1256,6 +1294,7 @@ function onClick(e) {
       const r = L.upgradeOffice(state);
       toast(r.msg);
       if (r.ok) {
+        play('level-up');
         play('fanfare');
         draft.showHQ = true;
         scene.pulse('confetti');
@@ -1305,6 +1344,11 @@ export function boot() {
     }
   });
   if (lsGet('epdg-reduce-motion') === '1') document.body.classList.add('reduce-motion');
+  import('./studio/sfx.js').then((m) => {
+    sfx = m.sfx;
+    sfx.warm?.();
+    sfx.syncBgm?.(screen === 'game' && state ? state.phase : screen);
+  });
   render();
 }
 

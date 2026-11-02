@@ -54,6 +54,8 @@ npm run preview  # 预览构建结果
 | [docs/MVP.md](docs/MVP.md) | MVP 功能拆解 |
 | [docs/PROTOTYPE.md](docs/PROTOTYPE.md) | 当前原型实现边界 |
 | [docs/DISCUSSION.md](docs/DISCUSSION.md) | 讨论与拍板记录 |
+| [docs/AUDIO_NOTES.md](docs/AUDIO_NOTES.md) | 音频手感与映射 |
+| [docs/AUDIO_SOURCES.md](docs/AUDIO_SOURCES.md) | 音频资产来源与许可 |
 
 ## MVP 成功标准（摘要）
 
