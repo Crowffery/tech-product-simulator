@@ -19,7 +19,10 @@ const DM = {
   heavy: ['砖头本砖', '这重量练手腕', '砸核桃神器', '口袋要被扯坏了'],
   bigcam: ['这镜头模组能煎蛋了', '镜头比我脸还大', '摄像头好凶', '这是背了台相机吧', '后摄有点密恐'],
   fast: ['{chip} 跑分破百万！', '{chip} 太猛了', '性能怪兽来了', '打游戏稳了', '遥遥领先？', '不服跑个分'],
-  chipok: ['{chip} 够用吗？', '{chip} 发热怎么样', '芯片挤牙膏了吗', '性能一般般？', '日常够用就行'],
+  chipok: ['{chip} 够用吗？', '{chip} 发热怎么样', '性能一般般？', '日常够用就行', '刷视频够了'],
+  chipmid: ['{chip} 日常够用', '中杯芯片真香', '打游戏够不够？', '{chip} 能战三年'],
+  valuechip: ['这价格还给 {chip}？真香', '{chip} 下放到这个价位了', '学生党狂喜', '性价比拉满', '这芯片配这价格，友商慌了'],
+  weakchip: ['这价格就给 {chip}？', '旗舰价，入门芯？', '芯片拖后腿了', '{chip} 配这个价？'],
   chiplag: ['芯片落后一代了吧', '还在用老芯片？', '友商都换新芯片了', '这芯片去年的吧', '性能要被吊打了'],
   chiplead: ['自研芯片领先了！', '这芯片比友商还新', '遥遥领先！', '芯片代差拉开了'],
   meme: ['Are you OK?', '真香警告', '等等党永不为奴', '为发烧而生？', '友商：？', '这波在大气层', '爷青回', '求求了别挤牙膏'],
@@ -75,7 +78,17 @@ export function danmakuLines(design, ctx = {}, n = 10) {
   if (p.thickness >= 8.8) intents.push('thick');
   if (p.weight >= 230) intents.push('heavy');
   if (design.parts.camera === 2) intents.push('bigcam');
-  intents.push(ctx.chipLag > 0 ? 'chiplag' : ctx.chipLead ? 'chiplead' : cs.bench >= 1000000 ? 'fast' : 'chipok');
+  // 芯片评论要结合价位：低价给好芯片是惊喜，高价给弱芯片是槽点
+  const tierId = design.parts.chip ?? 1;
+  const price = ctx.price || 3999;
+  intents.push(
+    ctx.chipLag > 0 ? 'chiplag'
+      : ctx.chipLead ? 'chiplead'
+        : price <= 2999 && tierId >= 1 ? 'valuechip'
+          : price >= 4500 && tierId === 0 ? 'weakchip'
+            : tierId === 2 || cs.bench >= 1000000 ? 'fast'
+              : tierId === 1 ? 'chipmid' : 'chipok',
+  );
   if (design.parts.material === 3) intents.push('leather');
   if (design.parts.material === 2) intents.push('metal');
   if (design.screenForm === 'full') intents.push('full');
@@ -115,6 +128,9 @@ const CM = {
   buzz: { base: 2000, hot: true, t: ['#{m}# 是今年最离谱的手机（褒义）', '今年最有想法的一台，没有之一', '这才是我想要的创新'] },
   rough: { base: 700, hot: true, t: ['想法很好，做工像样机', '概念满分，完成度堪忧', '首批用户就是测试员吧'] },
   stale: { base: 750, t: ['又是挤牙膏，换个颜色就是新品？', '今年的升级在哪里？', '跟上一代找不同'] },
+  copy: { base: 1300, hot: true, t: ['这不就是上一代吗？换了个名字', '找不同游戏：我找了十分钟', '上一代用户表示：没有任何换机理由'] },
+  valuechip: { base: 900, hot: true, t: ['{c} 下放到这个价，学生党狂喜', '这价格这芯片，友商今晚睡不着', '同价位没对手，闭眼入'] },
+  weakchip: { base: 800, hot: true, t: ['这么贵还用 {c}？割韭菜', '价格旗舰，芯片入门', '芯片拖了后腿，等降价'] },
   chiplag: { base: 950, hot: true, t: ['芯片还是老一代，友商都换新了', '性能落后一代，这价格说不过去', '自研芯片该升级了吧'] },
   chiplead: { base: 850, t: ['自研芯片终于领先了，支持', '芯片领先一代，性能党狂喜', '这代芯片是真的强'] },
   extchip: { base: 260, t: ['用的外购芯片，性能还行就是没特色', '外购芯片稳是稳，就是不够独特'] },
@@ -140,7 +156,7 @@ export function buildComments(ctx) {
     if (!free.length) return null;
     const t0 = pick(free);
     used.add(t0);
-    const t = t0.replace('{p}', vars.p || '').replace('{m}', ctx.company || ctx.modelName || '').replace('{last}', vars.last || '');
+    const t = t0.replace('{c}', vars.c || '').replace('{p}', vars.p || '').replace('{m}', ctx.company || ctx.modelName || '').replace('{last}', vars.last || '');
     return { t, like: Math.round(c.base * (0.6 + Math.random() * 0.8)), hot: !!c.hot };
   };
   const out = [];
@@ -156,13 +172,17 @@ export function buildComments(ctx) {
   if (ctx.flop) out.push(say('flop'));
   if (ctx.buzz >= 40) out.push(say('buzz'));
   if (ctx.completeness < 70) out.push(say('rough'));
-  if (ctx.novelty < 25 && ctx.gen > 1) out.push(say('stale'));
+  if ((ctx.stale || 0) >= 0.8) out.push(say('copy'));
+  else if (ctx.novelty < 25 && ctx.gen > 1) out.push(say('stale'));
+  const tierId = ctx.design?.parts?.chip ?? 1;
+  if ((ctx.price || 3999) <= 2999 && tierId >= 1 && !(ctx.chipLag > 0)) out.push(say('valuechip', { c: chipSpec(ctx.design).label }));
+  if ((ctx.price || 3999) >= 4500 && tierId === 0) out.push(say('weakchip', { c: chipSpec(ctx.design).label }));
   if (ctx.chipLag > 0) out.push(say('chiplag'));
   else if (ctx.chipLead) out.push(say('chiplead'));
   if (ctx.extChip) out.push(say('extchip'));
   out.push(say('good'), say('good'), say('meh'), say('meh'), say('joke'));
   // 弹幕里的短句也会出现在评论区（换成评论语气）
-  danmakuLines(ctx.design, ctx, 3).forEach((t) => out.push({ t, like: Math.round(60 + Math.random() * 220), hot: false }));
+  danmakuLines(ctx.design, { ...ctx, price: ctx.price }, 3).forEach((t) => out.push({ t, like: Math.round(60 + Math.random() * 220), hot: false }));
   const list = out.filter(Boolean).slice(0, 12);
   const names = shuffle(NAMES);
   return list.map((c, i) => ({ ...c, who: names[i % names.length], av: AV[(i * 5 + (ctx.gen || 1)) % AV.length], reply: Math.round((c.like / 40) * Math.random()) }));

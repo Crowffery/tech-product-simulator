@@ -346,3 +346,9 @@ button:disabled.chip, button:disabled.tier { opacity: .4; }
 .spot-tag.flip b::before { left: auto; right: -16px; transform: rotate(40deg); transform-origin: left; }
 @keyframes spotring { 0% { transform: scale(.6); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
 @keyframes spotin { from { transform: scale(.4); opacity: 0; } }
+.simbar { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; margin: 6px 0; font-size: .74rem; font-weight: 800; }
+.simbar i { height: 8px; border: 2px solid #2f2117; background: #eee3c8; }
+.simbar i b { display: block; height: 100%; background: #27ae60; }
+.simbar.mid i b { background: #f39c12; } .simbar.bad i b { background: #e74c3c; }
+.simbar small { grid-column: 1 / -1; font-weight: 400; color: #6d5c4d; }
+.simbar.bad small { color: #c0392b; font-weight: 800; }

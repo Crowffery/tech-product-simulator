@@ -13,7 +13,7 @@ export function createNewGame(companyName, chipSeries = '蜂鸟') {
     companyName,
     generation: 1,
     month: 1,
-    cash: 200,
+    cash: 500,
     faith: 50,
     hype: 0,
     reputation: 50,
@@ -61,6 +61,8 @@ export function createNewGame(companyName, chipSeries = '蜂鸟') {
     brand: 1,
     lastPrices: {},
     priceWar: null,
+    ledger: [],
+    mods: [],
   };
 }
 
@@ -86,6 +88,12 @@ export function loadGame() {
     if (data.rescued === undefined) data.rescued = false;
     data.brand ||= 1;
     data.lastPrices ||= {};
+    data.ledger ||= [];
+    data.mods ||= [];
+    // 旧存档的在售机型转成生命周期格式
+    data.onSale = (data.onSale || []).map((m) =>
+      m.d0 ? m : { ...m, d0: (m.monthly || 1) / 0.6, wom: 0, comp: 1, boost: 1, age: 1, price: 3999, unitCost: 2400, cap: 20, history: [], gen: 0 },
+    );
     if (data.design === undefined) data.design = null;
     if (data.designDraft === undefined) data.designDraft = null;
     return data;

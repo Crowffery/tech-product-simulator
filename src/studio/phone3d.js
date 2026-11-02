@@ -29,6 +29,24 @@ function roundedRectShape(w, h, r, cx = 0, cy = 0) {
   return s;
 }
 
+/** 把多边形裁成半平面 a*x + b*y + c >= 0 的部分（拼色用） */
+function clipHalf(pts, a, b, c) {
+  const out = [];
+  const f = (p) => a * p.x + b * p.y + c;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const q = pts[(i + 1) % pts.length];
+    const fp = f(p);
+    const fq = f(q);
+    if (fp >= 0) out.push(p);
+    if ((fp >= 0) !== (fq >= 0)) {
+      const t = fp / (fp - fq);
+      out.push(new THREE.Vector2(p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t));
+    }
+  }
+  return out;
+}
+
 function topBandShape(w, h, r, splitY) {
   const s = new THREE.Shape();
   r = Math.min(r, w / 2, h / 2);
@@ -150,7 +168,9 @@ function bodyMaterial(matId, hex) {
   }
 }
 
-function frameMaterial(matId, hex) {
+function frameMaterial(matId, hex, sub) {
+  if (sub === 'ti') return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex).lerp(new THREE.Color('#8a8d93'), 0.45), roughness: 0.38, metalness: 0.9, envMapIntensity: 1.2 });
+  if (sub === 'steel') return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex).offsetHSL(0, -0.15, 0.18), roughness: 0.08, metalness: 1, envMapIntensity: 1.9 });
   if (matId === 0) return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.45, envMapIntensity: 0.8 });
   return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex).offsetHSL(0, -0.1, 0.1), roughness: 0.22, metalness: 0.92, envMapIntensity: 1.5 });
 }
@@ -339,8 +359,13 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
   switch (layoutId) {
     case 'square': {
       const cell = r2 * 2 + 3.2;
-      const S = cell * 2 + 3;
+      const S = lensCount === 1 ? cell + R + 4 : cell * 2 + 3;
       module = { type: 'rrect', x: m + S / 2, y: m + S / 2, w: S, h: S, r: 5 };
+      if (lensCount === 1) {
+        lenses.push({ x: m + S / 2, y: m + S / 2, r: R * 1.05 });
+        flash = { x: m + S - 3.2, y: m + 3.2 };
+        break;
+      }
       const pos = [
         [m + 1.5 + cell / 2, m + 1.5 + cell / 2],
         [m + 1.5 + cell / 2, m + 1.5 + cell * 1.5],
@@ -389,6 +414,8 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
       module = { type: 'twin', a: { x: cx1, y: cy, r: Rc }, b: { x: cx2, y: cy, r: Rc } };
       lenses.push({ x: cx1, y: cy, r: R });
       if (lensCount >= 2) lenses.push({ x: cx2, y: cy, r: lensCount === 3 ? r2 : R });
+      // 单摄：另一只「眼睛」放补光灯和传感器，不留空洞
+      else lenses.push({ x: cx2, y: cy, r: R * 0.45, ring: true });
       if (lensCount === 3) lenses.push({ x: w / 2, y: cy + Rc + 3.5, r: r2 * 0.7, ring: true });
       flash = { x: w / 2, y: cy - Rc * 0.3, free: true };
       break;
@@ -399,8 +426,8 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
       const cy = m + D / 2;
       module = { type: 'diamond', x: cx, y: cy, s: D / Math.SQRT2 };
       const off = D * 0.27;
-      const pos = [[cx, cy - off], [cx - off, cy], [cx + off, cy]];
-      for (let i = 0; i < lensCount; i++) lenses.push({ x: pos[i][0], y: pos[i][1], r: i === 0 ? R * 0.9 : r2 * 0.85 });
+      const pos = lensCount === 1 ? [[cx, cy]] : [[cx, cy - off], [cx - off, cy], [cx + off, cy]];
+      for (let i = 0; i < lensCount; i++) lenses.push({ x: pos[i][0], y: pos[i][1], r: lensCount === 1 ? R * 1.1 : i === 0 ? R * 0.9 : r2 * 0.85 });
       flash = { x: cx, y: cy + off };
       break;
     }
@@ -484,7 +511,7 @@ export function buildPhone(design) {
     layers.frame.add(new THREE.Mesh(frameGeo, [new THREE.MeshBasicMaterial({ color: 0x0b0d14 }), new THREE.MeshBasicMaterial({ color: shade(design.color, 0.1), toneMapped: false })]));
   } else {
     const ti = (design.concepts || []).includes('titanium');
-    layers.frame.add(new THREE.Mesh(frameGeo, ti ? new THREE.MeshStandardMaterial({ color: 0x8d9096, metalness: 0.85, roughness: 0.45, envMapIntensity: 1.2 }) : frameMaterial(matId, frameHex)));
+    layers.frame.add(new THREE.Mesh(frameGeo, ti ? new THREE.MeshStandardMaterial({ color: 0x8d9096, metalness: 0.85, roughness: 0.45, envMapIntensity: 1.2 }) : frameMaterial(matId, frameHex, design.matSub)));
   }
   const mid = new THREE.Mesh(
     new THREE.ShapeGeometry(roundedRectShape(holeW - 0.5, holeH - 0.5, Math.max(0.6, corner.r - inset)), 16),
@@ -660,6 +687,15 @@ export function buildPhone(design) {
     band.position.z = 0.09;
     back.add(band);
   }
+  if (design.twoTone === 'vsplit' || design.twoTone === 'diag') {
+    const pts = roundedRectShape(capW, capH, capR).getPoints(48);
+    const half = design.twoTone === 'vsplit' ? clipHalf(pts, 1, 0, 0) : clipHalf(pts, 1, -0.55, -4);
+    if (half.length > 2) {
+      const sh = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(half)), bodyMaterial(matId, design.color2));
+      sh.position.z = 0.09;
+      back.add(sh);
+    }
+  }
   if (matId === 3) {
     const pts = roundedRectShape(capW - 5, capH - 5, Math.max(0.6, capR - 2.5)).getPoints(30);
     pts.push(pts[0]);
@@ -682,7 +718,7 @@ export function buildPhone(design) {
   const lay = cameraLayout(design.layout, w, h, camT.lenses, design.parts.camera);
   if (C.has('oneinch') && lay.lenses[0]) lay.lenses[0].r *= 1.4;
   const bump = camT.bump;
-  const modHex = design.twoTone === 'band' ? design.color2 : design.color;
+  const modHex = design.twoTone === 'band' || design.twoTone === 'module' ? design.color2 : design.color;
   const modMat = bodyMaterial(matId === 3 ? 2 : matId, shade(modHex, -0.07).getStyle());
   const extrude = (s, d) =>
     new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelThickness: 0.4, bevelSize: 0.4, bevelSegments: 3, curveSegments: 28 });
@@ -1011,7 +1047,7 @@ export function buildPhone(design) {
     const g = new THREE.Group();
     const body = new THREE.Mesh(
       new THREE.ExtrudeGeometry(roundedRectShape(sw - 1, sh - 1, Math.max(0.6, corner.r - 1)), { depth: st - 1, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5, bevelSegments: 2, curveSegments: 16 }),
-      [bodyMaterial(matId, backHex), frameMaterial(matId, frameHex)],
+      [bodyMaterial(matId, backHex), frameMaterial(matId, frameHex, design.matSub)],
     );
     body.geometry.translate(0, 0, -(st - 1) / 2);
     g.add(body);
@@ -1092,7 +1128,7 @@ export function buildPhone(design) {
   }
   if (C.has('popup')) {
     const pop = new THREE.Group();
-    const pb = new THREE.Mesh(new THREE.BoxGeometry(12, 9, Math.min(5, t - 1.5)), frameMaterial(matId, frameHex));
+    const pb = new THREE.Mesh(new THREE.BoxGeometry(12, 9, Math.min(5, t - 1.5)), frameMaterial(matId, frameHex, design.matSub));
     const pl = new THREE.Mesh(new THREE.CircleGeometry(2, 16), new THREE.MeshBasicMaterial({ color: 0x050507 }));
     pl.position.set(0, 1, Math.min(5, t - 1.5) / 2 + 0.05);
     pop.add(pb, pl);
@@ -1542,7 +1578,7 @@ export class PhoneStage {
     this.scene.environment = studioEnvironment(this.renderer);
     this.scene.environmentIntensity = 0.85;
 
-    this.hemi = new THREE.HemisphereLight(0xfff4e0, 0x3a2e26, 0.75);
+    this.hemi = new THREE.HemisphereLight(0xffffff, 0x4a3e36, 1.0);
     this.key = new THREE.DirectionalLight(0xffffff, 2.0);
     this.key.position.set(150, 260, 280);
     this.key.castShadow = true;

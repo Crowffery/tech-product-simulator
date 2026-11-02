@@ -164,8 +164,26 @@ function noise(dur, { vol = 0.08, at = 0, hp = 800, lp = 8000 } = {}) {
   src.stop(t + dur + 0.02);
 }
 
+const MUSIC_KEY = 'epdg-music-off';
+const BGM_VOL = 0.14;
+let musicOff = lsGet(MUSIC_KEY) === '1';
+let bgmRest = null;
+
 function setBgmVolume(v) {
-  if (bgmEl) bgmEl.volume = muted ? 0 : v;
+  if (bgmEl) bgmEl.volume = muted || musicOff ? 0 : v;
+}
+
+/** 放完一遍歇 20～45 秒再放，避免同一段旋律一直循环 */
+function scheduleNext(a, id) {
+  a.addEventListener('ended', () => {
+    clearTimeout(bgmRest);
+    bgmRest = setTimeout(() => {
+      if (bgmEl !== a || bgmId !== id || muted || musicOff) return;
+      a.currentTime = 0;
+      const p = a.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    }, 20000 + Math.random() * 25000);
+  });
 }
 
 export const sfx = {
@@ -337,8 +355,8 @@ export const sfx = {
       bgmId = null;
       return;
     }
-    if (bgmId === id && bgmEl && !bgmEl.paused) {
-      setBgmVolume(0.28);
+    if (bgmId === id && bgmEl) {
+      setBgmVolume(BGM_VOL);
       return;
     }
     const stem = BGM_FILE[id];
@@ -349,10 +367,12 @@ export const sfx = {
     }
     bgmId = id;
     const a = new Audio(srcFor(stem));
-    a.loop = true;
+    a.loop = false;
     a.preload = 'auto';
-    a.volume = muted ? 0 : 0.28;
+    a.volume = muted || musicOff ? 0 : BGM_VOL;
     bgmEl = a;
+    scheduleNext(a, id);
+    if (musicOff || muted) return;
     const p = a.play();
     if (p && typeof p.catch === 'function') p.catch(() => {});
   },
@@ -378,7 +398,7 @@ export const sfx = {
   setMuted(v) {
     muted = !!v;
     lsSet(MUTE_KEY, muted ? '1' : '0');
-    setBgmVolume(0.28);
+    setBgmVolume(BGM_VOL);
     if (muted && bgmEl) bgmEl.pause();
     else if (!muted && bgmEl && bgmId) {
       const p = bgmEl.play();
@@ -387,5 +407,20 @@ export const sfx = {
   },
   get muted() {
     return muted;
+  },
+
+  /** 音乐单独开关（音效不受影响） */
+  setMusic(on) {
+    musicOff = !on;
+    lsSet(MUSIC_KEY, musicOff ? '1' : '0');
+    setBgmVolume(BGM_VOL);
+    if (musicOff && bgmEl) bgmEl.pause();
+    else if (!musicOff && !muted && bgmEl) {
+      const p = bgmEl.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    }
+  },
+  get musicOn() {
+    return !musicOff;
   },
 };

@@ -11,7 +11,7 @@ import { SLOTS } from './data.js';
 
 /** 各定位的理想配比（%）：性能 / 外观 / 影像 / 续航 / 系统 */
 export const IDEAL = {
-  flagship: { perf: 25, design: 20, camera: 30, battery: 10, os: 15 },
+  flagship: { perf: 22, design: 16, camera: 24, battery: 20, os: 18 },
   mainstream: { perf: 20, design: 20, camera: 20, battery: 25, os: 15 },
   minimal: { perf: 10, design: 35, camera: 10, battery: 30, os: 15 },
   pro: { perf: 30, design: 10, camera: 35, battery: 15, os: 10 },
@@ -128,18 +128,18 @@ export function endingTitles(state) {
   const avgWow = ms.length ? ms.reduce((a, m) => a + (m.wow || 0), 0) / ms.length : 0;
   const maxBuzz = Math.max(0, ...ms.map((m) => m.buzz || 0));
   const minors = ms.filter((m) => m.design.redesign === 'minor').length;
-  const sold = ms.reduce((a, m) => a + (m.sold || 0), 0);
+  const sold = ms.reduce((a, m) => a + (m.lifeSold || m.sold || 0), 0);
   const titles = [];
   if (firsts >= 5) titles.push({ t: '潮流定义者', d: `首创 ${firsts} 项，竞品都在抄你` });
   if (avgWow >= 55) titles.push({ t: '惊艳制造机', d: `平均惊艳度 ${Math.round(avgWow)}` });
   if (maxBuzz >= 45) titles.push({ t: '出圈狂魔', d: `单代出圈度 ${maxBuzz}` });
   if (state.overstocks >= 2) titles.push({ t: '仓库传说', d: `积压了 ${state.overstocks} 次` });
-  if (state.cash >= 400) titles.push({ t: '印钞机', d: `账上躺着 ${state.cash}` });
+  if (state.cash >= 3000) titles.push({ t: '印钞机', d: `账上躺着 ¥${(state.cash / 100).toFixed(1)} 亿` });
   if (minors >= Math.max(3, ms.length - 1)) titles.push({ t: '挤牙膏之王', d: `${minors} 代小改款` });
   if ((state.chipLeads || 0) >= 2) titles.push({ t: '遥遥领先', d: `${state.chipLeads} 代产品的芯片领先行业` });
   if ((state.brand || 1) >= 1.2) titles.push({ t: 'Pro Max 定价大师', d: `品牌溢价 ×${state.brand.toFixed(2)}，卖得贵还有人排队` });
   if ((state.brand || 1) <= 0.85) titles.push({ t: '交个朋友', d: '价格屠夫，用户心中的「厚道」代名词' });
-  if (state.rescued && state.cash >= 150) titles.push({ t: '绝地翻盘', d: '差点倒闭，最后把投资人的钱挣回来了' });
+  if (state.rescued && state.cash >= 800) titles.push({ t: '绝地翻盘', d: '差点倒闭，最后把投资人的钱挣回来了' });
   if (!titles.length) titles.push({ t: '稳健经营者', d: '不惊艳，但活下来了' });
   return { titles, stats: { gens: ms.length, firsts, avgWow: Math.round(avgWow), sold, cash: state.cash } };
 }
@@ -168,7 +168,7 @@ export const roundPrice = (v) => Math.max(999, Math.round(v / 100) * 100 - 1);
 
 /** 价格越低，愿意掏钱的人群越大 */
 export function marketSize(price) {
-  return Math.max(0.45, Math.min(2.4, Math.pow(3999 / price, 0.9)));
+  return Math.max(0.45, Math.min(3.2, Math.pow(3999 / price, 1.3)));
 }
 
 /** 行业主流芯片代数：约 10 个月进一代 */

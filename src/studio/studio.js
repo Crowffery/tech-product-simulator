@@ -37,6 +37,12 @@ import {
   conceptsConflict,
   unlockStatus,
   buzzOf,
+  MAT_SUBS,
+  matSub,
+  FORM_COST_NOTE,
+  PRACTICAL,
+  innovCount,
+  similarity,
 } from './parts.js';
 import { sfx } from './sfx.js';
 import { term, installGlossary } from '../glossary.js';
@@ -116,13 +122,19 @@ export function createStudio(root, opts = {}) {
             `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}" ${key === 'size' ? lockAttr() : ''}>${esc(key === 'chip' ? chipName(design.chipSeries, design.chipGen || 1, t.id) : t.label)}</button>`,
         )
         .join('');
+      const subs = key === 'material' && MAT_SUBS[design.parts.material];
+      const sub = subs && matSub(design);
       return `<div class="part-row"><span class="part-name">${P.name}</span><div class="tiers">${btns}</div></div>
-        <div class="part-note" id="note-${key}">${esc(tier(design, key).note)}</div>`;
+        ${subs ? `<div class="part-row sub"><span class="part-name">↳ 细分</span><div class="tiers">${subs.map((x) => `<button type="button" class="tier ${sub.id === x.id ? 'on' : ''}" data-matsub="${x.id}">${x.label}${x.cost ? `<small>+¥${x.cost * 70}</small>` : ''}</button>`).join('')}</div></div>` : ''}
+        <div class="part-note" id="note-${key}">${esc(sub ? sub.note : tier(design, key).note)}</div>`;
     }).join('');
+    const forms = SCREEN_FORMS.map((f) => `<button type="button" class="tier ${design.screenForm === f.id ? 'on' : ''}" data-form="${f.id}" ${lockAttr()}>${f.label}${f.cost ? `<small>+¥${f.cost * 70}</small>` : ''}</button>`).join('');
+    const formRow = `<div class="part-row"><span class="part-name">前摄开孔</span><div class="tiers">${forms}</div></div>
+      <div class="part-note">${esc(FORM_COST_NOTE[design.screenForm] || '')}</div>`;
     const posField = opts.lockPosition
       ? `<div class="field"><span class="flabel">定位</span><b>${POSITIONS.find((p) => p.id === design.position)?.name || ''}</b> <small class="muted">（企划已定）</small></div>`
       : `<div class="field"><span class="flabel">定位</span><div class="chips">${pos}</div></div>`;
-    return `${posField}${parts}
+    return `${posField}${parts}${formRow}
       ${chipChart()}
 `;
   }
@@ -148,8 +160,7 @@ export function createStudio(root, opts = {}) {
       ).join('');
     return `
       <div class="field"><span class="flabel">圆角</span><div class="chips">${opt(CORNERS, design.corner, 'corner', true)}</div></div>
-      <div class="field"><span class="flabel">屏幕</span><div class="chips">${opt(SCREEN_FORMS, design.screenForm, 'form', true)}</div></div>
-      <div class="field"><span class="flabel">镜头布局</span><div class="chips">${opt(LAYOUTS, design.layout, 'layout', true)}</div></div>
+      <div class="field"><span class="flabel">镜头模组造型 <small class="muted">只改样子，不影响成本；镜头数量由「配置」里的主摄决定</small></span><div class="chips">${opt(LAYOUTS, design.layout, 'layout', true)}</div></div>
       <div class="field"><span class="flabel">主色 · ${esc(paletteName(design.color))}</span>
         <div class="swatches">${swatches(design.color, 'color')}<label class="swatch custom" title="自定义主色"><input type="color" value="${design.color}" data-custom="color" />＋</label></div></div>
       <div class="field"><span class="flabel">拼色</span><div class="chips">${opt(TWO_TONE, design.twoTone, 'tone')}</div></div>
@@ -205,7 +216,7 @@ export function createStudio(root, opts = {}) {
       }
       const on = sel.includes(c.id);
       const clash = !on && sel.find((x) => conceptsConflict(c.id, x));
-      const full = !on && sel.length >= maxC();
+      const full = !on && !PRACTICAL.has(c.id) && innovCount(sel) >= maxC();
       const why = minor() ? '小改款不能改概念件' : clash ? `与「${conceptName(clash)}」冲突` : full ? `这一代最多 ${maxC()} 个` : '';
       const [cls, label] = status(c.id);
       return `<button type="button" class="concept ${on ? 'on' : ''}" data-concept="${c.id}" ${minor() || clash || full ? 'disabled' : ''} title="${esc(why)}">
@@ -216,13 +227,17 @@ export function createStudio(root, opts = {}) {
     };
     const visible = CONCEPTS.filter((c) => hasAppeared(c.id, actx));
     const hidden = CONCEPTS.length - visible.length;
-    const groups = CATS.map((cat) => {
-      const list = visible.filter((c) => c.cat === cat.id);
-      if (!list.length) return '';
-      return `<h4 class="tier-h">${cat.icon} ${cat.name}</h4><div class="concepts">${list.map(card).join('')}</div>`;
-    }).join('');
+    const practical = visible.filter((c) => PRACTICAL.has(c.id));
+    const groups =
+      `<h3 class="sub">🚀 前沿创新 <small>占名额，决定新颖度和话题</small></h3>` +
+      CATS.map((cat) => {
+        const list = visible.filter((c) => c.cat === cat.id && !PRACTICAL.has(c.id));
+        if (!list.length) return '';
+        return `<h4 class="tier-h">${cat.icon} ${cat.name}</h4><div class="concepts">${list.map(card).join('')}</div>`;
+      }).join('') +
+      (practical.length ? `<h3 class="sub">🔧 实用功能 <small>常规配置，不占创新名额，但要加成本</small></h3><div class="concepts">${practical.map(card).join('')}</div>` : '');
     const known = COMBOS.filter((c) => mem[c.id]);
-    return `<p class="hint">${term('概念件')} 已选 <b>${sel.length}/${maxC()}</b>${ctx ? ` · ${term('研发点')} <b>${ctx.rp}</b>` : ''}</p>
+    return `<p class="hint">前沿创新 已选 <b>${innovCount(sel)}/${maxC()}</b> · 实用功能 ${sel.length - innovCount(sel)} 项${ctx ? ` · ${term('研发点')} <b>${ctx.rp}</b>` : ''}</p>
       ${groups}
       ${hidden ? `<p class="teaser">🔭 还有 ${hidden} 项技术尚未出现在行业里……</p>` : ''}
       ${known.length ? `<h3 class="sub">品类组合</h3><div class="combos">${known
@@ -257,6 +272,13 @@ export function createStudio(root, opts = {}) {
         <div class="ro"><span>蜂鸟实验室跑分</span><b><i data-num="bench" data-v="${p.bench}" data-sep="1">${p.bench.toLocaleString('en-US')}</i></b></div>
         <div class="ro"><span>单台成本</span><b>¥<i data-num="cost" data-v="${p.unitCost}">${p.unitCost}</i></b><em>建议 ${p.band}</em></div>
       </div>
+      ${(() => {
+        const pg = prevGen();
+        if (!pg) return '';
+        const sim = Math.round(similarity(design, pg) * 100);
+        return `<div class="simbar ${sim >= 80 ? 'bad' : sim >= 60 ? 'mid' : 'ok'}"><span>和上一代相似度</span><i><b style="width:${sim}%"></b></i><em>${sim}%</em>
+          <small>${sim >= 80 ? '几乎一样：媒体会说「找不同」，用户没理由换' : sim >= 60 ? '有点像：换个配色、加点新东西会更好卖' : '有新鲜感'}</small></div>`;
+      })()}
       <h3 class="sub">${term('研发上限')}</h3>
       <div class="caps">${caps.map(gauge).join('')}</div>
       <h3 class="sub">${term('卖点')}兑现</h3>
@@ -490,7 +512,7 @@ export function createStudio(root, opts = {}) {
     design.concepts = [];
     const want = Math.floor(Math.random() * (maxC() + 1));
     for (const c of [...CONCEPTS].sort(() => Math.random() - 0.5)) {
-      if (design.concepts.length >= want) break;
+      if (innovCount(design.concepts) >= want) break;
       if (!unlockStatus(c.id, unlockCtx()).unlocked) continue;
       if (design.concepts.some((x) => conceptsConflict(c.id, x))) continue;
       design.concepts.push(c.id);
@@ -758,6 +780,11 @@ export function createStudio(root, opts = {}) {
           if (d.part === 'battery' || d.part === 'chip') stage?.view('side');
           if (d.part === 'screen') stage?.view('front');
         }
+      } else if (d.matsub) {
+        sfx.part(1);
+        design.matSub = d.matsub;
+        update({ panel: true });
+        if (!exploded) stage?.view('side');
       } else if (d.corner) {
         sfx.part(Number(d.corner));
         design.corner = Number(d.corner);
