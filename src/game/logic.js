@@ -40,8 +40,29 @@ export function upgradeDept(state, id) {
   return { ok: true, msg: `${d.name}升到 Lv${state.depts[id]}` };
 }
 
+// ═════════════════════════ 办公室扩建 ═════════════════════════
+
+export const OFFICES = [
+  { lv: 1, name: '车库', icon: '🏚', cost: 0, mp: 0, pay: 0, launch: 0, rp: 0, desc: '一切从这里开始' },
+  { lv: 2, name: '小办公室', icon: '🏢', cost: 60, mp: 1, pay: 2, launch: 0, rp: 0, desc: '人力 +1 · 有了会议室' },
+  { lv: 3, name: '写字楼', icon: '🏙', cost: 150, mp: 2, pay: 5, launch: 4, rp: 1, desc: '人力 +2 · 发布会 +4 · 研发点 +1' },
+  { lv: 4, name: '科技园', icon: '🌳', cost: 300, mp: 3, pay: 8, launch: 7, rp: 2, desc: '人力 +3 · 发布会 +7 · 研发点 +2' },
+];
+export const office = (state) => OFFICES[(state.office || 1) - 1];
+export function nextOffice(state) {
+  return OFFICES[state.office || 1] || null;
+}
+export function upgradeOffice(state) {
+  const n = nextOffice(state);
+  if (!n) return { ok: false, msg: '已经是科技园了' };
+  if (state.cash < n.cost) return { ok: false, msg: '现金不够' };
+  state.cash -= n.cost;
+  state.office = n.lv;
+  return { ok: true, msg: `🎉 搬进${n.name}！` };
+}
+
 export function manpowerCap(state) {
-  return 4 + deptLevel(state, 'rnd') * 2;
+  return 4 + deptLevel(state, 'rnd') * 2 + office(state).mp;
 }
 
 export function maxConcepts(state) {
@@ -54,11 +75,11 @@ function slotBoost(state, slotId) {
 }
 
 function payroll(state) {
-  return 4 + Object.values(state.depts).reduce((a, b) => a + b, 0) * 2;
+  return 4 + Object.values(state.depts).reduce((a, b) => a + b, 0) * 2 + office(state).pay;
 }
 
 export function prLaunchBonus(state) {
-  return [3, 7, 11][deptLevel(state, 'pr') - 1];
+  return [3, 7, 11][deptLevel(state, 'pr') - 1] + office(state).launch;
 }
 
 // ═════════════════════════ 企划 ═════════════════════════
@@ -206,6 +227,7 @@ export function advanceMonth(state, allocation) {
     slot.comment = commentFor(slotId, slot.progress);
     gains[slotId] = slot.progress - before;
   }
+  const tail = sellTail(state);
   state.monthsLeft = Math.max(0, state.monthsLeft - 1);
   state.month += 1;
 
@@ -216,10 +238,38 @@ export function advanceMonth(state, allocation) {
     const ev = pool[Math.floor(Math.random() * pool.length)];
     state.pendingEvent = ev.id;
     state.phase = 'event';
-    return { ok: true, event: true, gains };
+    return { ok: true, event: true, gains, tail };
   }
-  return { ...afterDevCheck(state), gains };
+  return { ...afterDevCheck(state), gains, tail };
 }
+
+/** 在售旧款：每月卖一点，逐月衰减（长尾） */
+export function sellTail(state) {
+  let units = 0;
+  let income = 0;
+  for (const m of state.onSale || []) {
+    const u = Math.round(m.monthly);
+    units += u;
+    income += Math.round(u * m.unitMargin);
+    m.monthly *= 0.6;
+    m.months -= 1;
+  }
+  state.onSale = (state.onSale || []).filter((m) => m.months > 0 && m.monthly >= 1);
+  state.cash += income;
+  state.tailTotal = (state.tailTotal || 0) + income;
+  return { units, income };
+}
+
+/** 旧款预计还能挣多少（给清仓 / 以旧换新做参考） */
+export function tailValue(state) {
+  return Math.round((state.onSale || []).reduce((a, m) => a + (m.monthly / 0.4) * m.unitMargin, 0));
+}
+
+export const OLD_POLICIES = [
+  { id: 'keep', name: '继续卖', desc: '同定位旧款销量砍半，其他 ×0.85' },
+  { id: 'clear', name: '降价清仓', desc: '一次性回款约 5 成，口碑 -1' },
+  { id: 'tradein', name: '以旧换新', desc: '花 10，信仰 +3，新品首月 +12%' },
+];
 
 export function recommendedEventChoice(eventId) {
   const ev = EVENTS.find((e) => e.id === eventId);
@@ -385,7 +435,7 @@ export function finalizeScores(state) {
   state.userScore = user;
   state.headline = W ? W.headline : '中规中矩';
   // 研发点
-  const gain = Math.round(2 + media / 12 + (W ? W.score / 15 + W.firsts.length * 2 : 0) + (deptLevel(state, 'rnd') - 1));
+  const gain = Math.round(2 + media / 12 + (W ? W.score / 15 + W.firsts.length * 2 : 0) + (deptLevel(state, 'rnd') - 1) + office(state).rp);
   state.rp += gain;
   state.lastRp = gain;
 }
@@ -393,6 +443,29 @@ export function finalizeScores(state) {
 // ═════════════════════════ 销售 ═════════════════════════
 
 export function runSales(state) {
+  // 新品上市：先处理在售旧款（自相蚕食）
+  const policy = state.oldPolicy || 'keep';
+  let oldNote = '';
+  let tradeBoost = 1;
+  if ((state.onSale || []).length) {
+    if (policy === 'clear') {
+      const v = Math.round(tailValue(state) * 0.5);
+      state.cash += v;
+      state.reputation = Math.max(0, state.reputation - 1);
+      oldNote = `旧款降价清仓，回款 ${v}`;
+      state.onSale = [];
+    } else if (policy === 'tradein') {
+      state.cash -= 10;
+      state.faith = Math.min(100, state.faith + 3);
+      tradeBoost = 1.12;
+      oldNote = '以旧换新：老用户换新机，信仰 +3';
+      state.onSale = [];
+    } else {
+      for (const m of state.onSale) m.monthly *= m.pos === state.product.positioningId ? 0.5 : 0.85;
+      oldNote = '新旧同台：旧款销量被新品蚕食';
+    }
+  }
+  state.oldPolicy = 'keep';
   const price = PRICE_BANDS.find((p) => p.id === state.product.priceId);
   const stock = STOCK_OPTS.find((s) => s.id === state.stockId);
   const W = state.wowResult;
@@ -407,14 +480,15 @@ export function runSales(state) {
     (0.65 + state.userScore / 160) *
     (state.reputation / 55) *
     (0.82 + (W?.score || 20) / 140) *
-    (1 + (W?.buzz || 0) / 60);
+    (1 + (W?.buzz || 0) / 60) *
+    tradeBoost;
   const baseUnits = Math.round(28 * demand);
   const stocked = Math.round(30 * stock.mul * (0.5 + price.demand * 0.5));
   const sold = Math.min(stocked, baseUnits);
   const unitCost = Math.round((state.design ? physical(state.design).unitCost : 2400) * (deptLevel(state, 'supply') === 3 ? 0.95 : 1));
   // 单台毛利率 × 价位：高价利润厚但量小，低价走量但薄
   const margin = Math.max(0.15, (price.price - unitCost) / 1000);
-  const revenue = Math.round(sold * margin * 2.0);
+  const revenue = Math.round(sold * margin * 1.45);
   const cogs = Math.round(sold * 0.3 * (SUPPLIERS.find((x) => x.id === state.supplierId)?.costMul || 1));
   let inventoryFee = 0;
   let stockNote;
@@ -436,13 +510,23 @@ export function runSales(state) {
   }
   const profit = revenue - cogs - inventoryFee;
   state.cash += revenue - cogs;
+  // 进入长尾：之后每月继续卖（受口碑影响）
+  state.onSale = state.onSale || [];
+  state.onSale.push({
+    name: state.design?.modelName || state.product.name,
+    color: state.design?.color || '#5aa9d6',
+    pos: state.product.positioningId,
+    monthly: sold * 0.3 * (0.7 + state.userScore / 200) * (0.8 + (W?.score || 0) / 120),
+    unitMargin: margin * 1.45,
+    months: 6,
+  });
   state.monthDelta = profit;
   state.reputation = Math.max(0, Math.min(100, state.reputation + Math.round((state.mediaScore - 60) / 10)));
   state.faith = Math.max(0, Math.min(100, state.faith + Math.round((state.userScore - 60) / 12)));
   if (state.product.bindEco) state.faith = Math.min(100, state.faith + 3);
   state.salesResult = {
     sold, stocked, demand: baseUnits, revenue, cogs, inventoryFee, profit, stockNote, stockState, price: price.price, unitCost,
-    window: win?.name || '', windowMul: win?.mul || 1, clash: clash ? `${clash.brand} 同月发布，瓜分了需求` : '', clashF,
+    window: win?.name || '', windowMul: win?.mul || 1, clash: clash ? `${clash.brand} 同月发布，瓜分了需求` : '', clashF, oldNote,
   };
   state.phase = 'sales';
   if (state.cash < 0) {

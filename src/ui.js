@@ -73,7 +73,7 @@ function shell() {
 function hud() {
   if (!state) return `<div class="hud-title">电子产品发展国</div><button type="button" class="hud-btn" data-act="mute">${sfx?.muted ? '🔇' : '🔊'}</button>`;
   return `
-    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>第 ${state.generation} 代 · M${state.month}/${RUN_MONTHS}</small></div>
+    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>${L.office(state).icon} 第 ${state.generation} 代 · M${state.month}/${RUN_MONTHS}</small></div>
     <div class="hud-stat ${state.cash < 30 ? 'low' : ''}"><i>💰</i><b>${state.cash}</b></div>
     <div class="hud-stat"><i>❤️</i><b>${state.faith}</b></div>
     <div class="hud-stat"><i>⭐</i><b>${state.reputation}</b></div>
@@ -124,7 +124,7 @@ P.plan = () => {
       .map((x) => `<button type="button" class="chip ${multi ? (cur.includes(x.id) ? 'on' : '') : cur === x.id ? 'on' : ''}" data-act="${act}" data-id="${x.id}">${x.name}</button>`)
       .join('');
   return {
-    scene: ['plan', { month: state.month, positioning: p.positioningId, points: p.pointIds.length, price: p.priceId, color: state.designDraft?.color }],
+    scene: ['plan', { office: state.office, month: state.month, positioning: p.positioningId, points: p.pointIds.length, price: p.priceId, color: state.designDraft?.color }],
     caption: `企划会：第 ${state.generation} 代要赌什么？`,
     sheet: `<h2 class="sheet-h">📋 企划</h2>
       <div class="field-l">定位<div class="chips">${chips(POSITIONING, p.positioningId, 'plan-pos')}</div></div>
@@ -170,6 +170,7 @@ P.dev = () => {
     caption: `研发实验室 · 完成度 ${r}% · 还剩约 ${state.monthsLeft} 月`,
     sheet: `<h2 class="sheet-h">🔬 研发 <small>每月 ${L.manpowerCap(state)} 点人力 · ${state.notes?.[state.product.positioningId] ? '📒 按企划笔记分配' : '团队凭直觉分配'} · ⭐ 设为重点</small></h2>
       ${devTimeline()}
+      ${onSaleBlock()}
       <div class="slots">${SLOTS.map((s) => {
         const sl = state.slots[s.id];
         const cap = caps[s.id];
@@ -201,6 +202,14 @@ function calendar(from, launchAt, pos) {
   return `<div class="calendar"><div class="cal-h">档期日历 <small>📦=预计上市 · 红框=同定位竞品撞档</small></div><div class="cal-row">${cells.join('')}</div></div>`;
 }
 
+function onSaleBlock() {
+  const list = state.onSale || [];
+  if (!list.length) return '';
+  return `<div class="onsale"><b>🛒 在售旧款</b>${list
+    .map((m) => `<span><i style="background:${m.color}"></i>${esc(m.name)} · 月销约 ${Math.round(m.monthly)} 台 · 还卖 ${m.months} 月</span>`)
+    .join('')}</div>`;
+}
+
 function devTimeline() {
   const launchAt = state.month + state.monthsLeft + 1;
   const w = windowAt(launchAt);
@@ -215,6 +224,7 @@ function devTimeline() {
 
 function devSceneData(event = null) {
   return {
+    office: state.office,
     month: state.month,
     slots: Object.fromEntries(SLOTS.map((s) => [s.id, state.slots[s.id].progress])),
     caps: L.capsMap(state),
@@ -259,7 +269,9 @@ P.factory = () => {
       <div class="spec-row"><span>单台成本</span><b>¥${p.unitCost}</b></div>
       <div class="spec-row"><span>首批备货</span><b>${STOCK_OPTS.find((s) => s.id === state.stockId)?.name}</b></div>
       <div class="spec-row"><span>研发完成度</span><b>${Math.round(L.devRatio(state) * 100)}%</b></div>
-      <div class="spec-row"><span>机型</span><b>${esc(state.design.modelName)} · ${esc(paletteName(state.design.color))}</b></div>`,
+      <div class="spec-row"><span>机型</span><b>${esc(state.design.modelName)} · ${esc(paletteName(state.design.color))}</b></div>
+      ${(state.onSale || []).length ? `<div class="field-l" style="margin-top:8px">新品上市，旧款怎么办？<small class="muted">（旧款预计还能挣 ${L.tailValue(state)}）</small>
+        <div class="cards3">${L.OLD_POLICIES.map((o) => `<button type="button" class="pick ${(state.oldPolicy || 'keep') === o.id ? 'on' : ''}" data-act="old-policy" data-id="${o.id}"><b>${o.name}</b><small>${o.desc}</small></button>`).join('')}</div></div>` : ''}`,
     cta: `<button type="button" class="primary big" data-act="to-launch" ${draft.factoryDone ? '' : 'disabled'}>${draft.factoryDone ? '🎤 开发布会 ▶' : '量产中…'}</button>`,
   };
 };
@@ -289,7 +301,8 @@ P.score = () => {
       ${W.buzz >= 40 ? `<p class="trend">📈 #${esc(state.design.modelName)}# 冲上热搜</p>` : ''}
       ${reviewBlock()}
       <p class="muted">研发点 +${state.lastRp}（现有 ${state.rp}）</p>`,
-    cta: `<button type="button" class="primary big" data-act="to-sales">看首月销量 ▶</button>`,
+    cta: `<button type="button" class="primary big" data-act="to-sales">看首月销量 ▶</button>
+      <button type="button" data-act="share-launch">📤 分享卡</button>`,
   };
 };
 
@@ -316,6 +329,7 @@ P.sales = () => {
       <div class="score-big"><b>${r.sold}</b><span>台售出</span><b class="sub ${r.profit < 0 ? 'neg' : ''}">${r.profit > 0 ? '+' : ''}${r.profit}</b><span>盈亏</span></div>
       ${gauge('备货消化', (r.sold / Math.max(1, r.stocked)) * 100)}
       <p>${esc(r.stockNote)}</p>
+      ${r.oldNote ? `<p class="warn-line good">♻ ${esc(r.oldNote)}</p>` : ''}
       ${r.window ? `<p class="warn-line good">📅 赶上${r.window}：需求 ×${r.windowMul}</p>` : ''}
       ${r.clash ? `<p class="warn-line bad">⚔ ${r.clash}（×${r.clashF.toFixed(2)}）</p>` : ''}
       <p class="muted">售价 ¥${r.price} · 单台成本 ¥${r.unitCost}</p>`,
@@ -326,12 +340,21 @@ P.sales = () => {
 P.next = () => {
   const last = state.models[state.models.length - 1];
   return {
-    scene: ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length })) }],
-    caption: '年会：这一代进了机型墙',
+    scene: draft.showHQ
+      ? ['hq', { office: state.office, month: state.month, color: state.design?.color || state.designDraft?.color }]
+      : ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length })) }],
+    caption: draft.showHQ ? `新家：${L.office(state).name}` : '年会：这一代进了机型墙',
     sheet: `<h2 class="sheet-h">🏛 规划下一代</h2>
       ${last ? `<div class="model-card">${last.thumb ? `<img src="${last.thumb}" alt="" />` : ''}<div><b>${esc(last.design.modelName)}</b>
         <small>惊艳 ${last.wow} ${last.grade} · 售出 ${last.sold} 台 · 媒体 ${last.media}</small>
         ${(last.firsts || []).map((f) => `<span class="mini-first">🏆${esc(f)}</span>`).join('')}</div></div>` : ''}
+      ${(() => {
+        const o = L.office(state);
+        const n = L.nextOffice(state);
+        return `<div class="office-card"><span class="o-icon">${o.icon}</span><div><b>${o.name}</b><small>${o.desc}</small>
+          ${n ? `<small class="next">扩建到 ${n.icon} ${n.name}：${n.desc}</small>` : '<small class="next">已经是最大的园区了</small>'}</div>
+          ${n ? `<button type="button" data-act="office" ${state.cash < n.cost ? 'disabled' : ''}>扩建 ${n.cost}</button>` : ''}</div>`;
+      })()}
       <h3 class="sub-h">部门升级 <small>💰 ${state.cash}</small></h3>
       <div class="depts">${DEPTS.map((d) => {
         const lv = L.deptLevel(state, d.id);
@@ -357,7 +380,8 @@ P.ending = () => {
         <div><b>${E.stats.avgWow}</b><span>平均惊艳</span></div><div><b>${E.stats.sold}</b><span>总销量</span></div>
       </div>
       <div class="ending-wall">${state.models.map((m) => `<span title="${esc(m.design.modelName)}">${m.thumb ? `<img src="${m.thumb}" alt="" />` : '📱'}<i>${m.grade || ''}</i></span>`).join('')}</div>`,
-    cta: `<button type="button" class="primary big" data-act="hard-restart">再来一局</button>`,
+    cta: `<button type="button" class="primary big" data-act="hard-restart">再来一局</button>
+      <button type="button" data-act="share-ending">📤 分享结局</button>`,
   };
 };
 
@@ -478,6 +502,7 @@ async function playReveal() {
     busy = false;
     try {
       state.lastThumb = stage ? stage.snapshot(140) : '';
+      draft.shareShot = stage ? stage.snapshot(360) : '';
     } catch {
       state.lastThumb = '';
     }
@@ -523,6 +548,26 @@ async function playReveal() {
   }
 }
 
+// ═════════════════════════ 分享卡 ═════════════════════════
+
+async function shareCard(ending) {
+  busy = true;
+  toast('正在生成分享卡…');
+  try {
+    const S = await import('./share.js');
+    if (ending) {
+      const E = endingTitles(state);
+      S.showShare(await S.endingCard(state, E), S.endingText(state, E));
+    } else {
+      S.showShare(await S.launchCard(state, draft.shareShot || state.lastThumb), S.launchText(state));
+    }
+  } catch (e) {
+    console.error(e);
+    toast('分享卡生成失败');
+  }
+  busy = false;
+}
+
 // ═════════════════════════ 交互 ═════════════════════════
 
 function startGame(s) {
@@ -546,6 +591,7 @@ async function advance(all = false) {
     persist();
     render();
     scene.pulse('month', { gains: res.gains });
+    if (res.tail?.income > 0) scene.pulse('cash', { x: 196, y: 30, text: `+${res.tail.income}` });
     flash(`M${state.month}`);
     if (res.event) play('explode', true);
     if (state.phase !== 'dev') {
@@ -688,6 +734,23 @@ function onClick(e) {
     case 'to-next':
       L.enterNext(state);
       break;
+    case 'share-launch':
+    case 'share-ending':
+      shareCard(act === 'share-ending');
+      return;
+    case 'old-policy':
+      state.oldPolicy = id;
+      break;
+    case 'office': {
+      const r = L.upgradeOffice(state);
+      toast(r.msg);
+      if (r.ok) {
+        play('fanfare');
+        draft.showHQ = true;
+        scene.pulse('confetti');
+      }
+      break;
+    }
     case 'upgrade': {
       const r = L.upgradeDept(state, id);
       toast(r.msg);
@@ -695,6 +758,7 @@ function onClick(e) {
       break;
     }
     case 'next-gen':
+      draft.showHQ = false;
       L.goNextGen(state);
       draft.plan = { ...L.recommendedPlan(), positioningId: state.designDraft?.position || 'mainstream' };
       flash(`第 ${state.generation} 代`);

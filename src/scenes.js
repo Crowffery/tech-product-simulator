@@ -363,21 +363,7 @@ const SCENES = {
 
   // —— 企划：会议室 ——
   plan(s, g, d) {
-    s.rect(0, 0, W, 100, '#5b7a99');
-    s.rect(0, 96, W, 4, '#3d5a73');
-    // 窗户 + 城市
-    const night = (s.sky(14, 60, d.month || 1), (d.month || 1) % 4 === 0);
-    s.rect(0, 0, 160, 14, '#5b7a99');
-    s.rect(0, 60, W, 36, '#5b7a99');
-    s.rect(0, 14, 166, 46, '#5b7a99');
-    s.rect(234, 14, 6, 46, '#5b7a99');
-    for (let i = 0; i < 6; i++) {
-      const bh = 12 + hash(i + 2) * 22;
-      s.rect(168 + i * 11, 60 - bh, 10, bh, night ? '#232b4d' : '#7f8c8d');
-    }
-    s.rect(166, 12, 70, 3, '#2c3e50');
-    s.rect(166, 60, 70, 3, '#2c3e50');
-    s.rect(199, 14, 2, 46, '#2c3e50');
+    officeBack(s, g, d);
     // 白板
     s.rect(10, 12, 110, 52, '#2c3e50');
     s.rect(12, 14, 106, 48, '#fdfefe');
@@ -406,9 +392,10 @@ const SCENES = {
     s.rect(52, 108, 4, 12, '#4a3020');
     s.rect(184, 108, 4, 12, '#4a3020');
     s.phone(116, 90, pw, Math.round(pw * 0.6), d.color || '#8fd3b6');
-    // 人
+    // 人：办公室越大，开会的人越多
     const icons = ['bulb', 'coin', 'chart', 'phone'];
-    [[62, 80, 2], [96, 78, 7], [146, 78, 3], [178, 80, 5]].forEach(([x, y, seed], i) => {
+    const seats = [[62, 80, 2], [178, 80, 5], [96, 78, 7], [146, 78, 3], [30, 86, 9], [206, 86, 11]].slice(0, [3, 4, 5, 6][(d.office || 1) - 1]);
+    seats.forEach(([x, y, seed], i) => {
       s.person(x, y, seed, Math.floor(s.t + i) % 3 === 0 ? 'cheer' : 'idle', i < 2 ? 1 : -1);
       if (Math.floor(s.t * 0.8 + i * 1.3) % 4 === i % 4) s.bubble(x - 2, y - 14, icons[(Math.floor(s.t * 0.5) + i) % icons.length]);
     });
@@ -427,6 +414,7 @@ const SCENES = {
     s.rect(138, 70, 8, 2, '#ecf0f1');
     s.rect(138, 74, 6, 1, '#7f8c8d');
     if (Math.floor(s.t * 3) % 2) s.rect(126, 80, 22, 2, '#c0392b');
+    if ((d.office || 1) >= 4) robotDog(s, 112);
     s.cat(108, 1);
     // 盆栽
     s.rect(224, 104, 10, 10, '#a0522d');
@@ -540,6 +528,26 @@ const SCENES = {
       s.person(x + 16, 100, i * 2 + 1, pose, 1);
       if (hot && Math.floor(s.t * 4) % 2) s.rect(x + 18, 30, 4, 4, '#e74c3c');
     });
+    const lv = d.office || 1;
+    if (lv === 1) {
+      for (let x = 0; x < W; x += 7) s.rect(x, 0, 1, 40, '#2c3e50');
+      for (let i = 0; i < 4; i++) {
+        s.rect(214 + (i % 2) * 12, 124 - Math.floor(i / 2) * 9, 11, 8, '#c8a26b');
+        s.rect(214 + (i % 2) * 12, 127 - Math.floor(i / 2) * 9, 11, 1, '#9c7a4a');
+      }
+    }
+    if (lv >= 3) {
+      s.rect(206, 4, 30, 34, '#1b2631');
+      for (let i = 0; i < 6; i++) for (let k = 0; k < 4; k++) s.rect(209 + k * 7, 7 + i * 5, 4, 2, (Math.floor(s.t * 8) + i + k) % 5 ? '#2ecc71' : '#58d68d');
+    }
+    if (lv >= 4) {
+      const dx = 60 + Math.sin(s.t * 0.7) * 50;
+      const dy = 14 + Math.sin(s.t * 1.9) * 3;
+      s.rect(dx, dy, 12, 3, '#2c3e50');
+      s.rect(dx - 3, dy - 1, 5, 1, Math.floor(s.t * 20) % 2 ? '#bdc3c7' : '#7f8c8d');
+      s.rect(dx + 10, dy - 1, 5, 1, Math.floor(s.t * 20) % 2 ? '#7f8c8d' : '#bdc3c7');
+      s.rect(dx + 5, dy + 3, 2, 2, Math.floor(s.t * 3) % 2 ? '#e74c3c' : '#2ecc71');
+    }
     if (d.rivalSoon) {
       const y0 = 6 + Math.round(Math.sin(s.t * 2) * 1);
       s.rect(150, y0, 26, 30, '#fdfefe');
@@ -796,6 +804,47 @@ const SCENES = {
     }
   },
 
+  // —— 总部外景（搬家时）——
+  hq(s, g, d) {
+    const lv = d.office || 1;
+    const brand = d.color || '#e67e22';
+    const night = s.sky(0, 110, d.month || 1);
+    for (let i = 0; i < 10; i++) s.rect(i * 26, 60 + hash(i) * 20, 24, 50, night ? '#232b4d' : '#aab7b8');
+    s.rect(0, 110, W, 40, lv >= 4 ? '#58d68d' : '#7f8c8d');
+    if (lv === 1) {
+      s.rect(80, 70, 80, 40, '#5d4037');
+      s.rect(90, 80, 60, 30, '#ffe08a');
+      for (let y = 80; y < 110; y += 4) s.rect(90, y, 60, 1, '#f5b041');
+    } else if (lv === 2) {
+      s.rect(70, 50, 100, 60, '#ecf0f1');
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 5; c++) s.rect(78 + c * 18, 58 + r * 22, 12, 14, (r + c + Math.floor(s.t)) % 4 ? '#85c1e9' : '#f9e79f');
+      s.rect(66, 44, 108, 8, brand);
+      s.rect(110, 94, 20, 16, '#5d6d7e');
+    } else if (lv === 3) {
+      s.rect(92, 10, 56, 100, '#5d6d7e');
+      for (let y = 14; y < 106; y += 6) for (let x = 96; x < 144; x += 6) s.rect(x, y, 4, 4, hash(x * y + Math.floor(s.t * 2)) > 0.35 ? '#aed6f1' : '#f9e79f');
+      s.rect(92, 4, 56, 8, brand);
+      s.rect(118, -4, 4, 8, '#bdc3c7');
+      if (Math.floor(s.t * 2) % 2) s.rect(119, -4, 2, 2, '#e74c3c');
+    } else {
+      [[30, 70, 60], [100, 60, 70], [176, 72, 50]].forEach(([x, y, w2]) => {
+        s.rect(x, y, w2, 110 - y, '#fdfefe');
+        s.rect(x, y, w2, 4, brand);
+        for (let k = x + 4; k < x + w2 - 4; k += 8) s.rect(k, y + 10, 5, 18, '#85c1e9');
+      });
+      for (let i = 0; i < 9; i++) {
+        const tx = 8 + i * 27;
+        s.rect(tx + 3, 112, 2, 8, '#6e2c00');
+        s.rect(tx, 104, 9, 9, '#239b56');
+      }
+      s.rect(128, 30, 1, 30, '#bdc3c7');
+      s.rect(129, 30 + Math.round(Math.sin(s.t * 3)), 10, 6, brand);
+      robotDog(s, 126);
+    }
+    if (Math.floor(s.t * 2) % 3 === 0 && s.parts.length < 30) s.pulse('confetti');
+    [60, 100, 140, 180].forEach((x, i) => s.person(x, 120, i + 2, 'cheer', i < 2 ? 1 : -1));
+  },
+
   // —— 倒闭 ——
   bust(s, g, d) {
     s.rect(0, 0, W, H, '#2c3e50');
@@ -855,3 +904,90 @@ const STATION_DRAW = {
     s.rect(x + 18, 84, 4, 8, '#1b1b1b');
   },
 };
+
+/** 会议室背景：按办公室等级变化 */
+function officeBack(s, g, d) {
+  const lv = d.office || 1;
+  const wall = ['#7b5e45', '#5b7a99', '#2e4053', '#76b39d'][lv - 1];
+  s.rect(0, 0, W, 100, wall);
+  s.rect(0, 96, W, 4, shade(wall, -0.3));
+  const night = (d.month || 1) % 4 === 0;
+  if (lv === 1) {
+    for (let x = 0; x < W; x += 8) s.rect(x, 0, 1, 96, shade(wall, -0.2));
+    s.sky(18, 44, d.month || 1);
+    s.rect(0, 0, W, 18, wall);
+    s.rect(0, 44, W, 52, wall);
+    s.rect(0, 18, 180, 26, wall);
+    s.rect(226, 18, 14, 26, wall);
+    for (let x = 0; x < W; x += 8) {
+      s.rect(x, 0, 1, 18, shade(wall, -0.2));
+      s.rect(x, 44, 1, 52, shade(wall, -0.2));
+    }
+    s.rect(178, 16, 50, 2, '#4e342e');
+    s.rect(178, 44, 50, 2, '#4e342e');
+    // 吊灯泡
+    s.rect(160, 0, 1, 10, '#2c2c2c');
+    s.rect(158, 10, 5, 5, '#ffe08a');
+    g.fillStyle = 'rgba(255,224,138,0.1)';
+    g.fillRect(130, 15, 60, 80);
+    for (let i = 0; i < 3; i++) s.rect(200 + i * 4, 86 - i * 9, 22, 9, '#c8a26b');
+    return;
+  }
+  if (lv === 2) {
+    s.sky(14, 60, d.month || 1);
+    s.rect(0, 0, 160, 14, wall);
+    s.rect(0, 60, W, 36, wall);
+    s.rect(0, 14, 166, 46, wall);
+    s.rect(234, 14, 6, 46, wall);
+    for (let i = 0; i < 6; i++) {
+      const bh = 12 + hash(i + 2) * 22;
+      s.rect(168 + i * 11, 60 - bh, 10, bh, night ? '#232b4d' : '#7f8c8d');
+    }
+    s.rect(166, 12, 70, 3, '#2c3e50');
+    s.rect(166, 60, 70, 3, '#2c3e50');
+    s.rect(199, 14, 2, 46, '#2c3e50');
+    return;
+  }
+  // 写字楼 / 科技园：大落地窗
+  s.sky(4, 64, d.month || 1);
+  s.rect(0, 0, 124, 96, wall);
+  s.rect(0, 64, W, 32, wall);
+  s.rect(0, 0, W, 4, wall);
+  if (lv === 3) {
+    for (let i = 0; i < 10; i++) {
+      const bh = 24 + hash(i + 5) * 34;
+      const bx = 126 + i * 11;
+      s.rect(bx, 64 - bh, 10, bh, night ? '#1f2a48' : '#95a5a6');
+      for (let y = 66 - bh; y < 62; y += 4) if (hash(bx * y) > 0.5) s.rect(bx + 2, y, 2, 2, night ? '#f7dc6f' : '#d6eaf8');
+    }
+    // 奖杯架
+    s.rect(126, 70, 44, 3, '#6e4b2a');
+    for (let i = 0; i < 4; i++) {
+      s.rect(130 + i * 10, 64, 6, 6, '#f1c40f');
+      s.rect(132 + i * 10, 70, 2, 0, '#b7950b');
+    }
+  } else {
+    for (let i = 0; i < 9; i++) {
+      const tx = 128 + i * 13;
+      s.rect(tx + 4, 46, 3, 18, '#6e2c00');
+      s.rect(tx, 34 + (i % 2) * 4, 11, 14, i % 3 ? '#27ae60' : '#1e8449');
+    }
+    // 霓虹招牌
+    s.rect(126, 68, 48, 10, '#1b1b1b');
+    for (let k = 0; k < 5; k++) s.rect(130 + k * 9, 71, 6, 4, Math.floor(s.t * 4 + k) % 5 ? d.color || '#e67e22' : '#fff');
+  }
+  for (let x = 124; x < W; x += 28) s.rect(x, 4, 2, 60, '#2c3e50');
+  s.rect(124, 62, 116, 2, '#2c3e50');
+}
+
+/** 科技园巡逻机器狗 */
+function robotDog(s, y) {
+  const x = ((s.t * 18) % (W + 40)) - 20;
+  const step = Math.floor(s.t * 10) % 2;
+  s.rect(x, y, 12, 5, '#bdc3c7');
+  s.rect(x + 10, y - 3, 5, 4, '#95a5a6');
+  s.rect(x + 13, y - 2, 1, 1, '#2ecc71');
+  s.rect(x + 1, y + 5, 2, 3 - step, '#7f8c8d');
+  s.rect(x + 9, y + 5, 2, 2 + step, '#7f8c8d');
+  s.rect(x - 2, y, 2, 1, '#bdc3c7');
+}

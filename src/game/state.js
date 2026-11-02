@@ -47,6 +47,10 @@ export function createNewGame(companyName) {
     overstocks: 0,
     lastExp: 0,
     review: null,
+    onSale: [],
+    oldPolicy: 'keep',
+    office: 1,
+    tailTotal: 0,
   };
 }
 
@@ -65,6 +69,8 @@ export function loadGame() {
     if (data.phase === 'launchPrep') data.phase = 'launch';
     data.models ||= [];
     data.notes ||= {};
+    data.onSale ||= [];
+    data.office ||= 1;
     if (data.design === undefined) data.design = null;
     if (data.designDraft === undefined) data.designDraft = null;
     return data;
