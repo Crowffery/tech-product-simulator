@@ -19,7 +19,7 @@ body.phase-design #app { max-width: 1240px; }
 .hud-stat.low { background: #f5b7b1; animation: blinkcopy 1s steps(2) infinite; }
 .hud-btn { padding: 2px 7px; font-size: .9rem; box-shadow: 1px 1px 0 var(--shadow); }
 .hud-btn.armed { background: #f5b7b1; font-size: .7rem; }
-@media (max-width: 400px) { .hud-stat:nth-of-type(3), .hud-stat:nth-of-type(4) { display: none; } }
+
 
 /* 阶段进度条 */
 .g-rail { display: flex; align-items: center; gap: 0; padding: 0 2px; }
@@ -656,3 +656,66 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 .ntabs button small { display: block; font-size: .66rem; font-weight: 700; }
 .ntabs button.on { background: var(--orange); color: #fff; }
 .go-invest { width: 100%; margin-top: 10px; padding: 10px; font-weight: 900; background: #fdebd0; }
+
+
+/* ═════ HUD v2：像素图标 + 名称 + 可点击 ═════ */
+.pxi { display: block; image-rendering: pixelated; flex: 0 0 auto; }
+.g-hud { gap: 4px; }
+.hud-brand { flex: 1 1 auto; }
+.hud-stat { font: inherit; color: inherit; cursor: pointer; display: flex; align-items: center; gap: 3px; padding: 2px 5px 2px 3px; box-shadow: 1px 1px 0 var(--shadow); min-width: 0; }
+.hud-stat span { display: flex; flex-direction: column; line-height: 1; align-items: flex-start; }
+.hud-stat b { font-size: .84rem; white-space: nowrap; }
+.hud-stat small { font-size: .52rem; color: var(--muted); font-weight: 800; margin-top: 1px; }
+.hud-stat:active { transform: translate(1px, 1px); box-shadow: none; }
+.hud-stat.flash { animation: hudflash .6s steps(4); }
+@keyframes hudflash { 30% { background: #f5b7b1; transform: scale(1.12); } }
+.hud-stat.gain { animation: hudgain .6s steps(4); }
+@keyframes hudgain { 30% { background: #abebc6; transform: scale(1.12); } }
+@media (max-width: 420px) {
+  .hud-brand small { display: none; }
+  .hud-brand b { font-size: .86rem; }
+  .hud-stat { padding: 2px 3px 2px 2px; }
+  .hud-stat b { font-size: .76rem; }
+  .hud-stat .pxi { width: 14px; height: 14px; }
+}
+@media (max-width: 350px) { .hud-stat small { display: none; } }
+
+/* 资源说明卡 */
+.stat-pop { position: fixed; inset: 0; z-index: 76; background: rgba(8,6,12,.55); display: flex; align-items: flex-start; justify-content: center; padding: calc(64px + env(safe-area-inset-top, 0px)) 12px 12px; animation: tutin .25s steps(3); }
+.sp-card { width: min(420px, 100%); padding: 10px 12px; max-height: 80vh; overflow: auto; }
+.sp-h { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.sp-h b { display: block; font-family: "ZCOOL KuaiLe", sans-serif; font-size: 1.25rem; }
+.sp-h em { font-style: normal; font-weight: 900; color: var(--orange); font-size: 1.05rem; }
+.sp-h button { margin-left: auto; padding: 2px 9px; }
+.sp-card p { margin: 0 0 8px; font-size: .86rem; line-height: 1.55; }
+.sp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sp-cols div { display: flex; flex-direction: column; gap: 3px; background: #fffaf0; border: 2px solid var(--border); padding: 5px 7px; }
+.sp-cols small { font-weight: 900; font-size: .72rem; }
+.sp-cols div:first-child small { color: var(--green); }
+.sp-cols div:last-child small { color: var(--red); }
+.sp-cols span { font-size: .74rem; line-height: 1.4; }
+.sp-extra { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: .8rem; }
+.sp-led { display: flex; justify-content: space-between; border-bottom: 1px dashed #d8c7a0; }
+.sp-led i { font-style: normal; color: var(--muted); }
+.sp-extra button { margin-top: 4px; padding: 9px; font-weight: 900; }
+.sp-set { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px dashed #d8c7a0; font-weight: 800; font-size: .88rem; }
+.sp-set span { display: flex; align-items: center; gap: 6px; }
+.sp-set button { min-width: 6.5em; padding: 6px 10px; font-weight: 800; }
+.sp-set.danger span { color: var(--red); }
+
+/* ═════ 花钱按钮：扣什么、扣多少 ═════ */
+.costwrap { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 6.8em; }
+.costbtn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 8px; font-weight: 900; line-height: 1.15; }
+.costbtn em { font-style: normal; font-size: .8rem; }
+.costbtn .cost { display: inline-flex; align-items: center; gap: 2px; font-size: .68rem; font-weight: 800; color: #7d5a00; background: #fef5d4; border: 1px solid #b9770e; padding: 0 4px; }
+.costbtn:disabled .cost { color: var(--muted); background: #eee; border-color: #aaa; }
+.short-by { font-size: .62rem; color: var(--red); font-weight: 800; text-align: center; }
+.sub-h small.have { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; color: #7d5a00; }
+.locked-tag { font-size: .7rem; font-weight: 800; color: var(--muted); }
+.muted.sm { font-size: .72rem; margin: -2px 0 6px; }
+.money-fx { position: fixed; z-index: 90; pointer-events: none; display: flex; align-items: center; gap: 3px; font-weight: 900; font-size: 1rem; padding: 2px 8px; border: 2px solid #000; box-shadow: 2px 2px 0 #000; transform: translate(-50%, 0); animation: moneyfly 1s cubic-bezier(.5,0,.6,1) forwards; }
+.money-fx.neg { background: #fadbd8; color: #922b21; }
+.money-fx.pos { background: #d5f5e3; color: #1d6f42; }
+@keyframes moneyfly { 0% { transform: translate(-50%, 0) scale(1.1); opacity: 1; } 25% { transform: translate(-50%, -18px) scale(1.15); } 100% { transform: translate(calc(-50% + var(--dx)), var(--dy)) scale(.6); opacity: .2; } }
+.ev-choices .choice i { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.ev-choices .choice i .pxi, .mkt-ev .choice i .pxi { display: inline-block; vertical-align: -2px; }

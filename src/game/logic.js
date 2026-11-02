@@ -65,6 +65,11 @@ export function buyExpansion(state, id) {
   return { ok: true, msg: `${e.icon} ${e.name}：完成！` };
 }
 
+/** 每月固定支出：工资 + 运营费 */
+export function monthlyCost(state) {
+  return payroll(state) + upkeep(state);
+}
+
 /** 战略资产的每月运营费 */
 function upkeep(state) {
   return EXPANSIONS.filter((e) => hasAsset(state, e.id)).reduce((a, e) => a + e.upkeep, 0);

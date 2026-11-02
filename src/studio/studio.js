@@ -47,6 +47,7 @@ import {
   moduleFit,
 } from './parts.js';
 import { sfx } from './sfx.js';
+import { icon } from '../icons.js';
 import { term, installGlossary } from '../glossary.js';
 
 const MUSEUM_KEY = 'epdg-studio-museum';
@@ -84,6 +85,7 @@ export function createStudio(root, opts = {}) {
   let museum = game ? opts.museum || [] : readJSON(MUSEUM_KEY, []);
   const saveDraft = () => (game ? opts.onChange?.(design) : writeJSON(DRAFT_KEY, design));
   let tab = 'config';
+  let icat = 'all'; // 创新页分类筛选
   let stage = null;
   let pixel = 0;
   let revealing = false;
@@ -152,9 +154,9 @@ export function createStudio(root, opts = {}) {
     const rb = rivalBench(opts.getMonth?.() || 1);
     rows.push({ name: '蓝莓 A 系列（竞品）', v: rb });
     const max = Math.max(...rows.map((r) => r.v));
-    return `<div class="chipchart"><div class="cc-h">📊 跑分对比 <small>${opts.getChipNote?.() || ''}</small></div>${rows
+    return `<details class="chipchart"><summary class="cc-h">📊 芯片跑分对比 <small>${opts.getChipNote?.() || ''}</small></summary>${rows
       .map((r) => `<div class="cc-row ${r.on ? 'on' : ''} ${r.mine ? '' : 'rival'}"><span>${esc(r.name)}</span><i style="width:${Math.round((r.v / max) * 100)}%"></i><b>${(r.v / 10000).toFixed(0)} 万</b></div>`)
-      .join('')}</div>`;
+      .join('')}</details>`;
   }
 
   function appearanceTab() {
@@ -217,7 +219,7 @@ export function createStudio(root, opts = {}) {
         return `<div class="concept locked">
           <span class="c-icon">${c.icon}</span>
           <span class="c-main"><b>${c.name}${nw}</b><small>${esc(c.desc)}</small></span>
-          ${can ? `<button type="button" class="c-unlock" data-unlock="${c.id}">🔓 ${us.cost} 研发点</button>` : `<span class="c-tag t-crowd">🔒 ${us.prereqOk ? `${us.cost} 研发点` : '条件未满足'}</span>`}
+          ${can ? `<button type="button" class="c-unlock" data-unlock="${c.id}"><em>🔓 解锁</em><span class="cost">${icon('flask', 12)}研发点 ${us.cost}</span></button>` : `<span class="c-tag t-crowd">🔒 ${us.prereqOk ? `需要研发点 ${us.cost}（现有 ${ctx?.rp ?? 0}）` : '条件未满足'}</span>`}
         </div>`;
       }
       const on = sel.includes(c.id);
@@ -234,6 +236,21 @@ export function createStudio(root, opts = {}) {
     const visible = CONCEPTS.filter((c) => hasAppeared(c.id, actx));
     const hidden = CONCEPTS.length - visible.length;
     const practical = visible.filter((c) => PRACTICAL.has(c.id));
+    const countOf = (k) => (k === 'practical' ? practical.length : visible.filter((c) => c.cat === k && !PRACTICAL.has(c.id)).length);
+    // 只显示有东西的分类，后面带数量
+    const FILTERS = [
+      ['all', `全部 ${visible.length}`],
+      ...CATS.filter((c) => countOf(c.id)).map((c) => [c.id, `${c.icon} ${c.name} ${countOf(c.id)}`]),
+      ...(practical.length ? [['practical', `🔧 实用功能 ${practical.length}`]] : []),
+      ...(sel.length ? [['on', `✅ 已选 ${sel.length}`]] : []),
+    ];
+    const filterBar = `<div class="ifilter">${FILTERS.map(([k, n]) => `<button type="button" class="chip ${icat === k ? 'on' : ''}" data-icat="${k}">${n}</button>`).join('')}</div>`;
+    if (icat !== 'all') {
+      const list =
+        icat === 'practical' ? practical : icat === 'on' ? visible.filter((c) => sel.includes(c.id)) : visible.filter((c) => c.cat === icat && !PRACTICAL.has(c.id));
+      return `<p class="hint">前沿创新 已选 <b>${innovCount(sel)}/${maxC()}</b> · 实用功能 ${sel.length - innovCount(sel)} 项${ctx ? ` · 研发点 <b>${ctx.rp}</b>` : ''}</p>${filterBar}
+        <div class="concepts">${list.length ? list.map(card).join('') : '<p class="muted">这一类还没有可选的。</p>'}</div>`;
+    }
     const groups =
       `<h3 class="sub">🚀 前沿创新 <small>占名额，决定新颖度和话题</small></h3>` +
       CATS.map((cat) => {
@@ -243,7 +260,7 @@ export function createStudio(root, opts = {}) {
       }).join('') +
       (practical.length ? `<h3 class="sub">🔧 实用功能 <small>常规配置，不占创新名额，但要加成本</small></h3><div class="concepts">${practical.map(card).join('')}</div>` : '');
     const known = COMBOS.filter((c) => mem[c.id]);
-    return `<p class="hint">前沿创新 已选 <b>${innovCount(sel)}/${maxC()}</b> · 实用功能 ${sel.length - innovCount(sel)} 项${ctx ? ` · ${term('研发点')} <b>${ctx.rp}</b>` : ''}</p>
+    return `${filterBar}<p class="hint">前沿创新 已选 <b>${innovCount(sel)}/${maxC()}</b> · 实用功能 ${sel.length - innovCount(sel)} 项${ctx ? ` · ${term('研发点')} <b>${ctx.rp}</b>` : ''}</p>
       ${groups}
       ${hidden ? `<p class="teaser">🔭 还有 ${hidden} 项技术尚未出现在行业里……</p>` : ''}
       ${known.length ? `<h3 class="sub">品类组合</h3><div class="combos">${known
@@ -341,15 +358,20 @@ export function createStudio(root, opts = {}) {
 
   function renderPanel() {
     $('#redesign').innerHTML = redesignBar();
-    $('#tab-body').innerHTML = tab === 'config' ? configTab() : tab === 'innov' ? innovationTab() : appearanceTab();
+    $('#tab-body').innerHTML = tab === 'config' ? configTab() : tab === 'innov' ? innovationTab() : tab === 'eval' ? '<div id="eval" class="eval"></div>' : appearanceTab();
     root.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     renderReadouts();
   }
 
   /** 读数：数字滚动 + 变化浮字 */
   function renderReadouts() {
-    $('#readouts').innerHTML = readouts();
-    root.querySelectorAll('#readouts [data-num]').forEach((el) => {
+    // 关键读数常驻（摘要条），详细分析放在「评估」页
+    const html = readouts();
+    const cut = html.indexOf('<h3 class="sub">');
+    $('#summary').innerHTML = html.slice(0, cut);
+    const ev = $('#eval');
+    if (ev) ev.innerHTML = html.slice(cut);
+    root.querySelectorAll('#summary [data-num]').forEach((el) => {
       const key = el.dataset.num;
       const to = Number(el.dataset.v);
       const from = shown[key];
@@ -712,27 +734,32 @@ export function createStudio(root, opts = {}) {
         <div id="plaque" class="plaque"></div>
       </section>
       <aside class="panel kbox">
+        <div class="panel-top">
+          <div id="summary" class="summary"></div>
+          <div class="tabs">
+            <button type="button" class="tab" data-tab="config">🔧 配置</button>
+            <button type="button" class="tab" data-tab="innov">💡 创新</button>
+            <button type="button" class="tab" data-tab="look">🎨 外观</button>
+            <button type="button" class="tab" data-tab="eval">📊 评估</button>
+          </div>
+        </div>
         <div id="redesign"></div>
-        <div class="tabs">
-          <button type="button" class="tab" data-tab="config">🔧 配置</button>
-          <button type="button" class="tab" data-tab="innov">💡 创新</button>
-          <button type="button" class="tab" data-tab="look">🎨 外观</button>
+        <div class="row actions quick">
+          <button type="button" data-act="recommend">👍 推荐配置</button>
+          <button type="button" data-act="inherit" id="btn-inherit">↺ 沿用上代</button>
+          <button type="button" data-act="random">🎲 随机</button>
         </div>
         <div id="tab-body"></div>
-        <div class="row actions">
-          <button type="button" data-act="random">🎲 一键随机</button>
-          <button type="button" data-act="recommend">推荐配置</button>
-          <button type="button" data-act="inherit" id="btn-inherit">沿用上代</button>
+        <div class="confirm-bar">
           ${game ? `<button type="button" class="primary launch-btn" data-act="confirm-design">${opts.confirmLabel || '✅ 定稿'}</button>` : '<button type="button" class="primary launch-btn" data-act="launch">🎤 发布会揭幕</button>'}
         </div>
-        <div id="readouts"></div>
       </aside>
     </div>
-    <section class="museum-wrap kbox">
-      <h2 class="kbox-title">🏛 历代机型馆 <span class="badge">点击载入</span>
-        ${game ? '' : '<button type="button" class="mini-btn" data-act="add">＋ 当前机型入馆</button><button type="button" class="mini-btn danger" data-act="clear-museum">清空</button>'}</h2>
+    <details class="museum-wrap kbox" ${game ? '' : 'open'}>
+      <summary class="kbox-title">🏛 历代机型馆 <span class="badge">${museum.length} 台 · 点开查看</span>
+        ${game ? '' : '<button type="button" class="mini-btn" data-act="add">＋ 当前机型入馆</button><button type="button" class="mini-btn danger" data-act="clear-museum">清空</button>'}</summary>
       <div id="museum" class="museum"></div>
-    </section>`;
+    </details>`;
   }
 
   function bind() {
@@ -767,10 +794,21 @@ export function createStudio(root, opts = {}) {
           // 等新机身建好再指给玩家看
           requestAnimationFrame(() => stage?.spotlight(id, c ? `${c.icon} ${c.name}` : ''));
         }
+      } else if (d.icat) {
+        sfx.click();
+        icat = d.icat;
+        renderPanel();
       } else if (d.tab) {
         sfx.click();
         tab = d.tab;
         renderPanel();
+        // 手机上：切页后让内容从吸顶栏下面开始
+        const top = root.querySelector('.panel-top');
+        const body = $('#redesign');
+        if (top && body && window.innerWidth <= 900) {
+          const gap = body.getBoundingClientRect().top - top.getBoundingClientRect().bottom;
+          if (Math.abs(gap) > 8) window.scrollBy({ top: gap - 4, behavior: 'smooth' });
+        }
         if (tab === 'look' && !exploded) stage?.view('back');
       } else if (d.pos) {
         sfx.click();
