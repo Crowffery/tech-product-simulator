@@ -103,7 +103,7 @@ P.title = () => ({
     </div>`,
   cta: `${hasSave() ? '<button type="button" class="primary big" data-act="continue">▶ 继续游戏</button>' : ''}
       <button type="button" class="${hasSave() ? '' : 'primary big'}" data-act="new">${hasSave() ? '新开一局' : '▶ 新开一局'}</button>
-      <a class="ghost-link" href="${import.meta.env.VITE_STUDIO_HREF || './studio.html'}">🎨 设计沙盒（全部概念解锁）</a>`,
+      ${import.meta.env.VITE_STUDIO_HREF === 'none' ? '' : `<a class="ghost-link" href="${import.meta.env.VITE_STUDIO_HREF || './studio.html'}">🎨 设计沙盒（全部概念解锁）</a>`}`,
 });
 
 P.create = () => ({
