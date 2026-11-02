@@ -7,6 +7,7 @@
  */
 import * as THREE from 'three';
 import { CORNERS, SCREEN_FORMS, physical, tier } from './parts.js';
+import { createLiveScreen } from './screenOS.js';
 
 const FX = 1; // 不参与法线描边的图层（粒子、光柱、线条）
 
@@ -303,9 +304,23 @@ function wallpaperTexture(designOrAccent, { hd = false } = {}) {
         if (hd) {
           roundRect(g, x, y, iconSize, iconSize, rr);
           g.fill();
-          g.fillStyle = 'rgba(255,255,255,0.35)';
-          roundRect(g, x + 4, y + 4, iconSize - 8, iconSize * 0.22, 6);
+          const gloss = g.createLinearGradient(x, y, x, y + iconSize * 0.4);
+          gloss.addColorStop(0, 'rgba(255,255,255,0.42)');
+          gloss.addColorStop(1, 'rgba(255,255,255,0)');
+          g.fillStyle = gloss;
+          roundRect(g, x + 3, y + 3, iconSize - 6, iconSize * 0.35, 8);
           g.fill();
+          // simple geometric glyph (static fallback; live OS draws full vectors)
+          g.fillStyle = 'rgba(255,255,255,0.9)';
+          const cx = x + iconSize / 2;
+          const cy = y + iconSize / 2;
+          const k = i % 6;
+          if (k === 0) { g.beginPath(); g.arc(cx, cy, iconSize * 0.18, 0, Math.PI * 2); g.fill(); }
+          else if (k === 1) { roundRect(g, cx - iconSize * 0.22, cy - iconSize * 0.14, iconSize * 0.44, iconSize * 0.28, 4); g.fill(); }
+          else if (k === 2) { g.beginPath(); g.moveTo(cx, cy - iconSize * 0.2); g.lineTo(cx + iconSize * 0.2, cy + iconSize * 0.16); g.lineTo(cx - iconSize * 0.2, cy + iconSize * 0.16); g.closePath(); g.fill(); }
+          else if (k === 3) { g.fillRect(cx - iconSize * 0.18, cy - iconSize * 0.18, iconSize * 0.36, iconSize * 0.36); }
+          else if (k === 4) { g.beginPath(); g.arc(cx, cy, iconSize * 0.2, 0, Math.PI * 2); g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 3; g.stroke(); }
+          else { roundRect(g, cx - iconSize * 0.2, cy - iconSize * 0.08, iconSize * 0.4, iconSize * 0.16, 3); g.fill(); }
         } else {
           g.fillRect(x, y, iconSize, iconSize);
           g.fillStyle = 'rgba(255,255,255,.5)';
@@ -590,7 +605,7 @@ export const SPOT = {
   periscope: [0, 0, 'B', 'lens', 'back'], gimbal: [0, 0, 'B', 'lens', 'back'], oneinch: [0, 0, 'B', 'lens', 'back'],
 };
 
-export function buildPhone(design, { hdScreen = false } = {}) {
+export function buildPhone(design, { hdScreen = false, liveScreen = null } = {}) {
   const phys = physical(design);
   const { w, h, thickness: t } = phys;
   const corner = CORNERS[design.corner] || CORNERS[1];
@@ -703,9 +718,19 @@ export function buildPhone(design, { hdScreen = false } = {}) {
   const dispGeo = new THREE.ShapeGeometry(roundedRectShape(dispW, dispH, Math.max(0.5, capR - bez)), 24);
   const uv = dispGeo.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / dispW + 0.5, uv.getY(i) / dispH + 0.5);
-  const display = new THREE.Mesh(dispGeo, new THREE.MeshBasicMaterial({ map: wallpaperTexture(design, { hd: hdScreen }), toneMapped: false }));
+  const screenMaps = [];
+  const screenMat = (map) => {
+    const m = new THREE.MeshBasicMaterial({ map, toneMapped: false });
+    screenMaps.push(m);
+    return m;
+  };
+  const primaryMap = liveScreen?.texture || wallpaperTexture(design, { hd: hdScreen });
+  const display = new THREE.Mesh(dispGeo, screenMat(primaryMap));
   display.position.set(0, kbH / 2, 0.17);
   fa.add(display);
+  if (liveScreen) {
+    anim.push((now) => liveScreen.paint(now));
+  }
   if (kbH) {
     // 实体键盘：4 行 × 10 列
     const keyMat = new THREE.MeshStandardMaterial({ color: 0x2b2c33, roughness: 0.5 });
@@ -1179,7 +1204,7 @@ export function buildPhone(design, { hdScreen = false } = {}) {
     body.geometry.translate(0, 0, -(st - 1) / 2);
     g.add(body);
     if (withScreen) {
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(sw - 3, sh - 3), new THREE.MeshBasicMaterial({ map: wallpaperTexture(design, { hd: hdScreen }), toneMapped: false }));
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(sw - 3, sh - 3), screenMat(primaryMap));
       scr.position.z = st / 2 + 0.05;
       g.add(scr);
     }
@@ -1544,7 +1569,7 @@ export function buildPhone(design, { hdScreen = false } = {}) {
     layers.frame.add(o);
     anchors[`c-${id}`] = o;
   }
-  return { root, layers, anchors, anim, ctl, dims: { w, h, t } };
+  return { root, layers, anchors, anim, ctl, dims: { w, h, t }, screen: liveScreen, screenMaps };
 }
 
 export function disposeObject(obj) {
@@ -2103,7 +2128,21 @@ export class PhoneStage {
       disposeObject(this.phone.root);
     }
     this.design = design;
-    this.phone = buildPhone(design, { hdScreen: !!this._present });
+    if (this._liveScreen) {
+      this._liveScreen.dispose();
+      this._liveScreen = null;
+    }
+    if (this._present) {
+      const opts = this._launchOpts || {};
+      this._liveScreen = createLiveScreen(design, {
+        width: 480,
+        height: 1000,
+        theme: opts.screenTheme || 'series',
+        wallIntensity: opts.wallpaper === 'intense' ? 1.35 : opts.wallpaper === 'calm' ? 0.65 : 1,
+      });
+      if (this._screenMode) this._liveScreen.setScreenMode(this._screenMode, this._screenModeOpts || {});
+    }
+    this.phone = buildPhone(design, { hdScreen: !!this._present, liveScreen: this._liveScreen });
     this.dims = this.phone.dims;
     this.pivot.add(this.phone.root);
     this.pedestal.position.y = -this.dims.h / 2 - 14;
@@ -2202,6 +2241,32 @@ export class PhoneStage {
 
 
   /** 发布会 / keynote：提高清晰度与舞台光感；设计阶段保持原性能档 */
+  setLaunchOpts(opts = {}) {
+    this._launchOpts = opts || {};
+    if (this._liveScreen) {
+      this._liveScreen.setTheme(opts.screenTheme || 'series');
+      this._liveScreen.setBreath(opts.wallpaper === 'intense' ? 1.35 : opts.wallpaper === 'calm' ? 0.65 : 1);
+    }
+    // 灯光色温
+    const light = opts.light || 'brand';
+    if (light === 'warm') {
+      this.key.color?.set?.('#ffd2a0');
+      this.rimWarm.intensity = Math.max(this.rimWarm.intensity, 1.6);
+    } else if (light === 'cool') {
+      this.key.color?.set?.('#bcd8ff');
+      this.rim.intensity = Math.max(this.rim.intensity, 2.1);
+    } else {
+      this.key.color?.set?.('#ffffff');
+    }
+  }
+
+  /** 发布会卖点切换：屏内 OS 状态 */
+  setScreenMode(mode, opts = {}) {
+    this._screenMode = mode || 'home';
+    this._screenModeOpts = opts || {};
+    if (this._liveScreen) this._liveScreen.setScreenMode(this._screenMode, this._screenModeOpts);
+  }
+
   setPresentationMode(on) {
     this._present = !!on;
     const dpr = window.devicePixelRatio || 1;
@@ -2423,6 +2488,10 @@ export class PhoneStage {
   dispose() {
     this._dead = true;
     this._ro?.disconnect();
+    if (this._liveScreen) {
+      this._liveScreen.dispose();
+      this._liveScreen = null;
+    }
     if (this.phone) disposeObject(this.phone.root);
     this.scene.traverse((o) => {
       if (o.geometry) o.geometry.dispose();

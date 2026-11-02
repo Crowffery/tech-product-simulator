@@ -620,21 +620,83 @@ export const LAUNCH_STYLES = [
   { id: 'specs', label: '参数轰炸', desc: '务实党点头', score: 26, risk: 0.12 },
 ];
 
-export function resolveLaunchStyle(state, styleId) {
+/** 发布会额外定制（影响节目单 / 运镜 / 屏显，轻度挂钩 heat/flop） */
+export const LAUNCH_OPT_FIELDS = {
+  openTone: [
+    { id: 'areyouok', label: 'Are you OK', hint: '热场经典' },
+    { id: 'redefine', label: '重新定义', hint: '中式发布腔' },
+    { id: 'minimal', label: '极简无废话', hint: '少说多看' },
+  ],
+  light: [
+    { id: 'warm', label: '暖金', hint: '晚会感' },
+    { id: 'cool', label: '冷蓝', hint: '科技感' },
+    { id: 'brand', label: '品牌色', hint: '跟机身' },
+  ],
+  camera: [
+    { id: 'calm', label: '克制', hint: '稳、少晃' },
+    { id: 'cinema', label: '电影感', hint: '推拉+侧写' },
+    { id: 'wild', label: '夸张', hint: '荷兰角狂炫', risk: 0.04 },
+  ],
+  screenTheme: [
+    { id: 'series', label: '跟随芯片', hint: '系列主题色' },
+    { id: 'dark', label: '深色玻璃', hint: '暗色拟态' },
+    { id: 'light', label: '浅色清爽', hint: '明亮桌面' },
+  ],
+  wallpaper: [
+    { id: 'calm', label: '克制光斑', hint: '少动' },
+    { id: 'normal', label: '标准动态', hint: '默认' },
+    { id: 'intense', label: '高能动壁', hint: '光斑更疯' },
+  ],
+};
+
+export function defaultLaunchOpts(styleId = 'safe') {
+  const style = styleId || 'safe';
+  return {
+    style,
+    openTone: style === 'wow' ? 'areyouok' : style === 'specs' ? 'minimal' : 'redefine',
+    light: style === 'wow' ? 'warm' : style === 'specs' ? 'cool' : 'brand',
+    camera: style === 'wow' ? 'wild' : style === 'specs' ? 'calm' : 'cinema',
+    screenTheme: 'series',
+    wallpaper: style === 'wow' ? 'intense' : 'normal',
+    emphasize: true,
+    easter: style !== 'safe',
+  };
+}
+
+export function resolveLaunchStyle(state, styleId, launchOpts = null) {
   const style = LAUNCH_STYLES.find((s) => s.id === styleId) || LAUNCH_STYLES[0];
+  const opts = { ...defaultLaunchOpts(style.id), ...(launchOpts || {}), style: style.id };
+  state.launchOpts = opts;
   let score = prLaunchBonus(state) + style.score;
+  // 轻度挂钩：夸张运镜 / 彩蛋略增风险与上限
+  let risk = style.risk;
+  if (opts.camera === 'wild') {
+    risk += 0.04;
+    score += 2;
+  }
+  if (opts.camera === 'calm') risk -= 0.02;
+  if (opts.easter) {
+    risk += 0.03;
+    score += 3;
+  }
+  if (opts.emphasize) score += 1;
+  if (opts.openTone === 'minimal' && style.id === 'specs') score += 1;
+  risk = Math.max(0.04, Math.min(0.42, risk));
   state.launchFlop = false;
-  if (Math.random() < style.risk) {
+  if (Math.random() < risk) {
     score -= 14;
     state.launchFlop = true;
     state.eventLog.push(`发布会：${style.label} 翻车了一下`);
   } else {
-    state.eventLog.push(`发布会：${style.label}`);
+    const bits = [style.label];
+    if (opts.openTone === 'areyouok') bits.push('Are you OK');
+    if (opts.easter) bits.push('彩蛋');
+    state.eventLog.push(`发布会：${bits.join(' · ')}`);
   }
   state.launchScore = score;
   finalizeScores(state);
   state.phase = 'score';
-  return { ok: true };
+  return { ok: true, opts };
 }
 
 export function experienceScore(state) {

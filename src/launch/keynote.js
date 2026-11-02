@@ -519,25 +519,54 @@ const CONCEPT_FX = {
 const MAT_KIND = ['plastic', 'glass', 'metal', 'leather'];
 const MAT_NAME = { plastic: '多彩塑料机身', glass: '玻璃机身', metal: '全新金属机身', leather: '素皮机身' };
 
+const GREETINGS = {
+  areyouok: [
+    { w: 'ARE YOU OK?', sub: '主讲人上台，挥手：「大家好！<b>Are you OK?</b>」', react: ['I\'m very OK!', '哈哈哈哈', '鬼畜预定'], mood: 'good' },
+    { w: 'ARE YOU OK?', sub: '主讲人：「Hello, everybody! <b>Are you OK?</b>」', react: ['OK!!!', '熟悉的味道', '😂'], mood: 'good' },
+  ],
+  redefine: [
+    { w: '重新定义手机', sub: '「今天，我们要<b>重新定义手机</b>。」', react: ['又来了', '这次是真的吗', '👀'], mood: 'meh' },
+    { w: '重新定义体验', sub: '「不是参数的堆砌——是体验的<b>重新定义</b>。」', react: ['说说看', '期待', '🧐'], mood: 'meh' },
+  ],
+  minimal: [
+    { w: '少说，多看', sub: '主讲人只留一句话：「<b>少说，多看。</b>」', react: ['好家伙', '直接上菜', '👏'], mood: 'good' },
+    { w: '就是它', sub: '大屏只亮四个字：<b>就是它。</b>', react: ['简洁！', '有牌面', '✨'], mood: 'good' },
+  ],
+};
+
+const CAM_PRESETS = {
+  calm: { push: 0.7, spin: 0.08, dutch: false },
+  cinema: { push: 1.2, spin: 0.18, dutch: true },
+  wild: { push: 1.55, spin: 0.38, dutch: true },
+};
+
+function camPose(view, shot, opts, cam) {
+  const p = CAM_PRESETS[cam] || CAM_PRESETS.cinema;
+  const spin = (opts?.spin ?? 0.12) * (cam === 'wild' ? 1.5 : cam === 'calm' ? 0.55 : 1);
+  const push = (opts?.push ?? 0) * (p.push / 1.2);
+  const useDutch = p.dutch && (shot === 'dutch' || opts?.forceDutch);
+  return [view, useDutch && shot !== 'macro' ? 'dutch' : shot, { spin, push: push || p.push * 0.4 }];
+}
+
 /**
  * 生成发布会节目单
- * ctx: { d, phys, cs, prevChip, rivals, camCap, batCap, perfCap, price, pf, points, promises, firsts, quick, eco }
+ * ctx: { d, phys, cs, prevChip, rivals, camCap, batCap, perfCap, price, pf, points, promises, firsts, quick, eco, launchOpts }
  */
 export function buildKeynote(ctx) {
   const { d, phys, cs, prevChip, rivals, camCap, batCap, price, pf, points, promises, firsts, quick } = ctx;
+  const opts = ctx.launchOpts || {};
+  const style = opts.style || 'safe';
+  const cam = opts.camera || (style === 'wow' ? 'wild' : style === 'specs' ? 'calm' : 'cinema');
+  const openTone = opts.openTone || (style === 'wow' ? 'areyouok' : style === 'specs' ? 'minimal' : 'redefine');
+  const emphasize = opts.emphasize !== false;
+  const easter = opts.easter !== false;
   const C = new Set(d.concepts || []);
   const broke = new Set((promises || []).filter((p) => !p.ok).map((p) => p.id));
   const main = new Set(points || []);
   const out = [];
 
-  // —— 开场白（偶尔来一句经典的）——
-  const company = d.company || '我们';
-  const greet = quick ? null : pickOne([
-    { w: 'ARE YOU OK?', sub: '主讲人上台，挥手：「大家好！<b>Are you OK?</b>」', react: ['I\'m very OK!', '哈哈哈哈', '鬼畜预定'], mood: 'good' },
-    { w: 'ARE YOU OK?', sub: '主讲人：「Hello, everybody! <b>Are you OK?</b>」', react: ['OK!!!', '熟悉的味道', '😂'], mood: 'good' },
-    { w: '重新定义手机', sub: '「今天，我们要<b>重新定义手机</b>。」', react: ['又来了', '这次是真的吗', '👀'], mood: 'meh' },
-    { w: '一年的努力', sub: '「为了今天，我们准备了整整一年。」', react: ['加油！', '期待', '👏'], mood: 'good' },
-  ]);
+  const greetPool = GREETINGS[openTone] || GREETINGS.redefine;
+  const greet = quick ? null : pickOne(greetPool);
   if (greet)
     out.push({
       key: 'greet',
@@ -549,11 +578,12 @@ export function buildKeynote(ctx) {
       sub: greet.sub,
       react: greet.react,
       mood: greet.mood,
-      pose: ['front', 'wide'],
-      ms: 2600,
+      pose: camPose('front', 'wide', { spin: 0.05, push: 0.4 }, cam),
+      screen: 'lock',
+      ms: openTone === 'minimal' ? 2200 : 2600,
     });
 
-  // —— 外观（必有，首页）——
+  // —— 外观 ——
   const matId = tier(d, 'material').id;
   const kind = C.has('titanium') ? 'metal' : MAT_KIND[matId] || 'plastic';
   const matName = C.has('titanium') ? '钛金属中框' : C.has('ceramic') ? '陶瓷机身' : MAT_NAME[kind];
@@ -566,10 +596,29 @@ export function buildKeynote(ctx) {
     sub: `<b>${paletteName(d.color)}</b> · ${matName}${kind === 'metal' ? '，每一道边都经过抛光' : kind === 'glass' ? '，光线在背面流动' : ''}`,
     react: phys.thickness <= 8 ? ['好薄！', '颜值在线', '😍'] : kind === 'metal' ? ['这光泽！', '高级感', '✨'] : ['颜色好看', '手感应该不错'],
     mood: phys.thickness <= 8.4 || kind === 'metal' ? 'good' : 'meh',
-    pose: ['hero', 'push', { spin: 0.08, push: 1.4 }],
+    pose: camPose('hero', 'push', { spin: 0.08, push: 1.4 }, cam),
     shine: kind === 'metal' || kind === 'glass',
+    screen: 'home',
+    light: opts.light || 'brand',
     ms: 3600,
   });
+
+  // 材质特写（多一个状态）
+  if (!quick && (kind === 'metal' || kind === 'glass' || C.has('titanium') || C.has('ceramic'))) {
+    out.push({
+      key: 'material',
+      chap: null,
+      wall: SLIDES[kind](d.color, matName, ['#23242c', '#eeeae0', '#8fd3b6', '#f2b8c6', '#5aa9d6', '#f2d45c', d.color].slice(-6)),
+      sub: kind === 'metal' ? '侧面特写：CNC 刀路留下的，是<b>克制的锋利</b>。' : '光线掠过背面——玻璃不是背景，是<b>舞台</b>。',
+      react: ['细节控狂喜', '工业设计加分', '✨'],
+      mood: 'good',
+      pose: camPose('side', 'macro', { spin: 0.12, push: 1.1 }, cam),
+      shine: true,
+      screen: 'home',
+      ms: 2800,
+    });
+  }
+
   if (main.has('thin') || phys.thickness <= 7.8) {
     const bad = broke.has('thin');
     out.push({
@@ -580,7 +629,8 @@ export function buildKeynote(ctx) {
       sub: bad ? `我们说过要做最薄……它是 <b>${phys.thickness}mm</b>。` : `侧面看——只有 <b>${phys.thickness}mm</b>，比 ${Math.max(2, Math.round(phys.thickness / 1.85))} 枚硬币叠起来还薄。<br/><small>（比友商薄了整整 0.01mm）</small>`,
       react: bad ? ['说好的极致轻薄？', '就这？', '😅'] : ['薄如蝉翼', '0.01mm 也是领先', '🤏'],
       mood: bad ? 'bad' : 'good',
-      pose: ['side', 'push', { spin: 0, push: 1.2 }],
+      pose: camPose('side', 'push', { spin: 0, push: 1.2 }, cam),
+      screen: 'home',
       ms: 3000,
     });
   }
@@ -598,11 +648,17 @@ export function buildKeynote(ctx) {
       sub: `<b>${cs.label}</b>${up > 0 ? `，比上一代快 <b>${up}%</b>` : ''}${beat ? '，同期第一' : ''}${ctx.chipLag > 0 ? '<br/><small>（台下：友商都上新一代芯片了……）</small>' : bad ? '<br/><small>（性能调校没跟上，实际体验差点意思）</small>' : ''}`,
       react: ctx.chipLag > 0 ? ['老芯片？', '落后一代了', '🥱'] : bad ? ['发热呢？', '跑分没用', '😐'] : beat ? ['遥遥领先！', '这次真领先了', '🔥🔥'] : ['够用', '还行吧'],
       mood: bad ? 'bad' : beat ? 'good' : 'meh',
-      pose: ['back', 'orbit', { spin: 0.45 }],
+      pose: camPose('back', 'orbit', { spin: 0.45 }, cam),
       explode: true,
+      screen: 'chip',
+      screenPayload: {
+        label: cs.label,
+        score: cs.bench,
+        rivals: [...rivals.slice(0, 2).map((r) => ({ n: r.n || r.name || '友商', v: r.v / Math.max(cs.bench, r.v) })), { n: '本机', v: 1, me: true }],
+      },
       ms: 3800,
     });
-    if (beat && !bad)
+    if (easter && beat && !bad)
       out.push({
         key: 'yyld',
         chap: null,
@@ -620,26 +676,49 @@ export function buildKeynote(ctx) {
         sub: '主讲人停顿了三秒，只说了四个字：<b>遥遥领先。</b>',
         react: ['遥遥领先！！', '燃起来了', '🚀🚀🚀'],
         mood: 'good',
-        pose: ['hero', 'dutch', { spin: 0.25, push: 1.0 }],
+        pose: camPose('hero', 'dutch', { spin: 0.25, push: 1.0, forceDutch: true }, cam),
         shine: true,
         sfx: 'fanfare',
+        screen: 'chip',
+        screenPayload: { label: '遥遥领先', score: cs.bench },
         ms: 2800,
       });
   }
 
   const scr = d.parts.screen;
-  if (!quick && scr >= 1) {
-    out.push({
-      key: 'screen',
-      chap: '屏幕',
-      wall: scr === 2 ? SLIDES.bright(3000) : SLIDES.refresh(120),
-      kpi: scr === 2 ? { label: '峰值亮度', from: 400, to: 3000, dec: 0, unit: 'nit' } : { label: '自适应刷新率', from: 60, to: 120, dec: 0, unit: 'Hz' },
-      sub: scr === 2 ? '烈日下也看得清：峰值亮度 <b>3000 nit</b>' : '<b>120Hz</b> 高刷，每一次滑动都跟手',
-      react: ['好顺滑', '眼睛舒服', '👀'],
-      mood: 'good',
-      pose: ['front', 'push', { spin: 0, push: 1.5 }],
-      ms: 3200,
-    });
+  if ((!quick && scr >= 1) || (emphasize && main.has('screen'))) {
+    // 高刷演示
+    if (scr >= 1) {
+      out.push({
+        key: 'screen',
+        chap: '屏幕',
+        main: emphasize && (main.has('screen') || scr >= 1),
+        wall: SLIDES.refresh(scr >= 1 ? 120 : 90),
+        kpi: { label: '自适应刷新率', from: 60, to: scr >= 1 ? 120 : 90, dec: 0, unit: 'Hz' },
+        sub: `<b>${scr >= 1 ? 120 : 90}Hz</b> 高刷，每一次滑动都跟手——请看机身屏幕。`,
+        react: ['好顺滑', '眼睛舒服', '👀'],
+        mood: 'good',
+        pose: camPose('front', 'push', { spin: 0, push: 1.55 }, cam),
+        screen: 'scrollHz',
+        screenPayload: { hz: scr >= 1 ? 120 : 90 },
+        ms: 3400,
+      });
+    }
+    if (scr === 2 || (!quick && scr >= 1 && style !== 'safe')) {
+      out.push({
+        key: 'bright',
+        chap: scr === 2 ? '屏幕' : null,
+        wall: SLIDES.bright(scr === 2 ? 3000 : 1800),
+        kpi: { label: '峰值亮度', from: 400, to: scr === 2 ? 3000 : 1800, dec: 0, unit: 'nit' },
+        sub: scr === 2 ? '烈日下也看得清：峰值亮度 <b>3000 nit</b>' : '户外亮度拉满，屏幕自己就是光源。',
+        react: ['刺眼！（褒义）', '阳光下能看', '☀️'],
+        mood: 'good',
+        pose: camPose('front', 'macro', { spin: 0, push: 1.3 }, cam),
+        screen: 'brightness',
+        screenPayload: { nits: scr === 2 ? 3000 : 1800 },
+        ms: 3000,
+      });
+    }
   }
 
   const hasCam = d.parts.camera >= 1 || C.has('oneinch') || C.has('periscope') || C.has('gimbal');
@@ -655,10 +734,24 @@ export function buildKeynote(ctx) {
       sub: `${C.has('oneinch') ? '一英寸大底' : C.has('periscope') ? '潜望长焦' : tier(d, 'camera').label}，夜景直出，<b>没有修图</b>${bad ? '<br/><small>（不过噪点……大家都看到了）</small>' : ''}`,
       react: bad ? ['说好的影像叙事？', '糊了', '🤨'] : camCap >= 85 ? ['这是手机拍的？', '吊打相机', '📸'] : camCap >= 70 ? ['挺干净', '能发朋友圈'] : ['噪点有点多', '再练练'],
       mood: bad ? 'bad' : camCap >= 85 ? 'good' : camCap >= 70 ? 'meh' : 'bad',
-      pose: ['back', 'macro', { spin: 0.05, push: 1.1 }],
+      pose: camPose('back', 'macro', { spin: 0.05, push: 1.1 }, cam),
       sfx: 'shutter',
+      screen: 'camera',
       ms: 3600,
     });
+    if (!quick && camCap >= 75) {
+      out.push({
+        key: 'gallery',
+        chap: null,
+        wall: SLIDES.night(camCap),
+        sub: '样张墙亮起——每一张，都是这台手机自己拍的。',
+        react: ['可发杂志', '色彩真准', '🖼️'],
+        mood: 'good',
+        pose: camPose('front', 'push', { spin: 0.1, push: 1.2 }, cam),
+        screen: 'gallery',
+        ms: 2600,
+      });
+    }
   }
 
   const bigBat = d.parts.battery === 2 || C.has('sicarbon') || C.has('solar') || batCap >= 85;
@@ -674,7 +767,9 @@ export function buildKeynote(ctx) {
       sub: `重度使用，一次充电撑 <b>${days} 天</b>${bad ? '<br/><small>（实验室数据，仅供参考）</small>' : ''}`,
       react: bad ? ['实验室数据吧', '不信', '🙄'] : days >= 2 ? ['电量焦虑退散', '终于！', '🔋🔋'] : ['还行', '够一天'],
       mood: bad ? 'bad' : days >= 2 ? 'good' : 'meh',
-      pose: ['hero', 'low', { spin: 0.15 }],
+      pose: camPose('hero', 'low', { spin: 0.15 }, cam),
+      screen: 'battery',
+      screenPayload: { days, pct: 96 },
       ms: 3200,
     });
   }
@@ -687,10 +782,26 @@ export function buildKeynote(ctx) {
       sub: '十分钟充一半。换句话说——<b>充电五分钟，刷剧两小时</b>',
       react: ['这句好耳熟', '充电宝可以扔了', '⚡'],
       mood: 'good',
-      pose: ['front', 'bottom', { spin: 0, push: 0.9 }],
+      pose: camPose('front', 'bottom', { spin: 0, push: 0.9 }, cam),
+      screen: 'charge',
       ms: 3200,
     });
   }
+
+  if (C.has('ai') && !quick) {
+    out.push({
+      key: 'ai',
+      chap: '智能',
+      wall: SLIDES.concept(CONCEPTS.find((c) => c.id === 'ai') || { name: '端侧 AI', desc: '懂你所需', icon: '✨' }, false),
+      sub: `<b>${d.chipSeries || '蜂鸟'} 助理</b> —— 端侧推理，私人秘书就在手机里。`,
+      react: ['未来感', '想试试', '🤖'],
+      mood: 'good',
+      pose: camPose('front', 'push', { spin: 0.12, push: 1.25 }, cam),
+      screen: 'ai',
+      ms: 3200,
+    });
+  }
+
   if (main.has('eco') || ctx.eco) {
     const bad = broke.has('eco');
     out.push({
@@ -701,15 +812,17 @@ export function buildKeynote(ctx) {
       sub: bad ? '手机、手表、电脑、耳机……<b>理论上</b>都能一碰互传' : '手机、手表、电脑、耳机，<b>一碰互传</b>',
       react: bad ? ['理论上？', '又画饼', '🫓'] : ['全家桶安排', '丝滑', '🔗'],
       mood: bad ? 'bad' : 'good',
-      pose: ['front', 'orbit', { spin: 0.3 }],
+      pose: camPose('front', 'orbit', { spin: 0.3 }, cam),
+      screen: 'home',
       ms: 3000,
     });
   }
 
-  // —— 其余概念件（首发的留给 One more thing）——
-  const others = (d.concepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter((c) => c && !firsts.includes(c.name) && c.id !== 'fastcharge');
+  // —— 其余概念件 ——
+  const others = (d.concepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter((c) => c && !firsts.includes(c.name) && c.id !== 'fastcharge' && c.id !== 'ai');
+  const conceptLimit = style === 'specs' ? 3 : quick ? 0 : 2;
   if (!quick)
-    others.slice(0, 2).forEach((c) => {
+    others.slice(0, conceptLimit).forEach((c) => {
       const fx = CONCEPT_FX[c.id];
       const base = SLIDES.concept(c, false);
       out.push({
@@ -719,7 +832,8 @@ export function buildKeynote(ctx) {
         sub: `<b>${c.name}</b> —— ${c.desc}`,
         react: ['有点意思', '想试试', c.icon],
         mood: 'good',
-        pose: [c.cat === 'cam' ? 'back' : 'hero', c.cat === 'cam' ? 'macro' : 'push', { spin: 0.1, push: 1.2 }],
+        pose: camPose(c.cat === 'cam' ? 'back' : 'hero', c.cat === 'cam' ? 'macro' : 'push', { spin: 0.1, push: 1.2 }, cam),
+        screen: c.cat === 'cam' ? 'camera' : 'home',
         ms: 3000,
       });
     });
@@ -727,7 +841,7 @@ export function buildKeynote(ctx) {
   // —— One more thing ——
   const firstCs = firsts.map((n) => CONCEPTS.find((c) => c.name === n)).filter(Boolean);
   if (firstCs.length) {
-    out.push({ key: 'omt', chap: null, wall: (g, W, H, t) => title(g, typed('ONE MORE THING…', t, 10), W / 2, H / 2 + 6, 18), sub: '还有一件事……', react: ['？？？', '要来了', '屏住呼吸'], mood: 'meh', pose: ['back', 'wide', { spin: 0 }], ms: 2200, dim: true });
+    out.push({ key: 'omt', chap: null, wall: (g, W, H, t) => title(g, typed('ONE MORE THING…', t, 10), W / 2, H / 2 + 6, 18), sub: '还有一件事……', react: ['？？？', '要来了', '屏住呼吸'], mood: 'meh', pose: camPose('back', 'wide', { spin: 0 }, cam), screen: 'lock', ms: 2200, dim: true });
     firstCs.slice(0, 2).forEach((c, i) => {
       const fx = CONCEPT_FX[c.id];
       const base = SLIDES.concept(c, true);
@@ -740,8 +854,9 @@ export function buildKeynote(ctx) {
         sub: `全球首发：<b>${c.name}</b> —— ${c.desc}`,
         react: ['！！！', '这也行？', '买爆！', '🤯', '冲上热搜'],
         mood: 'good',
-        pose: [i % 2 ? 'hero' : 'back', i % 2 ? 'dutch' : 'push', { spin: 0.18, push: 1.3 }],
+        pose: camPose(i % 2 ? 'hero' : 'back', i % 2 ? 'dutch' : 'push', { spin: 0.18, push: 1.3, forceDutch: true }, cam),
         fanfare: true,
+        screen: c.id === 'ai' ? 'ai' : 'home',
         ms: 3400,
       });
     });
@@ -751,14 +866,43 @@ export function buildKeynote(ctx) {
       wall: (g, W, H, t) => {
         bg(g, W, H, '#000', '#111');
         txt(g, 'ONLY', W / 2, 22, 10, '#aab7b8');
-        title(g, typed(company, t, 6), W / 2, 46, 20, '#fff');
+        title(g, typed(d.company || '我们', t, 6), W / 2, 46, 20, '#fff');
         txt(g, 'CAN DO.', W / 2, 64, 10, '#aab7b8');
       },
-      sub: `「这件事，<b>Only ${company} can do.</b>」`,
+      sub: `「这件事，<b>Only ${d.company || '我们'} can do.</b>」`,
       react: ['好熟悉的句式', '狂起来了', '😎'],
       mood: 'good',
-      pose: ['hero', 'orbit', { spin: 0.4 }],
+      pose: camPose('hero', 'orbit', { spin: 0.4 }, cam),
+      screen: 'home',
       ms: 2600,
+    });
+  }
+
+  // 参数党：额外插一张总览 KPI 墙
+  if (style === 'specs' && !quick) {
+    out.push({
+      key: 'specwall',
+      chap: '参数',
+      wall: (g, W, H, t) => {
+        bg(g, W, H, '#0a1220', '#152238');
+        const rows = [
+          [`${cs.label}`, '芯片'],
+          [`${phys.thickness}mm`, '厚度'],
+          [scr >= 1 ? '120Hz' : '60Hz', '屏幕'],
+          [`${Math.round(batCap)}`, '续航指数'],
+        ];
+        rows.forEach((r, i) => {
+          const k = ease(t * 1.4 - i * 0.12);
+          mono(g, r[0], 70, 16 + i * 14, 11, `rgba(255,208,138,${0.4 + 0.6 * k})`, 'left');
+          txt(g, r[1], 170, 16 + i * 14, 9, `rgba(170,183,184,${0.5 + 0.5 * k})`, 'left');
+        });
+      },
+      sub: '一张图看完——<b>参数党请截图</b>。',
+      react: ['务实', '对比表安排', '📊'],
+      mood: 'good',
+      pose: camPose('hero', 'orbit', { spin: 0.2 }, cam),
+      screen: 'home',
+      ms: 2800,
     });
   }
 
@@ -766,7 +910,6 @@ export function buildKeynote(ctx) {
   const list = roundPrice(price * 1.2 + 300);
   const fair = ctx.fair || price;
   if (price <= fair * 0.95) {
-    // 价格逐级砸下来
     const steps = [roundPrice(fair * 1.3), roundPrice(fair * 1.1), roundPrice(fair)].filter((v, i, a) => v > price * 1.04 && a.indexOf(v) === i);
     steps.forEach((v, i) =>
       out.push({
@@ -783,7 +926,8 @@ export function buildKeynote(ctx) {
         sub: `不要 <b>¥${v}</b>！`,
         react: i === 0 ? ['来了来了', '熟悉的节奏'] : ['还降？', '😱'],
         mood: 'good',
-        pose: ['hero', 'orbit', { spin: 0.35 }],
+        pose: camPose('hero', 'orbit', { spin: 0.35 }, cam),
+        screen: 'home',
         ms: 1500,
         notap: true,
       }),
@@ -796,6 +940,7 @@ export function buildKeynote(ctx) {
       react: ['交个朋友！', '厚道！', '买买买', '👏👏👏'],
       mood: 'good',
       sfx: 'boom',
+      screen: 'home',
       ms: 2800,
     });
     return out;
@@ -810,7 +955,8 @@ export function buildKeynote(ctx) {
     sub: `售价……<b>¥${list}</b>？`,
     react: ['啊？', '这么贵'],
     mood: 'meh',
-    pose: ['hero', 'high', { spin: 0.2 }],
+    pose: camPose('hero', 'high', { spin: 0.2 }, cam),
+    screen: 'lock',
     ms: 1700,
   });
   const pricy = price >= fair * 1.12;
@@ -822,9 +968,8 @@ export function buildKeynote(ctx) {
     react: pricy ? ['价格也遥遥领先', '钱包：告辞', '😅'] : pf > 0 ? ['太良心了！', '买买买', '👏👏👏'] : pf < 0 ? ['还是贵', '等降价', '😅'] : ['可以！', '真香', '👍'],
     mood: pf < 0 ? 'meh' : 'good',
     sfx: 'boom',
+    screen: 'home',
     ms: 2600,
   });
   return out;
 }
-
-export { SLIDES, CONCEPT_FX, chipSpec };

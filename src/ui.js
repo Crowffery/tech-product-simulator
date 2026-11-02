@@ -651,14 +651,37 @@ P.launch = () => {
       sheet: pricingPanel(),
       cta: `<button type="button" class="primary big" data-act="set-price">就这个价！▶</button>`,
     };
+  const opts = draft.launchOpts || (draft.launchOpts = L.defaultLaunchOpts('safe'));
+  const chipRow = (field, title) => {
+    const list = L.LAUNCH_OPT_FIELDS[field] || [];
+    return `<div class="launch-opt"><span class="lo-lab">${title}</span><div class="lo-chips">${list
+      .map(
+        (o) =>
+          `<button type="button" class="chip ${opts[field] === o.id ? 'on' : ''}" data-act="launch-opt" data-field="${field}" data-id="${o.id}" title="${esc(o.hint || '')}">${o.label}${o.risk ? ' ⚠' : ''}</button>`,
+      )
+      .join('')}</div></div>`;
+  };
   return {
     scene: ['launch', {}],
     caption: '后台：观众已经入场，主讲人还在背稿',
     sheet: `<h2 class="sheet-h">${icon('mic', 22)} 发布会 <small>首销价 ¥${state.product.price} <button type="button" class="link-btn" data-act="re-price">改价</button></small></h2>
+    <p class="muted launch-hint">先选主风格，再微调演出——都会写进节目单与手机屏。</p>
     <div class="cards3">${L.LAUNCH_STYLES.map(
-      (s) => `<button type="button" class="pick" data-act="launch-style" data-id="${s.id}"><b>${s.label}</b><small>${s.desc}</small><i>${s.risk >= 0.3 ? '⚠ 很冒险' : s.risk >= 0.1 ? '有点风险' : '稳'}</i></button>`,
-    ).join('')}</div>`,
-    cta: '',
+      (s) => `<button type="button" class="pick ${opts.style === s.id ? 'on' : ''}" data-act="launch-pick-style" data-id="${s.id}"><b>${s.label}</b><small>${s.desc}</small><i>${s.risk >= 0.3 ? '⚠ 很冒险' : s.risk >= 0.1 ? '有点风险' : '稳'}</i></button>`,
+    ).join('')}</div>
+    <div class="launch-custom">
+      ${chipRow('openTone', '开场调性')}
+      ${chipRow('light', '灯光色温')}
+      ${chipRow('camera', '运镜')}
+      ${chipRow('screenTheme', '屏显主题')}
+      ${chipRow('wallpaper', '壁纸动感')}
+      <div class="launch-opt toggles">
+        <button type="button" class="chip ${opts.emphasize ? 'on' : ''}" data-act="launch-toggle" data-field="emphasize">主打卖点特写</button>
+        <button type="button" class="chip ${opts.easter ? 'on' : ''}" data-act="launch-toggle" data-field="easter">彩蛋页${opts.style === 'safe' ? ' · 略增风险' : ''}</button>
+      </div>
+    </div>
+    <p class="risk-line">${opts.camera === 'wild' || opts.easter ? '⚠ 夸张运镜 / 彩蛋会抬高热度上限，也更容易翻车' : '✓ 当前配置偏稳，适合把完成度打满'}</p>`,
+    cta: `<button type="button" class="primary big" data-act="launch-go">开场！▶</button>`,
   };
 };
 
@@ -1341,8 +1364,11 @@ async function playReveal() {
     const { buildKeynote, txt } = await import('./launch/keynote.js');
     const { danmakuLines } = await import('./launch/crowd.js');
     stage = new PhoneStage(ov.querySelector('.lo-stage'));
+    const launchOpts = state.launchOpts || draft.launchOpts || L.defaultLaunchOpts('safe');
     stage.setPresentationMode?.(true);
+    stage.setLaunchOpts?.(launchOpts);
     stage.setDesign(state.design);
+    stage.setScreenMode?.('lock');
     const W = state.wowResult || {};
     const quick = state.models.length > 0 && !W.firsts?.length && !['S', 'A'].includes(W.grade);
     const d = state.design;
@@ -1364,6 +1390,7 @@ async function playReveal() {
       firsts: W.firsts || [],
       quick,
       eco: state.product.bindEco,
+      launchOpts,
     });
 
     // 随机现场插曲（放在中段）
@@ -1452,6 +1479,8 @@ async function playReveal() {
           exploded = true;
         }
         if (sl.shine) stage.shine(1800);
+        if (sl.screen) stage.setScreenMode?.(sl.screen, { payload: sl.screenPayload || {}, t0: performance.now() });
+        if (sl.light || launchOpts.light) stage.setLaunchOpts?.({ ...launchOpts, light: sl.light || launchOpts.light });
         if (sl.wall) stage.wallAnim(sl.wall);
         ov.classList.toggle('dim', !!sl.dim);
         kpi(sl.kpi);
@@ -1947,12 +1976,29 @@ function onClick(e) {
     case 're-price':
       state.product.price = null;
       break;
-    case 'launch-style':
-      L.resolveLaunchStyle(state, id);
+    case 'launch-pick-style': {
+      const next = L.defaultLaunchOpts(id);
+      // 保留用户已选的非默认项里与风格无关的：屏显主题
+      if (draft.launchOpts?.screenTheme) next.screenTheme = draft.launchOpts.screenTheme;
+      draft.launchOpts = next;
+      break;
+    }
+    case 'launch-opt':
+      draft.launchOpts = draft.launchOpts || L.defaultLaunchOpts('safe');
+      draft.launchOpts[btn.dataset.field] = id;
+      break;
+    case 'launch-toggle':
+      draft.launchOpts = draft.launchOpts || L.defaultLaunchOpts('safe');
+      draft.launchOpts[btn.dataset.field] = !draft.launchOpts[btn.dataset.field];
+      break;
+    case 'launch-go': {
+      const opts = draft.launchOpts || L.defaultLaunchOpts('safe');
+      L.resolveLaunchStyle(state, opts.style || 'safe', opts);
       persist();
       play('press-reveal');
       playReveal();
       return;
+    }
     case 'to-sales':
       L.runSales(state);
       play('keep');

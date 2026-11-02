@@ -734,3 +734,17 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 .rail-ico { display: inline-flex; }
 .rail-step i.rail-ico { padding: 2px; }
 .sheet-h .pxi { vertical-align: -3px; margin-right: 4px; }
+
+/* 发布会定制面板 */
+.launch-hint { margin: 0 0 8px; font-size: .78rem; }
+.launch-custom { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 10px; padding: 8px; background: #fffaf0; border: 2px solid var(--border); }
+.launch-opt { display: flex; flex-direction: column; gap: 4px; }
+.launch-opt .lo-lab { font-size: .72rem; font-weight: 800; color: var(--muted); }
+.launch-opt .lo-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.launch-opt .lo-chips .chip { padding: 5px 9px; font-size: .78rem; }
+.launch-opt.toggles { flex-direction: row; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.risk-line { margin: 0 0 4px; font-size: .72rem; font-weight: 700; color: #7d5a00; }
+@media (max-width: 420px) {
+  .launch-custom { padding: 6px; gap: 6px; }
+  .launch-opt .lo-chips .chip { padding: 4px 7px; font-size: .72rem; }
+}
