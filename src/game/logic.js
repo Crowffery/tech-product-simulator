@@ -5,7 +5,7 @@
  */
 import { SLOTS, POSITIONING, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS } from './data.js';
 import { emptySlots } from './state.js';
-import { IDEAL, matchOf, promiseCheck, priceFit, windowAt, clashAt, expectationBar, RUN_MONTHS } from './market.js';
+import { IDEAL, matchOf, promiseCheck, priceFit, windowAt, clashAt, expectationBar, RUN_MONTHS, POS_BASE_PRICE, roundPrice, marketSize, marketChipGen, rivalPriceList, bandOf } from './market.js';
 import {
   defaultDesign,
   slotCaps,
@@ -88,7 +88,7 @@ export function prLaunchBonus(state) {
 
 export function chipResearchCost(state) {
   const gen = state.chip.gen;
-  return { cash: 30 + gen * 20, months: deptLevel(state, 'rnd') >= 3 ? 2 : 3, next: gen + 1 };
+  return { cash: 25 + gen * 10, months: deptLevel(state, 'rnd') >= 3 ? 2 : 3, next: gen + 1 };
 }
 
 export function startChipResearch(state) {
@@ -145,6 +145,8 @@ export function finishPlan(state, { positioningId, pointIds, priceId, bindEco })
     positioningId,
     pointIds: [...pointIds],
     priceId,
+    bandId: priceId,
+    price: null,
     bindEco: !!bindEco && state.generation > 1,
     expMul: pos.exp,
     baseMonths: pos.months,
@@ -160,6 +162,7 @@ export function finishPlan(state, { positioningId, pointIds, priceId, bindEco })
   state.designDraft.position = positioningId;
   state.designDraft.chipGen = state.chip.gen;
   state.designDraft.chipSeries = state.chip.series;
+  state.designDraft.chipSrc = 'own';
   state.designDraft.company = state.companyName.slice(0, 10);
   state.phase = 'design';
   return { ok: true };
@@ -192,10 +195,18 @@ export function unlockConcept(state, id) {
 
 // ═════════════════════════ 供应链 ═════════════════════════
 
-export function pickLogistics(state, supplierId, stockId = 'normal') {
+/** 外购芯片的厂商名 */
+export const EXT_CHIP = '联芯';
+
+export function pickLogistics(state, supplierId, stockId = 'normal', chipSrc = 'own') {
   if (!SUPPLIERS.some((s) => s.id === supplierId) || !STOCK_OPTS.some((s) => s.id === stockId)) return { ok: false };
   state.supplierId = supplierId;
   state.stockId = stockId;
+  if (state.design) {
+    state.design.chipSrc = chipSrc;
+    state.design.chipGen = chipSrc === 'ext' ? marketChipGen(state.month) : state.chip.gen;
+    state.design.chipSeries = chipSrc === 'ext' ? EXT_CHIP : state.chip.series;
+  }
   state.phase = 'dev';
   return { ok: true };
 }
@@ -273,7 +284,8 @@ export function advanceMonth(state, allocation) {
   state.month += 1;
 
   const sup = SUPPLIERS.find((s) => s.id === state.supplierId) || SUPPLIERS[1];
-  const chance = sup.eventChance * [1, 0.8, 0.6][deptLevel(state, 'supply') - 1];
+  // 第一代是新手期：事故减半
+  const chance = sup.eventChance * [1, 0.8, 0.6][deptLevel(state, 'supply') - 1] * (state.generation === 1 ? 0.5 : 1);
   if (Math.random() < chance) {
     const pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)));
     const ev = pool[Math.floor(Math.random() * pool.length)];
@@ -347,11 +359,11 @@ export function resolveEvent(state, choiceIndex) {
   if (eff.faith) state.faith += eff.faith;
   for (const [k, v] of Object.entries(eff.slotPenalty || {})) {
     if (state.slots[k]) {
-      state.slots[k].progress = Math.max(0, state.slots[k].progress - v);
+      state.slots[k].progress = Math.max(0, Math.min(capsMap(state)[k] ?? 100, state.slots[k].progress - v));
       state.slots[k].comment = commentFor(k, state.slots[k].progress);
     }
   }
-  if (eff.gambleFail && Math.random() < 0.45) {
+  if (eff.gambleFail && Math.random() < (state.generation === 1 ? 0.25 : 0.45)) {
     state.monthsLeft += 1;
     state.eventLog.push(`${ev.type}：赌输了，又拖一个月`);
   } else {
@@ -363,12 +375,35 @@ export function resolveEvent(state, choiceIndex) {
   return afterDevCheck(state);
 }
 
-export function afterDevCheck(state) {
-  if (state.cash < 0) {
-    state.phase = 'bust';
-    state.bustReason = '现金烧穿了。三角没权衡好，或事件砸太狠。';
-    return { ok: true, bust: true };
+/**
+ * 现金为负：第一次有天使投资人兜底，第二次才真的倒闭
+ * back = 救助后回到哪个阶段
+ */
+export const RESCUE_CASH = 100;
+function goBroke(state, reason, back) {
+  if (!state.rescued) {
+    const amount = RESCUE_CASH - state.cash;
+    state.rescued = true;
+    state.cash += amount;
+    state.rescue = { reason, back, amount };
+    state.phase = 'rescue';
+    return { ok: true, rescue: true };
   }
+  state.phase = 'bust';
+  state.bustReason = reason;
+  return { ok: true, bust: true };
+}
+
+export function leaveRescue(state) {
+  const back = state.rescue?.back || 'dev';
+  state.rescue = null;
+  state.phase = back;
+  if (back === 'dev') return afterDevCheck(state);
+  return { ok: true };
+}
+
+export function afterDevCheck(state) {
+  if (state.cash < 0) return goBroke(state, '研发期间账上的钱烧光了：工资、事故和扩张一起压了上来。', 'dev');
   const r = devRatio(state);
   if (state.monthsLeft <= 0 || r >= 0.97) {
     state.phase = 'factory';
@@ -438,11 +473,12 @@ export function wowNow(state) {
   const buzz = Math.round(buzzOf(d, state.models) * [1, 1.2, 1.4][deptLevel(state, 'pr') - 1]);
   let headline;
   if (buzz >= 40 && comp < 65) headline = '「做工翻车，但全网都在讨论」';
-  else if (n.score >= 55 && comp >= 85) headline = '「这才叫创新！」——科技媒体集体起立';
+  else if (n.score >= 55 && comp >= 85) headline = Math.random() < 0.5 ? `「Only ${state.companyName} can do」——外媒罕见点赞` : '「这才叫创新！」——科技媒体集体起立';
+  else if (chipLag(state) < 0 && comp >= 80) headline = '「遥遥领先」——自研芯片让友商连夜改 PPT';
   else if (n.score >= 55) headline = '「概念满分，做工还差口气」';
   else if (n.score >= 30) headline = '「有新意，但不够炸」';
   else if (!state.models.length) headline = '「中规中矩的首秀」——先活下来再说';
-  else if (comp >= 80) headline = '「稳，但又是挤牙膏的一年」';
+  else if (comp >= 80) headline = Math.random() < 0.5 ? '「稳，但又是挤牙膏的一年」' : '「这是我们最好的一代」——媒体：确实，就是有点眼熟';
   else headline = '「既不新，也不稳」——评论区沉默了';
   const firsts = n.items.filter((i) => i.first).map((i) => i.label.replace(/^.*「|」$/g, ''));
   return { score, grade: wowGrade(score), novelty: n.score, completeness: comp, headline, firsts, buzz };
@@ -456,22 +492,28 @@ export function finalizeScores(state) {
   const phys = physical(state.design);
   const m = matchOf(state.slots, state.product.positioningId);
   const promises = promiseCheck(state, phys);
-  const pf = priceFit(state.product.positioningId, state.product.priceId);
+  const price = state.product.price || PRICE_BANDS.find((p) => p.id === state.product.priceId)?.price || 3999;
+  const pe = priceEffect(state, price);
+  const pf = { user: pe.user, note: [pe.note, pe.anchorNote].filter(Boolean).join('；') };
   const bar = expectationBar(state);
   const promiseUser = promises.reduce((a, p) => a + (p.ok ? 3 : -6), 0);
+  const lag = chipLag(state);
+  const chipMedia = lag > 0 ? -6 * lag : lag < 0 && state.design?.chipSrc !== 'ext' ? 4 : 0;
+  const chipUser = lag > 0 ? -4 * lag : 0;
   const media = Math.max(
     15,
-    Math.min(98, Math.round(16 + exp * 0.45 + state.launchScore * 0.3 + state.hype * 0.1 + (W ? W.score * 0.25 : 10) + (exp - bar) * 0.35 + (Math.random() * 6 - 3))),
+    Math.min(98, Math.round(16 + exp * 0.45 + state.launchScore * 0.3 + state.hype * 0.1 + (W ? W.score * 0.25 : 10) + (exp - bar) * 0.35 + chipMedia + (Math.random() * 6 - 3))),
   );
   const user = Math.max(
     15,
-    Math.min(98, Math.round(8 + exp * 0.7 + state.faith * 0.1 + (W ? (W.completeness - 80) * 0.2 : 0) + promiseUser + pf.user + (Math.random() * 8 - 4))),
+    Math.min(98, Math.round(8 + exp * 0.7 + state.faith * 0.1 + (W ? (W.completeness - 80) * 0.2 : 0) + promiseUser + pf.user + chipUser + (Math.random() * 8 - 4))),
   );
   const pos = state.product.positioningId;
   const newNote = m.match >= 0.85 && !state.notes[pos];
   if (m.match >= 0.85) state.notes[pos] = true;
-  state.review = { exp, bar, match: Math.round(m.match * 100), mult: m.mult, verdict: m.verdict, promises, priceNote: pf.note, priceUser: pf.user, newNote };
+  state.review = { exp, bar, match: Math.round(m.match * 100), mult: m.mult, verdict: m.verdict, promises, priceNote: pf.note, priceUser: pf.user, newNote, priceRatio: pe.ratio, anchorLast: pe.anchorLast, chipLag: lag };
   state.lastExp = exp;
+  if (lag < 0) state.chipLeads = (state.chipLeads || 0) + 1;
   state.mediaScore = media;
   state.userScore = user;
   state.headline = W ? W.headline : '中规中矩';
@@ -479,6 +521,110 @@ export function finalizeScores(state) {
   const gain = Math.round(2 + media / 12 + (W ? W.score / 15 + W.firsts.length * 2 : 0) + (deptLevel(state, 'rnd') - 1) + office(state).rp);
   state.rp += gain;
   state.lastRp = gain;
+}
+
+// ═════════════════════════ 芯片代差 ═════════════════════════
+
+/** 你的芯片比行业主流落后几代（负数 = 领先） */
+export function chipLag(state, design = state.design) {
+  return marketChipGen(state.month) - (design?.chipGen || state.chip.gen);
+}
+
+// ═════════════════════════ 定价 ═════════════════════════
+
+const priceWarOn = (state) => !!state.priceWar && state.month <= state.priceWar.until;
+
+/** 用户心理价位：定位基准 × 体验 × 新颖 × 芯片代差 × 品牌溢价 × 价格战 */
+export function fairPrice(state) {
+  const pos = state.product.positioningId;
+  const exp = experienceScore(state);
+  const n = state.design ? novelty(state.design, state.models).score : 0;
+  const lag = chipLag(state);
+  const chipK = lag > 0 ? 1 - 0.12 * lag : lag < 0 ? 1.06 : 1;
+  const v = POS_BASE_PRICE[pos] * (0.72 + (exp / 100) * 0.5) * (1 + Math.min(60, n) / 300) * chipK * (state.brand || 1) * (priceWarOn(state) ? 0.94 : 1);
+  return roundPrice(v);
+}
+
+/** 售价的连锁反应：需求、口碑、上一代价格锚 */
+export function priceEffect(state, price) {
+  const V = state.product.fair || fairPrice(state);
+  const ratio = price / V;
+  const demandMul = Math.max(0.25, Math.min(2.6, Math.pow(V / price, 1.7))) * marketSize(price);
+  let user = Math.max(-18, Math.min(8, Math.round((1 - ratio) * 45)));
+  const last = state.lastPrices?.[state.product.positioningId];
+  let anchorNote = '';
+  let anchorLast = 0;
+  if (last && price > last * 1.15) {
+    user -= 5;
+    anchorNote = `比上一代贵了 ¥${price - last}，老用户不太高兴`;
+    anchorLast = last;
+  } else if (last && price < last * 0.9) {
+    user += 2;
+    anchorNote = `比上一代便宜了 ¥${last - price}`;
+  }
+  const note =
+    ratio <= 0.8 ? '价格屠夫：口碑爆棚，但利润很薄，友商可能跟进降价'
+      : ratio <= 0.92 ? '良心价：用户觉得很值'
+        : ratio <= 1.08 ? '价格合理，和用户心理价位差不多'
+          : ratio <= 1.2 ? '有点贵：一部分人会等降价'
+            : '贵得离谱：大部分人只看不买';
+  return { V, ratio, demandMul, user, note, anchorNote, anchorLast };
+}
+
+/** 首批备货量（万台），按企划时的价位段决定 */
+export function stockedUnits(state) {
+  const stock = STOCK_OPTS.find((s) => s.id === state.stockId) || STOCK_OPTS[1];
+  const band = PRICE_BANDS.find((p) => p.id === (state.product.bandId || state.product.priceId)) || PRICE_BANDS[1];
+  return Math.round(30 * stock.mul * (0.5 + marketSize(band.price) * 0.5));
+}
+
+/** 单台毛利（游戏内现金单位 / 万台） */
+export function unitMargin(state, price) {
+  const unitCost = Math.round((state.design ? physical(state.design).unitCost : 2400) * (deptLevel(state, 'supply') === 3 ? 0.95 : 1));
+  return { unitCost, margin: (price - unitCost) / 1000 };
+}
+
+/** 需求公式（销售与预测共用） */
+function demandUnits(state, { price, media, user, W, tradeBoost = 1 }) {
+  const win = windowAt(state.month);
+  const clash = clashAt(state.month, state.product.positioningId);
+  const clashF = clash ? Math.max(0.6, Math.min(1.15, (media / (media + clash.power)) * 1.7)) : 1;
+  const pe = priceEffect(state, price);
+  // 芯片代差：落后的机器卖不动，领先的有话题
+  const lag = chipLag(state);
+  const chipD = lag > 0 ? Math.max(0.6, 1 - 0.12 * lag) : lag < 0 ? 1.06 : 1;
+  const demand = chipD *
+    (win?.mul || 1) * clashF * pe.demandMul * (0.55 + media / 120) * (0.65 + user / 160) * (state.reputation / 55) *
+    (0.82 + (W?.score || 20) / 140) * (1 + (W?.buzz || 0) / 60) * tradeBoost * (state.generation === 1 ? 1.2 : 1);
+  return { units: Math.round(28 * demand), win, clash, clashF, pe };
+}
+
+/** 定价面板的实时预测：用当前研发结果估算评分，不含发布会运气 */
+export function salesForecast(state, price) {
+  const W = wowNow(state);
+  const exp = experienceScore(state);
+  const bar = expectationBar(state);
+  const pe = priceEffect(state, price);
+  const promises = promiseCheck({ ...state, product: { ...state.product, price, fair: pe.V } }, physical(state.design));
+  const lag = chipLag(state);
+  const media = Math.max(15, Math.min(98, Math.round(16 + exp * 0.45 + 25 * 0.3 + state.hype * 0.1 + W.score * 0.25 + (exp - bar) * 0.35 - Math.max(0, lag) * 6)));
+  const user = Math.max(15, Math.min(98, Math.round(8 + exp * 0.7 + state.faith * 0.1 + (W.completeness - 80) * 0.2 + promises.reduce((a, p) => a + (p.ok ? 3 : -6), 0) + pe.user - Math.max(0, lag) * 4)));
+  const { units } = demandUnits(state, { price, media, user, W });
+  const stocked = stockedUnits(state);
+  const sold = Math.min(stocked, units);
+  const { unitCost, margin } = unitMargin(state, price);
+  const cogs = 0.3 * (SUPPLIERS.find((x) => x.id === state.supplierId)?.costMul || 1);
+  const profit = Math.round(sold * (margin * 1.45 - cogs) - (stocked > sold * 1.25 ? (stocked - sold) * 0.6 : 0));
+  return { units, stocked, sold, profit, unitCost, user, media, pe };
+}
+
+/** 发布前拍板售价 */
+export function setPrice(state, price) {
+  const p = Math.max(999, Math.min(12999, Math.round(price)));
+  state.product.fair = fairPrice(state);
+  state.product.price = p;
+  state.product.priceId = bandOf(p);
+  return { ok: true };
 }
 
 // ═════════════════════════ 销售 ═════════════════════════
@@ -507,28 +653,14 @@ export function runSales(state) {
     }
   }
   state.oldPolicy = 'keep';
-  const price = PRICE_BANDS.find((p) => p.id === state.product.priceId);
-  const stock = STOCK_OPTS.find((s) => s.id === state.stockId);
+  const priceVal = state.product.price || PRICE_BANDS.find((p) => p.id === state.product.priceId).price;
   const W = state.wowResult;
-  const win = windowAt(state.month);
-  const clash = clashAt(state.month, state.product.positioningId);
-  const clashF = clash ? Math.max(0.6, Math.min(1.15, (state.mediaScore / (state.mediaScore + clash.power)) * 1.7)) : 1;
-  const demand =
-    (win?.mul || 1) *
-    clashF *
-    price.demand *
-    (0.55 + state.mediaScore / 120) *
-    (0.65 + state.userScore / 160) *
-    (state.reputation / 55) *
-    (0.82 + (W?.score || 20) / 140) *
-    (1 + (W?.buzz || 0) / 60) *
-    tradeBoost;
-  const baseUnits = Math.round(28 * demand);
-  const stocked = Math.round(30 * stock.mul * (0.5 + price.demand * 0.5));
+  const { units: baseUnits, win, clash, clashF, pe } = demandUnits(state, { price: priceVal, media: state.mediaScore, user: state.userScore, W, tradeBoost });
+  const stocked = stockedUnits(state);
   const sold = Math.min(stocked, baseUnits);
-  const unitCost = Math.round((state.design ? physical(state.design).unitCost : 2400) * (deptLevel(state, 'supply') === 3 ? 0.95 : 1));
-  // 单台毛利率 × 价位：高价利润厚但量小，低价走量但薄
-  const margin = Math.max(0.15, (price.price - unitCost) / 1000);
+  const { unitCost, margin: rawMargin } = unitMargin(state, priceVal);
+  // 单台毛利：卖亏了就是负数
+  const margin = rawMargin;
   const revenue = Math.round(sold * margin * 1.45);
   const cogs = Math.round(sold * 0.3 * (SUPPLIERS.find((x) => x.id === state.supplierId)?.costMul || 1));
   let inventoryFee = 0;
@@ -565,15 +697,25 @@ export function runSales(state) {
   state.reputation = Math.max(0, Math.min(100, state.reputation + Math.round((state.mediaScore - 60) / 10)));
   state.faith = Math.max(0, Math.min(100, state.faith + Math.round((state.userScore - 60) / 12)));
   if (state.product.bindEco) state.faith = Math.min(100, state.faith + 3);
+  // —— 定价的连锁反应 ——
+  const pos = state.product.positioningId;
+  const chain = [];
+  const prevBrand = state.brand || 1;
+  if (pe.ratio <= 0.85) state.brand = Math.max(0.8, prevBrand - 0.03);
+  else if (pe.ratio >= 1.0 && state.userScore >= 65 && stockState !== 'over') state.brand = Math.min(1.35, prevBrand + 0.04);
+  if (state.brand !== prevBrand) chain.push(state.brand > prevBrand ? `品牌溢价上升到 ×${state.brand.toFixed(2)}：卖得贵也有人买单` : `品牌溢价降到 ×${state.brand.toFixed(2)}：用户开始把你当「便宜货」`);
+  if (pe.ratio <= 0.8) {
+    state.priceWar = { until: state.month + 8 };
+    chain.push('友商宣布跟进降价：接下来 8 个月是价格战，大家的心理价位都会被压低');
+  }
+  if (stockState === 'short' && pe.ratio <= 0.9) chain.push('黄牛加价 ¥500 倒卖，二手平台一机难求');
+  state.lastPrices = { ...(state.lastPrices || {}), [pos]: priceVal };
   state.salesResult = {
-    sold, stocked, demand: baseUnits, revenue, cogs, inventoryFee, profit, stockNote, stockState, price: price.price, unitCost,
+    sold, stocked, demand: baseUnits, revenue, cogs, inventoryFee, profit, stockNote, stockState, price: priceVal, unitCost, chain, priceRatio: pe.ratio,
     window: win?.name || '', windowMul: win?.mul || 1, clash: clash ? `${clash.brand} 同月发布，瓜分了需求` : '', clashF, oldNote,
   };
   state.phase = 'sales';
-  if (state.cash < 0) {
-    state.phase = 'bust';
-    state.bustReason = '首月结算后现金为负。售价、成本与备货没谈拢。';
-  }
+  if (state.cash < 0) goBroke(state, '首月结算后现金为负：售价、成本和备货没谈拢。', 'sales');
 }
 
 // ═════════════════════════ 规划下一代 ═════════════════════════
@@ -642,7 +784,7 @@ export const PHASE_STEPS = [
 ];
 
 export function stepIndex(phase) {
-  const map = { event: 'dev', score: 'launch', next: 'sales', bust: 'sales', ending: 'sales' };
+  const map = { event: 'dev', score: 'launch', next: 'sales', bust: 'sales', ending: 'sales', rescue: 'sales' };
   return PHASE_STEPS.findIndex((s) => s.id === (map[phase] || phase));
 }
 

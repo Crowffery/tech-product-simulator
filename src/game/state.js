@@ -13,7 +13,7 @@ export function createNewGame(companyName, chipSeries = '蜂鸟') {
     companyName,
     generation: 1,
     month: 1,
-    cash: 160,
+    cash: 200,
     faith: 50,
     hype: 0,
     reputation: 50,
@@ -56,6 +56,11 @@ export function createNewGame(companyName, chipSeries = '蜂鸟') {
     tutSeen: {},
     seenConcepts: null,
     newConcepts: [],
+    rescued: false,
+    rescue: null,
+    brand: 1,
+    lastPrices: {},
+    priceWar: null,
   };
 }
 
@@ -78,6 +83,9 @@ export function loadGame() {
     data.office ||= 1;
     data.chip ||= { series: '蜂鸟', gen: 1, history: [{ gen: 1, bench: 720000, month: 1 }], research: null };
     data.tutSeen ||= {};
+    if (data.rescued === undefined) data.rescued = false;
+    data.brand ||= 1;
+    data.lastPrices ||= {};
     if (data.design === undefined) data.design = null;
     if (data.designDraft === undefined) data.designDraft = null;
     return data;

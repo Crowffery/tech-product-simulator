@@ -664,7 +664,7 @@ export function createStudio(root, opts = {}) {
     root.innerHTML = `
     <header class="studio-head kbox">
       ${game ? '' : `<a class="back" href="${import.meta.env.VITE_GAME_HREF || './index.html'}">← 回游戏</a>`}
-      <h1>${game ? `产品设计 <span class="badge">Gen ${museum.length + 1}</span>` : '外观台 <span class="badge">Demo</span>'}</h1>
+      <h1>${game ? `产品设计 <span class="badge">Gen ${museum.length + 1}</span>` : '自由设计工坊 <span class="badge">全解锁</span>'}</h1>
       <div class="news" id="news"></div>
       <button type="button" class="mute" data-act="mute" title="音效">${sfx.muted ? '🔇' : '🔊'}</button>
     </header>
@@ -733,7 +733,11 @@ export function createStudio(root, opts = {}) {
         else design.concepts.push(id);
         sfx.part(i >= 0 ? 0 : 2);
         update({ panel: true });
-        if (!exploded) stage?.view(['keyboard'].includes(id) ? 'front' : ['shutter', 'sat'].includes(id) ? 'hero' : 'back');
+        if (!exploded && i < 0) {
+          const c = CONCEPTS.find((x) => x.id === id);
+          // 等新机身建好再指给玩家看
+          requestAnimationFrame(() => stage?.spotlight(id, c ? `${c.icon} ${c.name}` : ''));
+        }
       } else if (d.tab) {
         sfx.click();
         tab = d.tab;
