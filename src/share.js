@@ -219,7 +219,7 @@ export async function endingCard(state, E) {
   g.fillText(main.d, W / 2, 380);
   E.titles.slice(1, 4).forEach((t, i) => pill(g, 52 + i * 210, 410, 196, 56, '#fff6df', '#2b2118', t.t, 28));
   // 统计
-  [['代产品', E.stats.gens], ['项首创', E.stats.firsts], ['平均惊艳', E.stats.avgWow], ['总销量', E.stats.sold]].forEach(([k, v], i) => {
+  [['代产品', E.stats.gens], ['项首创', E.stats.firsts], ['平均惊艳', E.stats.avgWow], ['万台总销量', E.stats.sold]].forEach(([k, v], i) => {
     const x = 52 + i * 158;
     g.fillStyle = '#fff6df';
     g.fillRect(x, 500, 144, 110);

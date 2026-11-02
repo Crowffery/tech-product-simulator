@@ -1,4 +1,4 @@
-/** 静态配置与文案 — 《电子产品发展国》原型 */
+/** 静态配置与文案 — 《电子产品发展国》 */
 
 export const SAVE_KEY = 'epdg-prototype-v2';
 

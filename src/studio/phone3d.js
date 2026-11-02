@@ -1410,6 +1410,14 @@ void main() {
 const IDLE_BG = { top: '#a7bfd3', bot: '#3b4a5e', spot: '#fff1d0' };
 const STAGE_BG = { top: '#140f22', bot: '#040307', spot: '#6a4fb0' };
 
+const SHOTS = {
+  wide: { z: 1, look: 0 },
+  close: { z: 0.76, look: 0 },
+  top: { z: 0.56, look: 0.24 },
+  bottom: { z: 0.56, look: -0.28 },
+  macro: { z: 0.4, look: 0.18 },
+};
+
 export class PhoneStage {
   constructor(host) {
     this.host = host;
@@ -1665,6 +1673,7 @@ export class PhoneStage {
 
   /** 发布会幻灯片：在 LED 大屏上自定义绘制 */
   wallSlide(draw) {
+    this.wallFn = null;
     const g = this.wallCanvas.getContext('2d');
     const W = this.wallCanvas.width;
     const H = this.wallCanvas.height;
@@ -1677,6 +1686,50 @@ export class PhoneStage {
     for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
     this.wallTex.needsUpdate = true;
     if (this.reveal) this.reveal.lastWall = 1e9; // 不让预告画面覆盖
+  }
+
+  /** 发布会动态幻灯片：draw(g, W, H, t秒) 每帧重绘，直到下一张 */
+  wallAnim(draw) {
+    this.wallFn = { draw, t0: performance.now(), last: 0 };
+    this._tickWall(performance.now(), true);
+  }
+
+  _tickWall(now, force = false) {
+    const f = this.wallFn;
+    if (!f) return;
+    if (!force && now - f.last < 33) return;
+    f.last = now;
+    const g = this.wallCanvas.getContext('2d');
+    const W = this.wallCanvas.width;
+    const H = this.wallCanvas.height;
+    g.save();
+    g.fillStyle = '#07060b';
+    g.fillRect(0, 0, W, H);
+    try {
+      f.draw(g, W, H, (now - f.t0) / 1000);
+    } catch (e) {
+      this.wallFn = null;
+    }
+    g.restore();
+    g.fillStyle = 'rgba(0,0,0,.3)';
+    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    this.wallTex.needsUpdate = true;
+    if (this.reveal) this.reveal.lastWall = 1e9;
+  }
+
+  /**
+   * 发布会运镜：view = 机身朝向，shot = 景别
+   *   wide 全景 · close 近景 · top 顶部特写（镜头模组）· bottom 底部特写（接口）· macro 大特写
+   */
+  pose(view = 'hero', shot = 'wide', { spin = 0.12 } = {}) {
+    if (view) this.view(view);
+    this.camShot = SHOTS[shot] || SHOTS.wide;
+    this.showSpin = spin;
+  }
+
+  /** 金属/玻璃高光扫过：环境反射旋转 + 主光扫场 */
+  shine(ms = 1600) {
+    this.shineFx = { t0: performance.now(), ms };
   }
 
   _bindPointer() {
@@ -2045,8 +2098,13 @@ export class PhoneStage {
       if (t < 3.6) {
         this.rotY = r.startRot - (1 - rise) * Math.PI * 5;
         this.rotX = -0.06;
+      } else if (this.targetRot) {
+        const kr = 1 - Math.exp(-dt * 4.5);
+        this.rotY += (this.targetRot.y - this.rotY) * kr;
+        this.rotX += (this.targetRot.x - this.rotX) * kr;
+        if (Math.abs(this.targetRot.y - this.rotY) < 0.003 && Math.abs(this.targetRot.x - this.rotX) < 0.003) this.targetRot = null;
       } else {
-        this.rotY += dt * 0.35;
+        this.rotY += dt * (this.showSpin ?? 0.35);
       }
       this.ledMat.color.setHSL((t * 0.4) % 1, 0.9, 0.6);
       fire('boom', 3.6, () => {
@@ -2070,8 +2128,12 @@ export class PhoneStage {
         fc.setXYZ(i, v, v, v * 0.95);
       });
       fc.needsUpdate = true;
-      camZ = this.baseZ - 34 * easeInOut(seg(t, 3.6, 6));
+      camZ = this.baseZ - 34 * easeInOut(seg(t, 3.6, 6)) + this.explode * 150;
       camY = 14 - 28 * easeInOut(seg(t, 0.5, 3.6));
+      if (r.done && this.camShot) {
+        camZ *= this.camShot.z;
+        camY = -14 + this.camShot.look * this.dims.h;
+      }
       fire('done', 4.8, () => {
         r.done = true;
         r.onBeat?.('done');
@@ -2107,9 +2169,30 @@ export class PhoneStage {
       }
     }
 
-    this.camera.position.z += (camZ - this.camera.position.z) * 0.08;
-    this.camera.position.y += (camY - this.camera.position.y) * 0.08;
-    this.camera.lookAt(0, this.reveal ? 8 : 0, 0);
+    const kc = this.reveal ? 1 - Math.exp(-dt * 3.2) : 0.08;
+    this.camera.position.z += (camZ - this.camera.position.z) * kc;
+    this.camera.position.y += (camY - this.camera.position.y) * kc;
+    const lookT = this.reveal ? (this.reveal.done && this.camShot ? 8 + this.camShot.look * this.dims.h : 8) : 0;
+    this.lookY = (this.lookY ?? lookT) + (lookT - (this.lookY ?? lookT)) * kc;
+    this.camera.lookAt(0, this.lookY, 0);
+
+    if (this.shineFx) {
+      const k = (now - this.shineFx.t0) / this.shineFx.ms;
+      if (k >= 1) {
+        this.shineFx = null;
+        this.scene.environmentRotation.set(0, 0, 0);
+        this.scene.environmentIntensity = 0.85;
+        this.key.position.set(150, 260, 280);
+        this.key.intensity = 2.0;
+      } else {
+        const e = easeInOut(k);
+        this.scene.environmentRotation.set(0, -1.2 + e * 2.4, 0);
+        this.scene.environmentIntensity = 0.85 + Math.sin(k * Math.PI) * 1.1;
+        this.key.position.set(-420 + e * 840, 220, 280);
+        this.key.intensity = 2.0 + Math.sin(k * Math.PI) * 2.6;
+      }
+    }
+    this._tickWall(now);
 
     const dp = this.dust.geometry.attributes.position;
     for (let i = 0; i < dp.count; i++) {

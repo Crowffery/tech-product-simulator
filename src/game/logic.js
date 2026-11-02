@@ -273,7 +273,8 @@ export function advanceMonth(state, allocation) {
   state.month += 1;
 
   const sup = SUPPLIERS.find((s) => s.id === state.supplierId) || SUPPLIERS[1];
-  const chance = sup.eventChance * [1, 0.8, 0.6][deptLevel(state, 'supply') - 1];
+  // 第一代是新手期：事故减半
+  const chance = sup.eventChance * [1, 0.8, 0.6][deptLevel(state, 'supply') - 1] * (state.generation === 1 ? 0.5 : 1);
   if (Math.random() < chance) {
     const pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)));
     const ev = pool[Math.floor(Math.random() * pool.length)];
@@ -351,7 +352,7 @@ export function resolveEvent(state, choiceIndex) {
       state.slots[k].comment = commentFor(k, state.slots[k].progress);
     }
   }
-  if (eff.gambleFail && Math.random() < 0.45) {
+  if (eff.gambleFail && Math.random() < (state.generation === 1 ? 0.25 : 0.45)) {
     state.monthsLeft += 1;
     state.eventLog.push(`${ev.type}：赌输了，又拖一个月`);
   } else {
@@ -363,12 +364,35 @@ export function resolveEvent(state, choiceIndex) {
   return afterDevCheck(state);
 }
 
-export function afterDevCheck(state) {
-  if (state.cash < 0) {
-    state.phase = 'bust';
-    state.bustReason = '现金烧穿了。三角没权衡好，或事件砸太狠。';
-    return { ok: true, bust: true };
+/**
+ * 现金为负：第一次有天使投资人兜底，第二次才真的倒闭
+ * back = 救助后回到哪个阶段
+ */
+export const RESCUE_CASH = 100;
+function goBroke(state, reason, back) {
+  if (!state.rescued) {
+    const amount = RESCUE_CASH - state.cash;
+    state.rescued = true;
+    state.cash += amount;
+    state.rescue = { reason, back, amount };
+    state.phase = 'rescue';
+    return { ok: true, rescue: true };
   }
+  state.phase = 'bust';
+  state.bustReason = reason;
+  return { ok: true, bust: true };
+}
+
+export function leaveRescue(state) {
+  const back = state.rescue?.back || 'dev';
+  state.rescue = null;
+  state.phase = back;
+  if (back === 'dev') return afterDevCheck(state);
+  return { ok: true };
+}
+
+export function afterDevCheck(state) {
+  if (state.cash < 0) return goBroke(state, '研发期间账上的钱烧光了：工资、事故和扩张一起压了上来。', 'dev');
   const r = devRatio(state);
   if (state.monthsLeft <= 0 || r >= 0.97) {
     state.phase = 'factory';
@@ -522,7 +546,8 @@ export function runSales(state) {
     (state.reputation / 55) *
     (0.82 + (W?.score || 20) / 140) *
     (1 + (W?.buzz || 0) / 60) *
-    tradeBoost;
+    tradeBoost *
+    (state.generation === 1 ? 1.2 : 1); // 第一款产品：尝鲜红利
   const baseUnits = Math.round(28 * demand);
   const stocked = Math.round(30 * stock.mul * (0.5 + price.demand * 0.5));
   const sold = Math.min(stocked, baseUnits);
@@ -570,10 +595,7 @@ export function runSales(state) {
     window: win?.name || '', windowMul: win?.mul || 1, clash: clash ? `${clash.brand} 同月发布，瓜分了需求` : '', clashF, oldNote,
   };
   state.phase = 'sales';
-  if (state.cash < 0) {
-    state.phase = 'bust';
-    state.bustReason = '首月结算后现金为负。售价、成本与备货没谈拢。';
-  }
+  if (state.cash < 0) goBroke(state, '首月结算后现金为负：售价、成本和备货没谈拢。', 'sales');
 }
 
 // ═════════════════════════ 规划下一代 ═════════════════════════
@@ -642,7 +664,7 @@ export const PHASE_STEPS = [
 ];
 
 export function stepIndex(phase) {
-  const map = { event: 'dev', score: 'launch', next: 'sales', bust: 'sales', ending: 'sales' };
+  const map = { event: 'dev', score: 'launch', next: 'sales', bust: 'sales', ending: 'sales', rescue: 'sales' };
   return PHASE_STEPS.findIndex((s) => s.id === (map[phase] || phase));
 }
 

@@ -359,6 +359,19 @@ const SCENES = {
     g.lineTo(196, 150);
     g.lineTo(44, 150);
     g.fill();
+    // 流星 + 路过的车，让夜景活起来
+    const st = (s.t * 0.45) % 1;
+    if (st < 0.25) {
+      const k = st / 0.25;
+      for (let i = 0; i < 6; i++) s.rect(200 - k * 120 + i * 2, 8 + k * 30 - i, 1, 1, i ? '#7f8fa6' : '#fff');
+    }
+    const cx = ((s.t * 40) % (W + 60)) - 30;
+    s.rect(cx, 116, 22, 6, '#c0392b');
+    s.rect(cx + 4, 112, 12, 5, '#922b21');
+    s.rect(cx + 3, 121, 4, 3, '#111');
+    s.rect(cx + 15, 121, 4, 3, '#111');
+    s.rect(cx + 22, 117, 2, 2, '#f9e79f');
+    if (s.cat) s.cat(104, 2);
   },
 
   // —— 企划：会议室 ——
