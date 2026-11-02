@@ -47,7 +47,7 @@ import {
   moduleFit,
 } from './parts.js';
 import { sfx } from './sfx.js';
-import { icon } from '../icons.js';
+import { icon, conceptIcon } from '../icons.js';
 import { term, installGlossary } from '../glossary.js';
 
 const MUSEUM_KEY = 'epdg-studio-museum';
@@ -154,7 +154,7 @@ export function createStudio(root, opts = {}) {
     const rb = rivalBench(opts.getMonth?.() || 1);
     rows.push({ name: '蓝莓 A 系列（竞品）', v: rb });
     const max = Math.max(...rows.map((r) => r.v));
-    return `<details class="chipchart"><summary class="cc-h">📊 芯片跑分对比 <small>${opts.getChipNote?.() || ''}</small></summary>${rows
+    return `<details class="chipchart"><summary class="cc-h">${icon('spark', 14)} 芯片跑分对比 <small>${opts.getChipNote?.() || ''}</small></summary>${rows
       .map((r) => `<div class="cc-row ${r.on ? 'on' : ''} ${r.mine ? '' : 'rival'}"><span>${esc(r.name)}</span><i style="width:${Math.round((r.v / max) * 100)}%"></i><b>${(r.v / 10000).toFixed(0)} 万</b></div>`)
       .join('')}</details>`;
   }
@@ -187,7 +187,7 @@ export function createStudio(root, opts = {}) {
   const unlockCtx = () => (game ? { unlocked: opts.getUnlocked?.() || [], models: museum, rp: opts.getRp?.() ?? 0 } : null);
 
   const appearCtx = () => (game ? opts.getAppearCtx?.() || null : null);
-  const ICON = { design: '🎨', camera: '📷', battery: '🔋', os: '⚙️' };
+  const ICON = { design: '设计', camera: '影像', battery: '续航', os: '系统' };
 
   function innovationTab() {
     const mem = marketMemory(museum);
@@ -213,24 +213,37 @@ export function createStudio(root, opts = {}) {
         .join(' ');
     const card = (c) => {
       const us = unlockStatus(c.id, ctx);
-      const nw = isNew(c.id) ? '<em class="c-new">NEW</em>' : '';
+      const nw = isNew(c.id) ? '<em class="c-new" title="新解锁">NEW</em>' : '';
+      const ico = conceptIcon(c, 22);
       if (!us.unlocked) {
         const can = us.prereqOk && us.affordable;
+        const why = !us.prereqOk ? (us.prereqText || '条件未满足') : us.affordable ? '' : `研发点不足（需要 ${us.cost}，现有 ${ctx?.rp ?? 0}）`;
         return `<div class="concept locked">
-          <span class="c-icon">${c.icon}</span>
+          <span class="c-icon">${ico}</span>
           <span class="c-main"><b>${c.name}${nw}</b><small>${esc(c.desc)}</small></span>
-          ${can ? `<button type="button" class="c-unlock" data-unlock="${c.id}"><em>🔓 解锁</em><span class="cost">${icon('flask', 12)}研发点 ${us.cost}</span></button>` : `<span class="c-tag t-crowd">🔒 ${us.prereqOk ? `需要研发点 ${us.cost}（现有 ${ctx?.rp ?? 0}）` : '条件未满足'}</span>`}
+          ${can ? `<button type="button" class="c-unlock" data-unlock="${c.id}"><em>解锁</em><span class="cost">${icon('flask', 12)}研发点 ${us.cost}</span></button>` : `<span class="c-tag t-crowd" title="${esc(why)}">${icon('lock', 12)} ${esc(why || '条件未满足')}</span>`}
         </div>`;
       }
       const on = sel.includes(c.id);
       const clash = !on && sel.find((x) => conceptsConflict(c.id, x));
       const full = !on && !PRACTICAL.has(c.id) && innovCount(sel) >= maxC();
-      const why = minor() ? '小改款不能改概念件' : clash ? `与「${conceptName(clash)}」冲突` : full ? `这一代最多 ${maxC()} 个` : '';
+      let why = '';
+      let block = '';
+      if (minor()) {
+        why = '当前是小改款，切到大改款才能换创新件';
+        block = 'minor';
+      } else if (clash) {
+        why = `与「${conceptName(clash)}」冲突，先卸下再装`;
+        block = 'clash';
+      } else if (full) {
+        why = `前沿创新名额已满（最多 ${maxC()} 个）`;
+        block = 'full';
+      }
       const [cls, label] = status(c.id);
-      return `<button type="button" class="concept ${on ? 'on' : ''}" data-concept="${c.id}" ${minor() || clash || full ? 'disabled' : ''} title="${esc(why)}">
-        <span class="c-icon">${c.icon}</span>
+      return `<button type="button" class="concept ${on ? 'on' : ''} ${block ? 'blocked' : ''}" data-concept="${c.id}" ${block ? `data-block="${block}" data-why="${esc(why)}"` : ''} title="${esc(why)}">
+        <span class="c-icon">${ico}</span>
         <span class="c-main"><b>${c.name}${nw}</b><small>${esc(c.desc)}</small><i>${fxIcons(c)}</i></span>
-        <span class="c-tags"><span class="c-tag t-${cls}">${label}</span>${c.buzz >= 8 ? '<span class="c-tag t-buzz">🔥</span>' : ''}</span>
+        <span class="c-tags"><span class="c-tag t-${cls}">${label}</span>${c.buzz >= 8 ? `<span class="c-tag t-buzz">${icon('spark', 10)}</span>` : ''}${block ? `<span class="c-tag t-crowd">${block === 'minor' ? '小改款' : block === 'clash' ? '冲突' : '名额满'}</span>` : ''}</span>
       </button>`;
     };
     const visible = CONCEPTS.filter((c) => hasAppeared(c.id, actx));
@@ -240,9 +253,9 @@ export function createStudio(root, opts = {}) {
     // 只显示有东西的分类，后面带数量
     const FILTERS = [
       ['all', `全部 ${visible.length}`],
-      ...CATS.filter((c) => countOf(c.id)).map((c) => [c.id, `${c.icon} ${c.name} ${countOf(c.id)}`]),
-      ...(practical.length ? [['practical', `🔧 实用功能 ${practical.length}`]] : []),
-      ...(sel.length ? [['on', `✅ 已选 ${sel.length}`]] : []),
+      ...CATS.filter((c) => countOf(c.id)).map((c) => [c.id, `${c.name} ${countOf(c.id)}`]),
+      ...(practical.length ? [['practical', `实用功能 ${practical.length}`]] : []),
+      ...(sel.length ? [['on', `已选 ${sel.length}`]] : []),
     ];
     const filterBar = `<div class="ifilter">${FILTERS.map(([k, n]) => `<button type="button" class="chip ${icat === k ? 'on' : ''}" data-icat="${k}">${n}</button>`).join('')}</div>`;
     if (icat !== 'all') {
@@ -252,13 +265,13 @@ export function createStudio(root, opts = {}) {
         <div class="concepts">${list.length ? list.map(card).join('') : '<p class="muted">这一类还没有可选的。</p>'}</div>`;
     }
     const groups =
-      `<h3 class="sub">🚀 前沿创新 <small>占名额，决定新颖度和话题</small></h3>` +
+      `<h3 class="sub">${icon('rocket', 16)} 前沿创新 <small>占名额，决定新颖度和话题</small></h3>` +
       CATS.map((cat) => {
         const list = visible.filter((c) => c.cat === cat.id && !PRACTICAL.has(c.id));
         if (!list.length) return '';
-        return `<h4 class="tier-h">${cat.icon} ${cat.name}</h4><div class="concepts">${list.map(card).join('')}</div>`;
+        return `<h4 class="tier-h">${icon({cam:'cam',form:'phone',power:'battery',body:'gem',fun:'spark'}[cat.id]||'spark', 14)} ${cat.name}</h4><div class="concepts">${list.map(card).join('')}</div>`;
       }).join('') +
-      (practical.length ? `<h3 class="sub">🔧 实用功能 <small>常规配置，不占创新名额，但要加成本</small></h3><div class="concepts">${practical.map(card).join('')}</div>` : '');
+      (practical.length ? `<h3 class="sub">${icon('wrench', 16)} 实用功能 <small>常规配置，不占创新名额，但要加成本</small></h3><div class="concepts">${practical.map(card).join('')}</div>` : '');
     const known = COMBOS.filter((c) => mem[c.id]);
     return `${filterBar}<p class="hint">前沿创新 已选 <b>${innovCount(sel)}/${maxC()}</b> · 实用功能 ${sel.length - innovCount(sel)} 项${ctx ? ` · ${term('研发点')} <b>${ctx.rp}</b>` : ''}</p>
       ${groups}
@@ -737,26 +750,26 @@ export function createStudio(root, opts = {}) {
         <div class="panel-top">
           <div id="summary" class="summary"></div>
           <div class="tabs">
-            <button type="button" class="tab" data-tab="config">🔧 配置</button>
-            <button type="button" class="tab" data-tab="innov">💡 创新</button>
-            <button type="button" class="tab" data-tab="look">🎨 外观</button>
-            <button type="button" class="tab" data-tab="eval">📊 评估</button>
+            <button type="button" class="tab" data-tab="config">${icon('wrench', 14)} 配置</button>
+            <button type="button" class="tab" data-tab="innov">${icon('bulb', 14)} 创新</button>
+            <button type="button" class="tab" data-tab="look">${icon('paint', 14)} 外观</button>
+            <button type="button" class="tab" data-tab="eval">${icon('spark', 14)} 评估</button>
           </div>
         </div>
         <div id="redesign"></div>
         <div class="row actions quick">
-          <button type="button" data-act="recommend">👍 推荐配置</button>
+          <button type="button" data-act="recommend">推荐配置</button>
           <button type="button" data-act="inherit" id="btn-inherit">↺ 沿用上代</button>
-          <button type="button" data-act="random">🎲 随机</button>
+          <button type="button" data-act="random">${icon('dice', 14)} 随机</button>
         </div>
         <div id="tab-body"></div>
         <div class="confirm-bar">
-          ${game ? `<button type="button" class="primary launch-btn" data-act="confirm-design">${opts.confirmLabel || '✅ 定稿'}</button>` : '<button type="button" class="primary launch-btn" data-act="launch">🎤 发布会揭幕</button>'}
+          ${game ? `<button type="button" class="primary launch-btn" data-act="confirm-design">${opts.confirmLabel || '定稿'}</button>` : `<button type="button" class="primary launch-btn" data-act="launch">${icon('mic', 14)} 发布会揭幕</button>`}
         </div>
       </aside>
     </div>
     <details class="museum-wrap kbox" ${game ? '' : 'open'}>
-      <summary class="kbox-title">🏛 历代机型馆 <span class="badge">${museum.length} 台 · 点开查看</span>
+      <summary class="kbox-title">${icon('trophy', 16)} 历代机型馆 <span class="badge">${museum.length} 台 · 点开查看</span>
         ${game ? '' : '<button type="button" class="mini-btn" data-act="add">＋ 当前机型入馆</button><button type="button" class="mini-btn danger" data-act="clear-museum">清空</button>'}</summary>
       <div id="museum" class="museum"></div>
     </details>`;
@@ -782,6 +795,15 @@ export function createStudio(root, opts = {}) {
         if (r?.ok) sfx.keep();
         renderPanel();
       } else if (d.concept) {
+        if (d.block) {
+          const msg =
+            d.block === 'minor'
+              ? '当前是小改款，切到大改款才能换创新件'
+              : d.why || '现在不能装备这个部件';
+          toast(msg);
+          sfx.cancel();
+          return;
+        }
         const id = d.concept;
         const i = design.concepts.indexOf(id);
         if (i >= 0) design.concepts.splice(i, 1);
@@ -792,7 +814,7 @@ export function createStudio(root, opts = {}) {
         if (!exploded && i < 0) {
           const c = CONCEPTS.find((x) => x.id === id);
           // 等新机身建好再指给玩家看
-          requestAnimationFrame(() => stage?.spotlight(id, c ? `${c.icon} ${c.name}` : ''));
+          requestAnimationFrame(() => stage?.spotlight(id, c ? c.name : ''));
         }
       } else if (d.icat) {
         sfx.click();

@@ -349,6 +349,40 @@ export const sfx = {
     [784, 988, 1175, 1568].forEach((f, i) => tone(f, i === 3 ? 0.25 : 0.08, { vol: 0.05, at: i * 0.08 }));
   },
 
+
+  // ── 工程机跑分 ──
+  benchStart() {
+    // 开跑：短促上冲
+    tone(220, 0.08, { type: 'square', vol: 0.05 });
+    tone(440, 0.1, { type: 'square', vol: 0.045, at: 0.06 });
+    tone(880, 0.14, { type: 'triangle', vol: 0.05, at: 0.12 });
+    noise(0.06, { vol: 0.04, at: 0.02, hp: 1200 });
+  },
+  benchTick() {
+    // 子测试跳分
+    tone(660 + Math.random() * 80, 0.05, { type: 'square', vol: 0.035 });
+    tone(990, 0.07, { type: 'triangle', vol: 0.03, at: 0.04 });
+  },
+  benchHeat() {
+    // 升温嗡鸣
+    tone(90, 0.35, { type: 'sawtooth', vol: 0.03, slide: 1.4 });
+    noise(0.25, { vol: 0.035, hp: 400, lp: 1800 });
+  },
+  benchTotal() {
+    // 出总分
+    [523, 659, 784].forEach((f, i) => tone(f, 0.09, { type: 'triangle', vol: 0.05, at: i * 0.07 }));
+  },
+  benchWin() {
+    if (playFile('level-up', { volume: 0.7 })) return;
+    sfx.fanfare(0);
+    sfx.applause(1.2, 0.35);
+  },
+  benchLose() {
+    tone(392, 0.18, { type: 'triangle', vol: 0.05, slide: 0.6 });
+    tone(247, 0.28, { type: 'sine', vol: 0.06, at: 0.14, slide: 0.7 });
+    noise(0.12, { vol: 0.03, at: 0.05, hp: 600 });
+  },
+
   /** @param {'office'|'press'|null|string} id */
   setBgm(id) {
     unlock();

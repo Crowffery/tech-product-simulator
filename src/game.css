@@ -90,7 +90,7 @@ body.phase-design #app { max-width: 1240px; }
 /* 量产 / 结算 */
 .spec-row { display: flex; justify-content: space-between; border-bottom: 1px dashed #d8c7a0; padding: 4px 0; font-size: .88rem; }
 .score-big { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: baseline; gap: 4px 8px; margin: 4px 0 8px; }
-.score-big b { font-size: 2.8rem; font-weight: 900; color: var(--orange); text-shadow: 3px 3px 0 var(--border); line-height: 1; animation: scoreReveal .8s steps(6); }
+.score-big b { font-size: 2.8rem; font-weight: 900; color: var(--orange); text-shadow: 1px 1px 0 rgba(47,33,23,.25); line-height: 1; animation: scoreReveal .8s steps(6); }
 .score-big b.sub { font-size: 1.8rem; color: var(--blue); }
 .score-big b.neg { color: var(--red); }
 .score-big span { font-size: .78rem; color: var(--muted); }
@@ -585,7 +585,7 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 .mkt-ev p { margin: 4px 0 8px; font-size: .84rem; }
 
 /* 企划说明卡 */
-.pos-card, .pt-card { margin: 6px 0 0; background: #fffaf0; border: 2px solid var(--border); padding: 6px 8px; font-weight: 400; color: var(--ink); }
+.pos-card, .pt-card { margin: 6px 0 0; background: #fffaf0; border: 2px solid var(--border); padding: 4px 8px; font-weight: 400; color: var(--ink); }
 .pos-card b { font-size: .82rem; }
 .pos-card p { margin: 2px 0 6px; font-size: .78rem; line-height: 1.5; }
 .pos-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
@@ -594,8 +594,7 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 .pos-bars em { font-style: normal; }
 .pos-bars i { height: 6px; background: #eee3c8; }
 .pos-bars u { display: block; height: 100%; background: var(--orange); }
-.pt-card { list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: .76rem; line-height: 1.5; }
-.pt-card li.phys { color: #7d5a00; background: #fef9e7; margin: 0 -4px; padding: 2px 4px; }
+.pt-tip { margin: 4px 0 0; font-size: .72rem; color: #7d5a00; background: #fef9e7; border: 1px dashed #d4a017; padding: 3px 6px; }
 
 /* ═════ 在售产品生命周期 ═════ */
 .onsale { display: flex; flex-direction: column; gap: 4px; background: #eafaf1; border: 3px solid var(--border); padding: 6px 8px; margin: 8px 0; box-shadow: 2px 2px 0 var(--shadow); }
@@ -623,7 +622,10 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 .hud-btn.off { opacity: .45; text-decoration: line-through; }
 .timeline .good { color: var(--green); font-weight: 900; }
 
-.score-big b.money { font-size: 1.45rem; white-space: nowrap; }
+.score-big b.money { font-size: 1.45rem; white-space: nowrap; text-shadow: none; filter: none; }
+.score-big .sb-cell b.money,
+.sb-cell b.money { text-shadow: 0 1px 0 rgba(47,33,23,.18); }
+.sb-cell b { text-shadow: none; }
 .sb-cell { flex-wrap: wrap; }
 
 /* ═════ 市场份额 / 战略投资 ═════ */
@@ -719,3 +721,16 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 @keyframes moneyfly { 0% { transform: translate(-50%, 0) scale(1.1); opacity: 1; } 25% { transform: translate(-50%, -18px) scale(1.15); } 100% { transform: translate(calc(-50% + var(--dx)), var(--dy)) scale(.6); opacity: .2; } }
 .ev-choices .choice i { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
 .ev-choices .choice i .pxi, .mkt-ev .choice i .pxi { display: inline-block; vertical-align: -2px; }
+
+/* 企划说明：默认收起，不占屏 */
+.pos-card, .pt-card { margin: 6px 0 0; background: #fffaf0; border: 2px solid var(--border); padding: 4px 8px; font-weight: 400; color: var(--ink); }
+.pos-card > summary, .pt-card > summary { cursor: pointer; font-size: .78rem; font-weight: 800; color: var(--muted); list-style: none; }
+.pos-card > summary::-webkit-details-marker, .pt-card > summary::-webkit-details-marker { display: none; }
+.pos-card > summary::before, .pt-card > summary::before { content: '▸ '; color: var(--orange); }
+.pos-card[open] > summary::before, .pt-card[open] > summary::before { content: '▾ '; }
+.pos-card p { margin: 4px 0 6px; font-size: .78rem; line-height: 1.5; }
+.pt-card ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: .76rem; line-height: 1.5; }
+.pt-tip { margin: 4px 0 0; font-size: .72rem; color: #7d5a00; background: #fef9e7; border: 1px dashed #d4a017; padding: 3px 6px; }
+.rail-ico { display: inline-flex; }
+.rail-step i.rail-ico { padding: 2px; }
+.sheet-h .pxi { vertical-align: -3px; margin-right: 4px; }

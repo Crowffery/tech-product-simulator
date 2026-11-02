@@ -11,7 +11,7 @@ import { SceneView } from './scenes.js';
 import { term, installGlossary } from './glossary.js';
 import { buildComments } from './launch/crowd.js';
 import { money, moneyShort } from './game/money.js';
-import { icon } from './icons.js';
+import { icon, conceptIcon } from './icons.js';
 import { physical, tier, CONCEPTS, hasAppeared, danmaku, paletteName, novelty, buzzOf, chipSpec, chipName, chipBench, rivalBench, CHIP_SERIES_SEEDS } from './studio/parts.js';
 import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, IDEAL, rivalPhones, marketChipGen, rivalPriceList, roundPrice } from './game/market.js';
 
@@ -224,7 +224,7 @@ function rail() {
   if (!state) return '';
   const cur = L.stepIndex(state.phase);
   return L.PHASE_STEPS.map(
-    (s, i) => `<span class="rail-step ${i < cur ? 'done' : i === cur ? 'on' : ''}"><i>${s.icon}</i><small>${s.label}</small></span>`,
+    (s, i) => `<span class="rail-step ${i < cur ? 'done' : i === cur ? 'on' : ''}"><i class="rail-ico">${icon(s.icon, 16)}</i><small>${s.label}</small></span>`,
   ).join('<b class="rail-line"></b>');
 }
 
@@ -236,7 +236,7 @@ const VERSION = 'v1.4';
 function saveSummary() {
   const s = hasSave() ? loadGame() : null;
   if (!s) return '';
-  return `${esc(s.companyName)} · 第 ${s.generation} 代 · 第 ${Math.floor((s.month - 1) / 12) + 1} 年 ${monthOfYear(s.month)} 月 · 💰${money(s.cash)}`;
+  return `${esc(s.companyName)} · 第 ${s.generation} 代 · 第 ${Math.floor((s.month - 1) / 12) + 1} 年 ${monthOfYear(s.month)} 月 · ${icon('coin', 12)}${money(s.cash)}`;
 }
 
 P.title = () => {
@@ -264,7 +264,7 @@ P.title = () => {
 P.create = () => ({
   scene: ['title', {}],
   caption: '一切从这间车库开始',
-  sheet: `<h2 class="sheet-h">🏁 创立公司</h2>
+  sheet: `<h2 class="sheet-h">${icon('flag', 22)} 创立公司</h2>
     <label class="field-l">公司名
       <div class="row"><input id="cname" maxlength="10" value="${esc(draft.companyName)}" /><button type="button" data-act="rand-name" title="换一个">🎲</button></div>
     </label>
@@ -290,11 +290,11 @@ P.plan = () => {
   return {
     scene: ['plan', { office: state.office, month: state.month, positioning: p.positioningId, points: p.pointIds.length, price: p.priceId, color: state.designDraft?.color }],
     caption: `企划会：第 ${state.generation} 代要赌什么？`,
-    sheet: `<h2 class="sheet-h">📋 企划</h2>
+    sheet: `<h2 class="sheet-h">${icon('clipboard', 22)} 企划</h2>
       ${marketEventCard()}
       ${newsCard()}
       ${marketNotice()}
-      <div class="field-l">${term('定位')}<div class="chips">${chips(POSITIONING, p.positioningId, 'plan-pos')}</div>${posCard(p.positioningId)}</div>
+      <div class="field-l">${term('定位')}<div class="chips">${chips(POSITIONING, p.positioningId, 'plan-pos')}</div>${posCard(p.positioningId, !draft.planPosSeen)}</div>
       <div class="field-l">${term('卖点')} <small>选 1～3 个，发布会上的承诺</small><div class="chips">${chips(SELL_POINTS, p.pointIds, 'toggle-point', true)}</div>${pointsCard(p)}</div>
       <div class="field-l">${term('售价带')} <small>决定备货规模；具体售价发布会前再定</small><div class="chips">${chips(PRICE_BANDS, p.priceId, 'plan-price')}</div></div>
       ${state.generation > 1 ? `<label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco ? 'checked' : ''}/> 绑定上代生态</label>` : ''}
@@ -311,7 +311,7 @@ P.plan = () => {
 P.supply = () => ({
   scene: ['supply', { month: state.month, supplierId: draft.supplierId, stockId: draft.stockId }],
   caption: '供应商大会：选谁来造？备多少货？',
-  sheet: `<h2 class="sheet-h">🤝 供应链</h2>
+  sheet: `<h2 class="sheet-h">${icon('handshake', 22)} 供应链</h2>
     <div class="cards3">${SUPPLIERS.map(
       (s) => `<button type="button" class="pick ${draft.supplierId === s.id ? 'on' : ''}" data-act="pick-sup" data-id="${s.id}">
         <b>${s.name}</b><small>${s.desc}</small></button>`,
@@ -341,10 +341,10 @@ function chipSourcePick() {
   return `<div class="field-l">芯片来源 <small>行业主流已到第 ${mg} 代</small>
     <div class="cards2">
       <button type="button" class="pick ${cur === 'own' ? 'on' : ''}" data-act="pick-chip" data-id="own">
-        <b>🧪 自研 ${esc(state.chip.series)} X${own}</b>
+        <b>${icon('flask', 14)} 自研 ${esc(state.chip.series)} X${own}</b>
         <small>${lag > 0 ? `<span class="bad">落后 ${lag} 代</span>：性能上限、口碑、心理价位都吃亏` : lag < 0 ? '<span class="good">领先行业</span>：媒体加分，成本最低' : '和行业同代，成本最低'}</small></button>
       <button type="button" class="pick ${cur === 'ext' ? 'on' : ''}" data-act="pick-chip" data-id="ext" ${L.marketMod(state, 'extBan') ? 'disabled' : ''}>
-        <b>🛒 外购 ${L.EXT_CHIP} S${mg}</b>
+        <b>${icon('cart', 14)} 外购 ${L.EXT_CHIP} S${mg}</b>
         <small>${L.marketMod(state, 'extBan') ? '<span class="bad">断供中，买不到</span>' : `永远是最新一代，但每台成本 +¥${extCost}，也没有「自研」光环`}</small></button>
     </div></div>`;
 }
@@ -355,7 +355,7 @@ P.dev = () => {
   return {
     scene: ['dev', devSceneData()],
     caption: `研发实验室 · 还剩约 ${state.monthsLeft} 月`,
-    sheet: `<h2 class="sheet-h">🔬 研发 <small>${state.notes?.[state.product.positioningId] ? `📒 ${term('企划笔记')}生效` : '⭐ 点星标出重点'}</small></h2>
+    sheet: `<h2 class="sheet-h">${icon('flask', 22)} 研发 <small>${state.notes?.[state.product.positioningId] ? `📒 ${term('企划笔记')}生效` : '⭐ 点星标出重点'}</small></h2>
       ${devTimeline()}
       ${state.month > 1 || state.slots.perf.progress > 0 ? benchCard() : ''}
       ${onSaleBlock()}
@@ -391,25 +391,29 @@ function refreshNews() {
 function newsCard() {
   const list = (state.newConcepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter(Boolean);
   if (!list.length) return '';
-  return `<div class="news-card"><b>📰 行业新技术</b><span>${list.map((c) => `${c.icon} ${c.name}`).join(' · ')}</span><small>去设计部的「💡 创新」看看</small></div>`;
+  return `<div class="news-card"><b>${icon('news', 16)} 行业新技术</b><span>${list.map((c) => `${conceptIcon(c, 14)} ${c.name}`).join(' · ')}</span><small>去设计部的「创新」页看看</small></div>`;
 }
 
-/** 定位说明：卖给谁、他们期待什么 */
-function posCard(id) {
+/** 定位说明：默认收起；首次进入企划可展开一次 */
+function posCard(id, openOnce = false) {
   const pos = POSITIONING.find((x) => x.id === id);
   const ideal = IDEAL[id];
   const bars = SLOTS.map((sl) => `<span><em>${sl.name.slice(0, 2)}</em><i><u style="width:${ideal[sl.id] * 2.5}%"></u></i></span>`).join('');
-  return `<div class="pos-card"><b>👥 ${esc(pos.who)}</b><p>${esc(pos.desc)}</p><div class="pos-bars"><small>研发力气大致该这样分：</small>${bars}</div></div>`;
+  return `<details class="pos-card" ${openOnce ? 'open' : ''}><summary>查看定位说明 · ${esc(pos.who)}</summary><p>${esc(pos.desc)}</p><div class="pos-bars"><small>研发力气大致该这样分：</small>${bars}</div></details>`;
 }
 
-/** 卖点说明 + 物理提示 */
+/** 卖点：轻提示一行；完整说明默认收起 */
 function pointsCard(p) {
-  const lines = p.pointIds.map((id) => SELL_POINTS.find((x) => x.id === id)).filter(Boolean).map((sp) => `<li><b>${esc(sp.name)}</b>：${esc(sp.desc)}</li>`);
+  const selected = p.pointIds.map((id) => SELL_POINTS.find((x) => x.id === id)).filter(Boolean);
+  const tips = [];
   const heavy = ['flagship', 'pro'].includes(p.positioningId);
   if (p.pointIds.includes('thin') && (heavy || p.pointIds.includes('battery') || p.pointIds.includes('photo')))
-    lines.push(`<li class="phys">⚖ 物理提醒：${heavy ? '旗舰/专业机要堆料' : '大电池和大底镜头都占厚度'}，想同时做到「极致轻薄」只能在电池或影像上让步——可以挑战，但要算好厚度。</li>`);
-  if (p.pointIds.includes('eco') && state.generation === 1) lines.push('<li class="phys">⚠ 第一代还没有「上一代」可以互联，生态闭环这代兑现不了。</li>');
-  return lines.length ? `<ul class="pt-card">${lines.join('')}</ul>` : '';
+    tips.push(`物理提醒：${heavy ? '旗舰/专业机要堆料' : '大电池和大底镜头都占厚度'}，极致轻薄只能在电池或影像上让步。`);
+  if (p.pointIds.includes('eco') && state.generation === 1) tips.push('第一代还没有上一代可互联，生态闭环这代兑现不了。');
+  const tipLine = tips.length ? `<p class="pt-tip">${tips.map(esc).join(' ')}</p>` : '';
+  if (!selected.length) return tipLine;
+  const lines = selected.map((sp) => `<li><b>${esc(sp.name)}</b>：${esc(sp.desc)}</li>`).join('');
+  return `${tipLine}<details class="pt-card"><summary>查看卖点说明（${selected.length}）</summary><ul>${lines}</ul></details>`;
 }
 
 /** 行业大事件：必须先表态 */
@@ -472,7 +476,7 @@ function calendar(from, launchAt, pos) {
 function benchCard() {
   const best = state.benchBest?.gen === state.generation ? state.benchBest.score : 0;
   const perf = Math.round((state.slots.perf.progress / Math.max(1, L.capsMap(state).perf)) * 100);
-  return `<div class="bench-card"><span class="o-icon">🏁</span><div><b>工程机跑分</b>
+  return `<div class="bench-card"><span class="o-icon">${icon('flag', 22)}</span><div><b>工程机跑分</b>
     <small>${best ? `本代最好成绩 ${best.toLocaleString('en-US')}` : `性能调校 ${perf}%${state.benchGen === state.generation ? '' : perf >= 60 ? ' · 首跑会被晒到论坛' : ' · 过 60% 再跑才上得了论坛'}`}</small></div>
     <button type="button" data-act="bench">跑个分</button></div>`;
 }
@@ -566,7 +570,7 @@ P.factory = () => {
   return {
     scene: ['factory', { color: state.design.color, stockId: state.stockId }],
     caption: run ? '流水线开足马力' : '首批货已装箱，等发布会开售',
-    sheet: `<h2 class="sheet-h">🏭 量产 <small>${esc(state.design.modelName)} · ${esc(paletteName(state.design.color))}</small></h2>
+    sheet: `<h2 class="sheet-h">${icon('factory', 22)} 量产 <small>${esc(state.design.modelName)} · ${esc(paletteName(state.design.color))}</small></h2>
       <div class="fac ${run ? 'running' : 'done'}">
         <div class="fac-stages">${FAC_STAGES.map((n, i) => `<span style="--i:${i}">${n}</span>`).join('')}</div>
         <div class="fac-count"><b id="fac-n">${run ? 0 : units}</b><small>/ ${units} 万台</small></div>
@@ -607,7 +611,7 @@ function pricingPanel() {
   const last = state.lastPrices?.[pos];
   const mood = f.pe.ratio <= 0.85 ? ['🤩', '买爆', 'good'] : f.pe.ratio <= 0.95 ? ['😊', '很值', 'good'] : f.pe.ratio <= 1.08 ? ['🙂', '合理', 'ok'] : f.pe.ratio <= 1.2 ? ['🤔', '有点贵', 'meh'] : ['😠', '劝退', 'bad'];
   const lag = L.chipLag(state);
-  return `<h2 class="sheet-h">🏷 定价 <small>发布会上要念出这个数字</small></h2>
+  return `<h2 class="sheet-h">${icon('tag', 22)} 定价 <small>发布会上要念出这个数字</small></h2>
     <div class="price-big pp-dyn" data-k="big"><button type="button" data-act="price-step" data-d="-500">−500</button><button type="button" data-act="price-step" data-d="-100">−</button>
       <b>¥${price.toLocaleString('en-US')}</b>
       <button type="button" data-act="price-step" data-d="100">+</button><button type="button" data-act="price-step" data-d="500">+500</button></div>
@@ -650,7 +654,7 @@ P.launch = () => {
   return {
     scene: ['launch', {}],
     caption: '后台：观众已经入场，主讲人还在背稿',
-    sheet: `<h2 class="sheet-h">🎤 发布会 <small>首销价 ¥${state.product.price} <button type="button" class="link-btn" data-act="re-price">改价</button></small></h2>
+    sheet: `<h2 class="sheet-h">${icon('mic', 22)} 发布会 <small>首销价 ¥${state.product.price} <button type="button" class="link-btn" data-act="re-price">改价</button></small></h2>
     <div class="cards3">${L.LAUNCH_STYLES.map(
       (s) => `<button type="button" class="pick" data-act="launch-style" data-id="${s.id}"><b>${s.label}</b><small>${s.desc}</small><i>${s.risk >= 0.3 ? '⚠ 很冒险' : s.risk >= 0.1 ? '有点风险' : '稳'}</i></button>`,
     ).join('')}</div>`,
@@ -665,7 +669,7 @@ P.score = () => {
     scene: ['score', { color: state.design?.color, grade: W.grade, flop: state.launchFlop, hidePhone: !!state.lastCut }],
     imgs: state.lastCut ? [{ src: state.lastCut, x: 50, y: 50, h: 52, cls: 'hero' }] : [],
     caption: state.launchFlop ? '演示机卡住了，但发布会总算撑完了' : heat >= 85 ? '全场沸腾，掌声停不下来' : '发布会落幕，媒体开始写稿',
-    sheet: `<h2 class="sheet-h">📰 媒体评测 <small>发布会结束 30 分钟后</small></h2>
+    sheet: `<h2 class="sheet-h">${icon('news', 22)} 媒体评测 <small>发布会结束 30 分钟后</small></h2>
       <div class="score-big">
         <div class="sb-cell rv-step" data-step="1"><b data-count="${state.mediaScore}">${state.mediaScore}</b><span>媒体评分</span></div>
         <div class="sb-cell rv-step" data-step="2"><b class="sub" data-count="${state.userScore}">${state.userScore}</b><span>用户口碑</span></div>
@@ -707,7 +711,7 @@ P.sales = () => {
     scene: ['sales', { month: state.month, color: state.design?.color, state: r.stockState, queue, hidePhone: !!state.lastCut }],
     imgs: state.lastCut ? [{ src: state.lastCut, x: 31, y: 41, h: 30 }] : [],
     caption: r.stockState === 'short' ? '门口排起长队，黄牛也来了' : r.stockState === 'over' ? '店里有点冷清，仓库在吃灰' : '门店生意不错',
-    sheet: `<h2 class="sheet-h">🛒 首月战报</h2>
+    sheet: `<h2 class="sheet-h">${icon('cart', 22)} 首月战报</h2>
       <div class="score-big">
         <div class="sb-cell rv-step" data-step="1"><b data-count="${r.sold}">${r.sold}</b><span>万台售出</span></div>
         <div class="sb-cell rv-step" data-step="3"><b class="sub money ${r.profit < 0 ? 'neg' : ''}" data-count="${r.profit}" data-sign="1" data-money="1">${money(r.profit, { sign: true })}</b><span>首月利润</span></div>
@@ -747,7 +751,7 @@ P.next = () => {
       : ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut })) }],
     imgs: draft.showHQ ? [] : wallImgs(),
     caption: draft.showHQ ? `新家：${L.office(state).name}` : '年会：这一代进了机型墙',
-    sheet: `<h2 class="sheet-h">🏛 年终会</h2>
+    sheet: `<h2 class="sheet-h">${icon('trophy', 22)} 年终会</h2>
       <div class="ntabs"><button type="button" class="${draft.nextTab !== 'invest' ? 'on' : ''}" data-act="next-tab" data-id="review">📊 年终复盘</button><button type="button" class="${draft.nextTab === 'invest' ? 'on' : ''}" data-act="next-tab" data-id="invest">🏗 投资与升级 <small>${money(state.cash)}</small></button></div>
       ${draft.nextTab === 'invest' ? investTab() : `
       ${last ? `<div class="model-card">${last.thumb ? `<img src="${last.thumb}" alt="" />` : ''}<div><b>${esc(last.design.modelName)}</b>
@@ -797,7 +801,7 @@ P.ending = () => {
     scene: ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut })), finale: true }],
     imgs: wallImgs(),
     caption: '三年过去了，年会大结算',
-    sheet: `<h2 class="sheet-h">🏆 三年结算</h2>
+    sheet: `<h2 class="sheet-h">${icon('trophy', 22)} 三年结算</h2>
       <div class="titles">${E.titles.map((t, i) => `<div class="title-card ${i === 0 ? 'main' : ''}"><b>${t.t}</b><small>${esc(t.d)}</small></div>`).join('')}</div>
       <div class="stat-grid">
         <div><b>${E.stats.gens}</b><span>代产品</span></div><div><b>${E.stats.firsts}</b><span>项首创</span></div>
@@ -1172,7 +1176,7 @@ async function mountStudio() {
       $('#g-hud').innerHTML = hud();
       return r;
     },
-    confirmLabel: '✅ 定稿，去谈供应链 ▶',
+    confirmLabel: '定稿，去谈供应链 ▶',
     onChange: (d) => {
       state.designDraft = d;
       persist();
@@ -1337,6 +1341,7 @@ async function playReveal() {
     const { buildKeynote, txt } = await import('./launch/keynote.js');
     const { danmakuLines } = await import('./launch/crowd.js');
     stage = new PhoneStage(ov.querySelector('.lo-stage'));
+    stage.setPresentationMode?.(true);
     stage.setDesign(state.design);
     const W = state.wowResult || {};
     const quick = state.models.length > 0 && !W.firsts?.length && !['S', 'A'].includes(W.grade);
@@ -1864,6 +1869,7 @@ function onClick(e) {
   switch (act) {
     case 'plan-pos':
       draft.plan.positioningId = id;
+      draft.planPosSeen = true;
       break;
     case 'plan-price':
       draft.plan.priceId = id;
@@ -1878,6 +1884,7 @@ function onClick(e) {
     case 'confirm-plan': {
       const r = L.finishPlan(state, draft.plan);
       if (!r.ok) return toast(r.msg);
+      draft.planPosSeen = true;
       play('keep');
       flash('企划拍板！');
       break;
@@ -2064,6 +2071,7 @@ function onClick(e) {
       draft.nextTab = 'review';
       L.goNextGen(state);
       draft.plan = { ...L.recommendedPlan(), positioningId: state.designDraft?.position || 'mainstream' };
+      draft.planPosSeen = false;
       flash(`第 ${state.generation} 代`);
       break;
     default:

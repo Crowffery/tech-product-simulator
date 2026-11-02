@@ -154,10 +154,10 @@ export function openBench(opts) {
   const ov = document.createElement('div');
   ov.className = 'bench-ov';
   ov.innerHTML = `<div class="bench kbox">
-      <div class="bench-h"><b>🏁 工程机跑分</b><button type="button" class="bench-x" data-b="close">✕</button></div>
+      <div class="bench-h"><b>工程机跑分</b><button type="button" class="bench-x" data-b="close">✕</button></div>
       <div class="bench-screen"><canvas width="${W}" height="${H}"></canvas>
         <div class="bench-total"><small>总分</small><b>0</b></div>
-        <div class="bench-temp" hidden>🌡 <b>32</b>°C</div>
+        <div class="bench-temp" hidden>TEMP <b>32</b>°C</div>
       </div>
       <div class="bench-body"></div>
     </div>`;
@@ -209,7 +209,7 @@ export function openBench(opts) {
 
   const run = () => {
     mode = 'run';
-    play('confirm');
+    play('benchStart');
     tempEl.hidden = false;
     const final = Math.round((theory * (0.55 + 0.45 * ratio) * (0.98 + Math.random() * 0.04)) / 100) * 100;
     const parts = SUBS.map((s) => Math.round(final * s.w));
@@ -234,8 +234,11 @@ export function openBench(opts) {
           const li = body.querySelector(`[data-id="${SUBS[lastIdx].id}"]`);
           li.classList.add('ok');
           li.querySelector('em').textContent = parts[lastIdx].toLocaleString('en-US');
-          play('part', 1);
+          play('benchTick');
+        } else {
+          play('benchTick');
         }
+        if (idx === 2) play('benchHeat');
         body.querySelector(`[data-id="${SUBS[idx].id}"]`)?.classList.add('on');
         lastIdx = idx;
       }
@@ -247,6 +250,8 @@ export function openBench(opts) {
         const li = body.querySelector(`[data-id="${SUBS[idx].id}"]`);
         li.classList.add('ok');
         li.querySelector('em').textContent = parts[idx].toLocaleString('en-US');
+        play('benchTick');
+        play('benchTotal');
         board(final);
       }
     };
@@ -260,7 +265,7 @@ export function openBench(opts) {
     const beaten = all.length - rank;
     result = { score: final, rank, beaten, total: all.length };
     const max = all[0].v;
-    play(rank === 1 ? 'fanfare' : 'keep');
+    play(rank === 1 ? 'benchWin' : 'benchLose');
     // 结果画面：奖杯 / 冷汗
     const t0 = performance.now();
     const loop = (now) => {
@@ -279,7 +284,7 @@ export function openBench(opts) {
       }
       g.font = '40px sans-serif';
       g.textAlign = 'center';
-      g.fillText(rank === 1 ? '🏆' : rank === 2 ? '🥈' : '😓', W / 2, 74 + Math.sin(t * 3) * 3);
+      g.fillText(rank === 1 ? 'NO.1' : rank === 2 ? 'NO.2' : '…', W / 2, 74 + Math.sin(t * 3) * 3);
       g.fillStyle = '#ffe8b0';
       g.font = 'bold 11px sans-serif';
       g.fillText(rank === 1 ? '遥遥领先！' : `同期第 ${rank} 名`, W / 2, 112);

@@ -273,7 +273,7 @@ export function unlockConcept(state, id) {
   if (state.rp < st.cost) return { ok: false, msg: `研发点不够（需要 ${st.cost}）` };
   state.rp -= st.cost;
   state.unlocked.push(id);
-  return { ok: true, msg: `🔓 解锁「${conceptName(id)}」` };
+  return { ok: true, msg: `已解锁「${conceptName(id)}」，可以装备了` };
 }
 
 // ═════════════════════════ 供应链 ═════════════════════════
@@ -1046,7 +1046,7 @@ export function enterNext(state) {
 
 export function goNextGen(state) {
   if (state.design) {
-    state.designDraft = { ...structuredClone(state.design), redesign: 'minor', modelName: bumpName(state.design.modelName, state.generation + 1) };
+    state.designDraft = { ...structuredClone(state.design), redesign: 'major', modelName: bumpName(state.design.modelName, state.generation + 1) };
   }
   state.design = null;
   state.archived = false;
@@ -1072,13 +1072,13 @@ export function goNextGen(state) {
 }
 
 export const PHASE_STEPS = [
-  { id: 'plan', label: '企划', icon: '📋' },
-  { id: 'design', label: '设计', icon: '🎨' },
-  { id: 'supply', label: '供应', icon: '🤝' },
-  { id: 'dev', label: '研发', icon: '🔬' },
-  { id: 'factory', label: '量产', icon: '🏭' },
-  { id: 'launch', label: '发布', icon: '🎤' },
-  { id: 'sales', label: '销售', icon: '🛒' },
+  { id: 'plan', label: '企划', icon: 'clipboard' },
+  { id: 'design', label: '设计', icon: 'paint' },
+  { id: 'supply', label: '供应', icon: 'handshake' },
+  { id: 'dev', label: '研发', icon: 'flask' },
+  { id: 'factory', label: '量产', icon: 'factory' },
+  { id: 'launch', label: '发布', icon: 'mic' },
+  { id: 'sales', label: '销售', icon: 'cart' },
 ];
 
 export function stepIndex(phase) {

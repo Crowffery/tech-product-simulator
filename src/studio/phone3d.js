@@ -2051,6 +2051,29 @@ export class PhoneStage {
     this.lastInteract = performance.now();
   }
 
+
+  /** 发布会 / keynote：提高清晰度与舞台光感；设计阶段保持原性能档 */
+  setPresentationMode(on) {
+    this._present = !!on;
+    const dpr = window.devicePixelRatio || 1;
+    this.renderer.setPixelRatio(Math.min(dpr, on ? 3 : 2));
+    if (on) {
+      this.key.shadow.mapSize.set(2048, 2048);
+      this.key.intensity = Math.max(this.key.intensity, 2.4);
+      this.rim.intensity = Math.max(this.rim.intensity, 1.6);
+      this.hemi.intensity = Math.max(this.hemi.intensity, 1.15);
+      this.scene.environmentIntensity = Math.max(this.scene.environmentIntensity, 1.05);
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.12;
+    } else {
+      this.key.shadow.mapSize.set(1024, 1024);
+      this.renderer.toneMapping = THREE.NoToneMapping;
+      this.renderer.toneMappingExposure = 1;
+    }
+    this.renderer.shadowMap.needsUpdate = true;
+    this.resize();
+  }
+
   resize() {
     const w = Math.max(1, this.host.clientWidth);
     const h = Math.max(1, this.host.clientHeight);

@@ -326,7 +326,11 @@ button:disabled.chip, button:disabled.tier { opacity: .4; }
 .cc-row b { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* v1.3 创新页 / 预判 */
-.c-new { font-style: normal; font-size: .58rem; background: var(--red); color: #fff; padding: 0 4px; margin-left: 4px; border: 1px solid #000; vertical-align: middle; animation: blinkcopy 1s steps(2) 4; }
+.c-new { font-style: normal; font-size: .55rem; font-weight: 900; letter-spacing: .04em;
+  background: #1f618d; color: #ebf5fb; padding: 0 4px; margin-left: 4px;
+  border: 1px solid #154360; border-radius: 2px; vertical-align: middle;
+  box-shadow: 1px 1px 0 #000; animation: newflash .9s steps(2) 1; }
+@keyframes newflash { 0%, 100% { opacity: 1; } 40% { opacity: .55; } }
 .teaser { font-size: .78rem; color: var(--muted); text-align: center; border: 2px dashed var(--border2); padding: 6px; margin: 8px 0; }
 .forecast { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .forecast div { background: var(--cream); border: 2px solid var(--border); padding: 4px 6px; text-align: center; }
@@ -415,3 +419,8 @@ body.phase-design .g-rail { display: none; }
   .confirm-bar .launch-btn { padding: 10px; font-size: .98rem; }
 }
 @media (max-width: 900px) { .part-row { align-items: start; } .part-name { padding-top: 6px; } }
+
+.concept.blocked { opacity: .55; filter: grayscale(.25); }
+.concept.blocked:hover { outline: 2px dashed var(--border); }
+.concept .c-icon { display: inline-flex; align-items: center; justify-content: center; }
+.concept .c-icon .pxi { image-rendering: pixelated; }
