@@ -12,9 +12,9 @@ export const PARTS = {
   chip: {
     name: '芯片',
     tiers: [
-      { id: 0, label: '蜂鸟 S1', cap: 60, cost: 6, heat: 0, bench: 382000, note: '凉快，够用' },
-      { id: 1, label: '蜂鸟 S3', cap: 80, cost: 10, heat: 1, bench: 726000, note: '中杯真香' },
-      { id: 2, label: '蜂鸟 S5', cap: 100, cost: 16, heat: 2, bench: 1268000, note: '跑分怪兽，略烫手' },
+      { id: 0, label: '标准', cap: 60, cost: 6, heat: 0, bench: 396000, note: '凉快，够用' },
+      { id: 1, label: 'Pro', cap: 80, cost: 10, heat: 1, bench: 720000, note: '中杯真香' },
+      { id: 2, label: 'Max', cap: 100, cost: 16, heat: 2, bench: 1260000, note: '跑分怪兽，略烫手' },
     ],
   },
   screen: {
@@ -146,11 +146,48 @@ export function defaultDesign() {
     company: '回路工作室',
     concepts: [],
     redesign: 'major',
+    chipGen: 1,
+    chipSeries: '蜂鸟',
   };
 }
 
 export function tier(design, key) {
+  if (key === 'chip') return chipSpec(design);
   return PARTS[key].tiers[design.parts[key]] || PARTS[key].tiers[0];
+}
+
+// ═════════════════════════ 自研芯片 ═════════════════════════
+
+export const CHIP_SUFFIX = ['', ' Pro', ' Max'];
+export const CHIP_SERIES_SEEDS = ['蜂鸟', '天枢', '星火', '玄鸟', '雷霆', '朱雀', '青龙', '白泽', '鲲鹏', '烛龙'];
+
+export function chipName(series, gen, t) {
+  return `${series || '蜂鸟'} X${gen}${CHIP_SUFFIX[t] || ''}`;
+}
+
+/** 跑分：每代约 +28%；Pro 为基准，标准 ×0.55，Max ×1.75 */
+export function chipBench(gen, t) {
+  return Math.round((720000 * Math.pow(1.28, gen - 1) * [0.55, 1, 1.75][t]) / 1000) * 1000;
+}
+
+/** 竞品同期芯片跑分（蓝莓的 A 系列式年更） */
+export function rivalBench(month) {
+  const year = Math.floor((month - 1) / 12);
+  return Math.round((1150000 * Math.pow(1.22, year)) / 1000) * 1000;
+}
+
+/** 芯片规格：档位决定基础，代数决定性能上限与跑分 */
+export function chipSpec(design) {
+  const t = design.parts?.chip ?? 1;
+  const base = PARTS.chip.tiers[t] || PARTS.chip.tiers[1];
+  const gen = design.chipGen || 1;
+  return {
+    ...base,
+    label: chipName(design.chipSeries, gen, t),
+    cap: Math.min(100, base.cap - 10 + gen * 5),
+    bench: chipBench(gen, t),
+    gen,
+  };
 }
 
 /** 形体与读数 */
@@ -203,7 +240,7 @@ export function sellPointChecks(design) {
     { name: '极致轻薄', ok: p.thickness <= 7.6 && p.weight <= 175, why: `需 ≤7.6mm 且 ≤175g（现 ${p.thickness}mm / ${p.weight}g）` },
     { name: '续航焦虑终结者', ok: design.parts.battery === 2, why: '需大电池' },
     { name: '影像叙事', ok: design.parts.camera === 2, why: '需大底三摄' },
-    { name: '性能猛兽', ok: design.parts.chip === 2, why: '需蜂鸟 S5' },
+    { name: '性能猛兽', ok: design.parts.chip === 2, why: '需 Max 档芯片' },
   ];
 }
 
@@ -264,7 +301,9 @@ export function danmaku(design, trend) {
   if (design.layout === 'diamond') out.push('菱形模组？有点东西');
   if (design.screenForm === 'full') out.push('全面屏看片爽');
   if (design.screenForm === 'bezel') out.push('边框能放下我的工资条');
-  if (design.parts.chip === 2) out.push('跑分破百万了！');
+  const cs = chipSpec(design);
+  if (cs.bench >= 1000000) out.push(`${cs.label} 跑分破百万了！`, `${cs.label} 太猛了`);
+  else out.push(`${cs.label} 够用吗？`);
   if (design.twoTone !== 'none') out.push('撞色好看诶');
   const C = new Set(design.concepts || []);
   if (C.has('clear')) out.push('透明后盖！能看见电池！');
@@ -462,7 +501,8 @@ export function novelty(design, museum) {
     else if (m.first >= 0 && m.rivals === 0) items.push({ label: `独家组合「${c.name}」`, v: 6 });
     else items.push({ label: `组合「${c.name}」已有人做`, v: m.rivals >= 2 ? 1 : 4 });
   }
-  if (prev && isSqueeze(design, prev)) items.push({ label: '和上一代几乎一样', v: -10 });
+  if (prev && (design.chipGen || 1) > (prev.chipGen || 1)) items.push({ label: `首发新芯片 ${chipName(design.chipSeries, design.chipGen, 1).replace(/ Pro$/, '')}`, v: 8 });
+  if (prev && isSqueeze(design, prev) && (design.chipGen || 1) <= (prev.chipGen || 1)) items.push({ label: '和上一代几乎一样', v: -10 });
   const minors = trailingMinors(museum) + (design.redesign === 'minor' ? 1 : 0);
   if (minors >= 3) items.push({ label: `连续 ${minors} 代小改`, v: -10 });
   const score = Math.max(0, Math.min(100, items.reduce((a, b) => a + b.v, 0)));

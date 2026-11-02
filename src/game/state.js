@@ -6,7 +6,7 @@ export function emptySlots() {
   return Object.fromEntries(SLOTS.map((s) => [s.id, { progress: 0, comment: '尚未动手' }]));
 }
 
-export function createNewGame(companyName) {
+export function createNewGame(companyName, chipSeries = '蜂鸟') {
   return {
     version: 2,
     phase: 'plan',
@@ -51,6 +51,9 @@ export function createNewGame(companyName) {
     oldPolicy: 'keep',
     office: 1,
     tailTotal: 0,
+    chip: { series: chipSeries, gen: 1, history: [{ gen: 1, bench: 720000, month: 1 }], research: null },
+    tutorial: true,
+    tutSeen: {},
   };
 }
 
@@ -71,6 +74,8 @@ export function loadGame() {
     data.notes ||= {};
     data.onSale ||= [];
     data.office ||= 1;
+    data.chip ||= { series: '蜂鸟', gen: 1, history: [{ gen: 1, bench: 720000, month: 1 }], research: null };
+    data.tutSeen ||= {};
     if (data.design === undefined) data.design = null;
     if (data.designDraft === undefined) data.designDraft = null;
     return data;

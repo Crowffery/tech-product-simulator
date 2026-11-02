@@ -1340,8 +1340,8 @@ const STAGE_BG = { top: '#140f22', bot: '#040307', spot: '#6a4fb0' };
 export class PhoneStage {
   constructor(host) {
     this.host = host;
-    this.pixel = 3;
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
+    this.pixel = 0; // 只保留高清档
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
@@ -1590,6 +1590,22 @@ export class PhoneStage {
     this.wallTex.needsUpdate = true;
   }
 
+  /** 发布会幻灯片：在 LED 大屏上自定义绘制 */
+  wallSlide(draw) {
+    const g = this.wallCanvas.getContext('2d');
+    const W = this.wallCanvas.width;
+    const H = this.wallCanvas.height;
+    g.save();
+    g.fillStyle = '#07060b';
+    g.fillRect(0, 0, W, H);
+    draw(g, W, H);
+    g.restore();
+    g.fillStyle = 'rgba(0,0,0,.35)';
+    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    this.wallTex.needsUpdate = true;
+    if (this.reveal) this.reveal.lastWall = 1e9; // 不让预告画面覆盖
+  }
+
   _bindPointer() {
     const el = this.renderer.domElement;
     let drag = null;
@@ -1757,11 +1773,44 @@ export class PhoneStage {
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.postScene, this.postCam);
     } else {
-      this.scene.background = this.postMat.uniforms.bgBot.value;
+      this._updateBg();
+      this.scene.background = this.bgTex;
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.scene, this.camera);
       this.scene.background = null;
     }
+  }
+
+  /** 高清档背景：竖向渐变 + 聚光 + 暗角（画在小画布上） */
+  _updateBg() {
+    const u = this.postMat.uniforms;
+    const key = `${u.bgTop.value.getHexString()}${u.bgBot.value.getHexString()}${u.spot.value.toFixed(2)}`;
+    if (key === this._bgKey) return;
+    this._bgKey = key;
+    if (!this.bgCanvas) {
+      this.bgCanvas = document.createElement('canvas');
+      this.bgCanvas.width = 256;
+      this.bgCanvas.height = 256;
+      this.bgTex = new THREE.CanvasTexture(this.bgCanvas);
+      this.bgTex.colorSpace = THREE.SRGBColorSpace;
+    }
+    const g = this.bgCanvas.getContext('2d');
+    const lin = g.createLinearGradient(0, 0, 0, 256);
+    lin.addColorStop(0, `#${u.bgTop.value.getHexString()}`);
+    lin.addColorStop(1, `#${u.bgBot.value.getHexString()}`);
+    g.fillStyle = lin;
+    g.fillRect(0, 0, 256, 256);
+    const rad = g.createRadialGradient(128, 112, 6, 128, 112, 150);
+    rad.addColorStop(0, `rgba(255,241,208,${u.spot.value * 0.9})`);
+    rad.addColorStop(1, 'rgba(255,241,208,0)');
+    g.fillStyle = rad;
+    g.fillRect(0, 0, 256, 256);
+    const vig = g.createRadialGradient(128, 128, 90, 128, 128, 190);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.45)');
+    g.fillStyle = vig;
+    g.fillRect(0, 0, 256, 256);
+    this.bgTex.needsUpdate = true;
   }
 
   /** 机型馆缩略图：背面斜侧 + 摄影棚光 */

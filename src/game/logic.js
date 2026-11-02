@@ -18,6 +18,8 @@ import {
   conceptName,
   buzzOf,
   unlockStatus,
+  chipBench,
+  chipName,
 } from '../studio/parts.js';
 
 // ═════════════════════════ 部门 ═════════════════════════
@@ -82,6 +84,42 @@ export function prLaunchBonus(state) {
   return [3, 7, 11][deptLevel(state, 'pr') - 1] + office(state).launch;
 }
 
+// ═════════════════════════ 自研芯片 ═════════════════════════
+
+export function chipResearchCost(state) {
+  const gen = state.chip.gen;
+  return { cash: 30 + gen * 20, months: deptLevel(state, 'rnd') >= 3 ? 2 : 3, next: gen + 1 };
+}
+
+export function startChipResearch(state) {
+  if (state.chip.research) return { ok: false, msg: '已经在流片了' };
+  const c = chipResearchCost(state);
+  if (state.cash < c.cash) return { ok: false, msg: '现金不够' };
+  state.cash -= c.cash;
+  state.chip.research = { gen: c.next, months: c.months, total: c.months };
+  return { ok: true, msg: `🧪 ${chipName(state.chip.series, c.next, 1).replace(/ Pro$/, '')} 开始流片（${c.months} 个月）` };
+}
+
+/** 研发期间每月推进芯片流片 */
+function tickChip(state) {
+  const r = state.chip?.research;
+  if (!r) return null;
+  r.months -= 1;
+  if (r.months > 0) return null;
+  const prev = chipBench(state.chip.gen, 1);
+  state.chip.gen = r.gen;
+  state.chip.research = null;
+  const bench = chipBench(r.gen, 1);
+  state.chip.history.push({ gen: r.gen, bench, month: state.month });
+  return { gen: r.gen, name: chipName(state.chip.series, r.gen, 1).replace(/ Pro$/, ''), up: Math.round((bench / prev - 1) * 100) };
+}
+
+export function renameChip(state, name) {
+  const n = String(name || '').trim().slice(0, 4);
+  if (n) state.chip.series = n;
+  if (state.designDraft) state.designDraft.chipSeries = state.chip.series;
+}
+
 // ═════════════════════════ 企划 ═════════════════════════
 
 export function recommendedPlan() {
@@ -120,6 +158,8 @@ export function finishPlan(state, { positioningId, pointIds, priceId, bindEco })
     state.designDraft = d;
   }
   state.designDraft.position = positioningId;
+  state.designDraft.chipGen = state.chip.gen;
+  state.designDraft.chipSeries = state.chip.series;
   state.designDraft.company = state.companyName.slice(0, 10);
   state.phase = 'design';
   return { ok: true };
@@ -228,6 +268,7 @@ export function advanceMonth(state, allocation) {
     gains[slotId] = slot.progress - before;
   }
   const tail = sellTail(state);
+  const chipDone = tickChip(state);
   state.monthsLeft = Math.max(0, state.monthsLeft - 1);
   state.month += 1;
 
@@ -238,9 +279,9 @@ export function advanceMonth(state, allocation) {
     const ev = pool[Math.floor(Math.random() * pool.length)];
     state.pendingEvent = ev.id;
     state.phase = 'event';
-    return { ok: true, event: true, gains, tail };
+    return { ok: true, event: true, gains, tail, chipDone };
   }
-  return { ...afterDevCheck(state), gains, tail };
+  return { ...afterDevCheck(state), gains, tail, chipDone };
 }
 
 /** 在售旧款：每月卖一点，逐月衰减（长尾） */

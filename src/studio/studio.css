@@ -312,3 +312,15 @@ button:disabled.chip, button:disabled.tier { opacity: .4; }
 .t-buzz { background: #fadbd8; color: #922b21; }
 .buzz-line { margin: 0 0 6px; font-size: .8rem; font-weight: 800; color: #922b21; }
 .buzz-line small { color: var(--muted); font-weight: 400; }
+
+/* 芯片跑分对比 */
+.chipchart { margin-top: 8px; border: 2px solid var(--border); background: #fffaf0; padding: 6px 8px; }
+.cc-h { font-size: .8rem; font-weight: 900; margin-bottom: 4px; }
+.cc-h small { font-weight: 400; color: var(--muted); }
+.cc-row { display: grid; grid-template-columns: 7.5em 1fr 3.6em; gap: 6px; align-items: center; font-size: .72rem; margin: 2px 0; }
+.cc-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-row i { height: 10px; background: #85c1e9; border: 2px solid var(--border); display: block; }
+.cc-row.on i { background: var(--orange); }
+.cc-row.on span { font-weight: 900; }
+.cc-row.rival i { background: #95a5a6; }
+.cc-row b { text-align: right; font-variant-numeric: tabular-nums; }

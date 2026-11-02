@@ -220,3 +220,73 @@ body.phase-design #app { max-width: 1240px; }
 .share-btns > * { flex: 1 1 auto; text-align: center; font-weight: 800; }
 .share-dl { border: 3px solid var(--border); background: var(--cream2); color: var(--ink); text-decoration: none; padding: 8px 12px; box-shadow: 2px 2px 0 var(--shadow); }
 .share-box textarea { width: 100%; min-height: 80px; font: inherit; border: 3px solid var(--border); }
+
+/* ═════ 发布会加戏 / 评论区 / 芯片 ═════ */
+.launch-overlay .dm { animation-duration: 11s; font-size: 1.05rem; }
+.lo-sub {
+  position: absolute; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 3;
+  width: min(92vw, 560px); text-align: center; color: #fff; font-size: 1.15rem; font-weight: 700; line-height: 1.5;
+  background: rgba(10,8,16,.78); border: 3px solid #ffe8b0; padding: 8px 14px; box-shadow: 4px 4px 0 #000;
+}
+.lo-sub b { color: #f5b041; }
+.lo-sub.pop { animation: subpop .3s steps(4); }
+@keyframes subpop { from { transform: translateX(-50%) scale(.85); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
+.lo-react { position: absolute; left: 0; right: 0; bottom: 18%; height: 30%; pointer-events: none; z-index: 2; }
+.rx {
+  position: absolute; bottom: 0; font-weight: 900; font-size: 1.05rem; padding: 3px 9px; border: 3px solid #000; box-shadow: 3px 3px 0 #000;
+  animation: rxup 2.4s steps(12) forwards; opacity: 0;
+}
+.rx.good { background: #abebc6; }
+.rx.meh { background: #fef9e7; }
+.rx.bad { background: #f5b7b1; }
+@keyframes rxup { 0% { transform: translateY(20px); opacity: 0; } 15% { opacity: 1; } 80% { opacity: 1; } 100% { transform: translateY(-90px); opacity: 0; } }
+.launch-overlay.shake { animation: shake .45s steps(6); }
+@keyframes shake { 20% { transform: translate(-6px, 3px); } 40% { transform: translate(6px, -3px); } 60% { transform: translate(-4px, -1px); } 80% { transform: translate(3px, 1px); } }
+
+.comments { border: 3px solid var(--border); background: #fff; margin: 6px 0 8px; }
+.cm-h { font-weight: 900; font-size: .88rem; padding: 4px 8px; background: var(--cream); border-bottom: 2px solid var(--border); }
+.cm-h small { font-weight: 400; color: var(--muted); }
+.cm { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: start; padding: 6px 8px; border-bottom: 1px dashed #e0d4b8; animation: cmin .4s steps(4) both; }
+.cm:nth-child(3) { animation-delay: .15s; } .cm:nth-child(4) { animation-delay: .3s; } .cm:nth-child(5) { animation-delay: .45s; }
+.cm:nth-child(6) { animation-delay: .6s; } .cm:nth-child(7) { animation-delay: .75s; } .cm:nth-child(8) { animation-delay: .9s; }
+@keyframes cmin { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+.cm-av { font-size: 1.4rem; line-height: 1; }
+.cm b { font-size: .72rem; color: var(--muted); }
+.cm p { margin: 1px 0 0; font-size: .9rem; line-height: 1.4; }
+.cm i { font-style: normal; font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.cm.hot p { font-weight: 800; }
+.cm.hot i { color: var(--red); font-weight: 900; }
+
+.chip-line { margin: 0 0 8px; font-size: .78rem; font-weight: 800; background: #f4ecf7; border: 2px solid var(--border); padding: 4px 8px; position: relative; }
+.chip-line i { display: block; height: 4px; margin-top: 3px; background: linear-gradient(90deg, #8e44ad var(--p), #d7bde2 var(--p)); }
+.chiplab { margin-top: 10px; border: 3px solid var(--border); background: #f4ecf7; padding: 8px; box-shadow: 2px 2px 0 var(--shadow); }
+.cl-head { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.cl-head .o-icon { font-size: 1.6rem; }
+.cl-head b { font-family: "ZCOOL KuaiLe", sans-serif; font-size: 1.1rem; }
+.cl-head small { display: block; font-size: .72rem; color: var(--muted); }
+.cl-name { width: 4.6em; font: inherit; font-weight: 900; border: 2px solid var(--border); padding: 1px 4px; background: #fff; }
+.cl-head button { font-weight: 900; padding: 6px 8px; }
+.cl-head button small { display: block; font-size: .64rem; }
+.cl-chart { display: flex; align-items: flex-end; gap: 8px; height: 110px; margin: 8px 0 4px; padding: 0 4px; border-bottom: 3px solid var(--border); overflow-x: auto; }
+.cl-col { display: flex; flex-direction: column; align-items: center; min-width: 34px; height: 100%; }
+.cl-bars { flex: 1; display: flex; align-items: flex-end; gap: 2px; width: 100%; justify-content: center; }
+.cl-bars i { width: 12px; display: block; border: 2px solid var(--border); border-bottom: 0; }
+.cl-bars .me { background: var(--orange); }
+.cl-bars .rv { background: #95a5a6; }
+.cl-col.pending .me { background: repeating-linear-gradient(45deg, var(--orange) 0 4px, #fad7a0 4px 8px); }
+.cl-col b { font-size: .7rem; }
+.cl-col small { font-size: .6rem; color: var(--muted); }
+
+/* ═════ 新手引导 ═════ */
+.tut { position: fixed; inset: 0; z-index: 75; background: rgba(10,8,14,.45); display: flex; align-items: flex-end; justify-content: center; padding: 16px max(12px, env(safe-area-inset-left, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)); }
+.tut-card { width: min(520px, 100%); padding: 12px 14px; animation: tutin .35s steps(5); }
+@keyframes tutin { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.tut-who { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.tut-av { font-size: 2rem; background: var(--cream); border: 3px solid var(--border); width: 46px; height: 46px; display: grid; place-items: center; }
+.tut-who b { font-family: "ZCOOL KuaiLe", sans-serif; font-size: 1.15rem; display: block; }
+.tut-who small { font-size: .7rem; color: var(--muted); }
+.tut-card p { margin: 0 0 10px; font-size: .95rem; line-height: 1.6; }
+.tut-card p b { color: #b9770e; }
+.tut-btns { display: flex; gap: 6px; }
+.tut-btns button { flex: 1; padding: 10px; font-weight: 800; }
+.tut-btns .primary { flex: 2; }

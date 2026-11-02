@@ -29,6 +29,9 @@ import {
   conceptName,
   hasC,
   TIERS,
+  chipName,
+  chipSpec,
+  rivalBench,
   conceptsConflict,
   unlockStatus,
   buzzOf,
@@ -63,7 +66,7 @@ function writeJSON(key, v) {
  */
 export function createStudio(root, opts = {}) {
   const game = opts.mode === 'game';
-  let design = game ? structuredClone(opts.design) : { ...defaultDesign(), ...readJSON(DRAFT_KEY, {}) };
+  let design = game ? structuredClone(opts.design) : { ...defaultDesign(), chipGen: 3, ...readJSON(DRAFT_KEY, {}) };
   design.parts = { ...defaultDesign().parts, ...(design.parts || {}) };
   design.concepts ||= [];
   design.redesign ||= 'major';
@@ -71,7 +74,7 @@ export function createStudio(root, opts = {}) {
   const saveDraft = () => (game ? opts.onChange?.(design) : writeJSON(DRAFT_KEY, design));
   let tab = 'config';
   let stage = null;
-  let pixel = 3;
+  let pixel = 0;
   let revealing = false;
   let exploded = false;
   const shown = {}; // 读数上一次显示的值（做数字滚动）
@@ -107,7 +110,7 @@ export function createStudio(root, opts = {}) {
       const btns = P.tiers
         .map(
           (t) =>
-            `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}" ${key === 'size' ? lockAttr() : ''}>${esc(t.label)}</button>`,
+            `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}" ${key === 'size' ? lockAttr() : ''}>${esc(key === 'chip' ? chipName(design.chipSeries, design.chipGen || 1, t.id) : t.label)}</button>`,
         )
         .join('');
       return `<div class="part-row"><span class="part-name">${P.name}</span><div class="tiers">${btns}</div></div>
@@ -117,7 +120,20 @@ export function createStudio(root, opts = {}) {
       ? `<div class="field"><span class="flabel">定位</span><b>${POSITIONS.find((p) => p.id === design.position)?.name || ''}</b> <small class="muted">（企划已定）</small></div>`
       : `<div class="field"><span class="flabel">定位</span><div class="chips">${pos}</div></div>`;
     return `${posField}${parts}
-      <p class="hint">💡 悬停档位可预览差值；点「🔩 拆解」看内部元件</p>`;
+      ${chipChart()}
+    <p class="hint">💡 悬停档位可预览差值；点「🔩 拆解」看内部元件</p>`;
+  }
+
+  /** 芯片跑分对比：本代三档 vs 竞品同期 */
+  function chipChart() {
+    const gen = design.chipGen || 1;
+    const rows = [0, 1, 2].map((t) => ({ name: chipName(design.chipSeries, gen, t), v: chipSpec({ ...design, parts: { ...design.parts, chip: t } }).bench, mine: true, on: design.parts.chip === t }));
+    const rb = rivalBench(opts.getMonth?.() || 1);
+    rows.push({ name: '蓝莓 A 系列（竞品）', v: rb });
+    const max = Math.max(...rows.map((r) => r.v));
+    return `<div class="chipchart"><div class="cc-h">📊 跑分对比 <small>${opts.getChipNote?.() || ''}</small></div>${rows
+      .map((r) => `<div class="cc-row ${r.on ? 'on' : ''} ${r.mine ? '' : 'rival'}"><span>${esc(r.name)}</span><i style="width:${Math.round((r.v / max) * 100)}%"></i><b>${(r.v / 10000).toFixed(0)} 万</b></div>`)
+      .join('')}</div>`;
   }
 
   function appearanceTab() {
@@ -651,9 +667,6 @@ export function createStudio(root, opts = {}) {
           <button type="button" data-view="side">侧面</button>
           <button type="button" data-view="hero">斜侧</button>
           <button type="button" id="btn-explode" data-act="explode">🔩 拆解</button>
-        </div>
-        <div class="pixel-btns" title="像素度">
-          ${[2, 3, 4, 0].map((n) => `<button type="button" data-pixel="${n}" class="${n === pixel ? 'on' : ''}">${n ? `像素×${n}` : '高清'}</button>`).join('')}
         </div>
         <div id="plaque" class="plaque"></div>
       </section>
