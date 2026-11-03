@@ -480,3 +480,25 @@ body.reduce-motion .title-screen h1 { animation: none !important; }
 }
 .term-pop b { font-family: "ZCOOL KuaiLe", sans-serif; font-size: 1rem; color: #f5b041; }
 .term-pop p { margin: 2px 0 0; }
+
+
+/* 按键时代：短信上墙 */
+.lo-dm.sms { pointer-events: none; }
+.lo-dm .dm.sms-bubble {
+  left: 8% !important;
+  right: auto !important;
+  max-width: 70%;
+  background: #dfffd6;
+  color: #1a3318;
+  border-radius: 10px 10px 10px 2px;
+  padding: 6px 10px;
+  font-size: 12px;
+  box-shadow: 0 2px 0 #8fbf80;
+  animation-name: smsUp;
+}
+@keyframes smsUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.comments.bbs .cm-h { font-family: "ZCOOL KuaiLe", sans-serif; }
+.comments.bbs .cm { border-left: 3px solid #c4a574; }

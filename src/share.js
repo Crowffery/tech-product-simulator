@@ -1,3 +1,23 @@
+
+function drawKeypadSilhouette(g, x, y, w, h, color, formFactor) {
+  g.fillStyle = '#1b1b1b';
+  g.fillRect(x, y, w, h);
+  g.fillStyle = color || '#3a3d46';
+  g.fillRect(x + 4, y + 4, w - 8, h - 8);
+  const ff = formFactor || 'feature';
+  if (ff === 'flip') {
+    g.fillStyle = '#9bbc0f';
+    g.fillRect(x + 10, y + 10, w - 20, h * 0.28);
+    g.fillStyle = '#2a2c33';
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) g.fillRect(x + 14 + c * 18, y + h * 0.42 + r * 16, 14, 10);
+  } else {
+    g.fillStyle = '#9bbc0f';
+    g.fillRect(x + 12, y + 12, w - 24, h * 0.32);
+    g.fillStyle = ff === 'elder' ? '#c0392b' : '#2a2c33';
+    g.fillRect(x + 14, y + h * 0.42, 16, 12);
+  }
+}
+
 /**
  * 分享卡（720×1280 竖版）：发布会卡 / 三年结局卡
  * 用 Canvas 绘制，像素风；配套一段可复制的文案。
@@ -112,6 +132,8 @@ export async function launchCard(state, shot) {
     const iw = Math.round(img.width * scale);
     const ih = Math.round(img.height * scale);
     g.drawImage(img, (W - iw) / 2, 160, iw, ih);
+  } else if (['feature', 'elder', 'flip', 'slider', 'swivel'].includes(d.formFactor)) {
+    drawKeypadSilhouette(g, W / 2 - 110, 220, 220, 420, d.color, d.formFactor);
   }
   // 评级章
   const [gb, gf] = GRADE_C[Wr.grade] || GRADE_C.C;
@@ -249,6 +271,9 @@ export async function endingCard(state, E) {
     g.fillStyle = '#f9e79f';
     g.fillRect(x, y, 136, 200);
     if (imgs[i]) g.drawImage(imgs[i], x + 4, y + 4, 128, 192);
+    else if (['feature', 'elder', 'flip', 'slider', 'swivel'].includes(m.design?.formFactor)) {
+      drawKeypadSilhouette(g, x + 16, y + 16, 104, 168, m.design.color, m.design.formFactor);
+    }
     g.fillStyle = '#ffe8b0';
     g.font = `900 22px ${FONT_B}`;
     g.fillText(`${m.design.modelName} ${m.grade || ''}`.slice(0, 10), x + 68, y + 230);

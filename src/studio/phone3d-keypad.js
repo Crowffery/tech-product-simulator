@@ -1,8 +1,7 @@
 /**
- * 按键机 3D 机身（功能机 / 老年机）
- * 由 buildPhone 在 formFactor === feature|elder 时分派。
- * 返回结构与 buildPhone 一致，PhoneStage 无需感知差异。
- * 完整按键时代内容包（parts/keynote/market）属 v0.12+，此处仅机身视觉切片。
+ * 按键机 3D 机身（功能机 / 老年机 / 翻盖 / 滑盖 / 旋转屏）
+ * 由 buildPhone 在 isKeypadForm(formFactor) 时分派。
+ * 返回结构与 buildPhone 一致；flip/slider/swivel 带 ctl.open 开合。
  */
 import * as THREE from 'three';
 import { physical, tier } from './parts.js';
@@ -145,7 +144,18 @@ function keyLabelTex(labels) {
  * @param {object} design
  * @param {{ hdScreen?: boolean, liveScreen?: object|null }} opts
  */
+export function archetypeOf(design) {
+  const ff = design?.formFactor || 'feature';
+  if (ff === 'elder') return 'elder';
+  if (ff === 'flip' || ff === 'slider' || ff === 'swivel') return ff;
+  return 'bar';
+}
+
 export function buildKeypadPhone(design, { hdScreen = false, liveScreen = null } = {}) {
+  const arch = archetypeOf(design);
+  if (arch === 'flip') return buildFlipPhone(design, { hdScreen, liveScreen });
+  if (arch === 'slider') return buildSliderPhone(design, { hdScreen, liveScreen });
+  if (arch === 'swivel') return buildSwivelPhone(design, { hdScreen, liveScreen });
   const phys = physical(design);
   const ff = design.formFactor || phys.formFactor || 'feature';
   const elder = ff === 'elder';
@@ -585,7 +595,235 @@ export function buildKeypadPhone(design, { hdScreen = false, liveScreen = null }
   };
 }
 
-/** 是否应由按键机身构建（仅 feature / elder；flip 等属 v0.12+） */
+/** 是否应由按键机身构建 */
 export function isKeypadForm(formFactor) {
-  return formFactor === 'feature' || formFactor === 'elder';
+  return formFactor === 'feature' || formFactor === 'elder' || formFactor === 'flip' || formFactor === 'slider' || formFactor === 'swivel';
 }
+
+function keypadScreenMap(design, liveScreen, { elder = false } = {}) {
+  return liveScreen?.texture || standbyTexture(design, { elder });
+}
+
+function baseKeypadMats(design) {
+  const matId = design.parts?.material ?? 0;
+  const backHex = design.color || '#3a3d46';
+  const frameHex = design.twoTone === 'frame' ? design.color2 || backHex : backHex;
+  return { matId, backHex, frameHex };
+}
+
+/** 翻盖：上盖主屏 + 外屏，下盖键盘，铰链开合 */
+function buildFlipPhone(design, { liveScreen = null } = {}) {
+  const phys = physical(design);
+  const w = 50;
+  const h = 98;
+  const t = Math.max(phys.thickness, 15);
+  const { matId, backHex, frameHex } = baseKeypadMats(design);
+  const root = new THREE.Group();
+  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
+  Object.values(layers).forEach((g) => root.add(g));
+  const anchors = {};
+  const anim = [];
+  const screenMaps = [];
+  const ctl = { open: 0.65, id: null, t0: 0, until: 0 };
+
+  const hinge = new THREE.Group();
+  hinge.position.set(0, 0, 0);
+  layers.frame.add(hinge);
+
+  const lower = new THREE.Group();
+  lower.position.set(0, -h * 0.26, 0);
+  layers.frame.add(lower);
+  const upperPivot = new THREE.Group();
+  upperPivot.position.set(0, 0, 0);
+  hinge.add(upperPivot);
+  const upper = new THREE.Group();
+  upper.position.set(0, h * 0.26, 0);
+  upperPivot.add(upper);
+
+  // lower body (keyboard half)
+  const lowGeo = new THREE.BoxGeometry(w - 2, h * 0.48, t - 2);
+  lower.add(new THREE.Mesh(lowGeo, frameMaterial(matId, frameHex)));
+  // keys 3x4 dots
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 3; c++) {
+      const key = new THREE.Mesh(
+        new THREE.BoxGeometry(10, 6, 1.2),
+        new THREE.MeshStandardMaterial({ color: 0x2b2e36, roughness: 0.45 }),
+      );
+      key.position.set((c - 1) * 13, 12 - r * 9, t / 2 - 0.4);
+      lower.add(key);
+    }
+  }
+
+  // upper body (screen)
+  const upGeo = new THREE.BoxGeometry(w - 2, h * 0.48, t - 3);
+  upper.add(new THREE.Mesh(upGeo, frameMaterial(matId, backHex)));
+  const map = keypadScreenMap(design, liveScreen);
+  const sm = new THREE.MeshBasicMaterial({ map, toneMapped: false });
+  screenMaps.push(sm);
+  const disp = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.72, h * 0.32), sm);
+  disp.position.set(0, 2, (t - 3) / 2 + 0.2);
+  upper.add(disp);
+  if (liveScreen) anim.push((now) => liveScreen.paint(now));
+  anchors.screen = disp;
+
+  // outer screen (back of upper when closed)
+  const outerCvs = canvasTex(64, 48, (g, W, H) => {
+    g.fillStyle = '#0f380f';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#306230';
+    g.font = 'bold 14px monospace';
+    g.textAlign = 'center';
+    g.fillText('12:30', W / 2, H / 2 + 4);
+  }, { nearest: true });
+  const outer = new THREE.Mesh(
+    new THREE.PlaneGeometry(w * 0.4, h * 0.18),
+    new THREE.MeshBasicMaterial({ map: outerCvs, toneMapped: false }),
+  );
+  outer.position.set(0, 4, -(t - 3) / 2 - 0.15);
+  outer.rotation.y = Math.PI;
+  upper.add(outer);
+
+  // hinge cylinder
+  const pin = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.8, 1.8, w - 6, 12),
+    new THREE.MeshStandardMaterial({ color: 0x4a4e57, metalness: 0.6, roughness: 0.35 }),
+  );
+  pin.rotation.z = Math.PI / 2;
+  hinge.add(pin);
+
+  let lastOpen = ctl.open;
+  anim.push((now) => {
+    // auto cycle every 6s unless held
+    if (!ctl.id) {
+      const phase = (now / 1000) % 6;
+      ctl.open = phase < 3 ? 0.15 + (phase / 3) * 0.8 : 0.95 - ((phase - 3) / 3) * 0.8;
+    }
+    upperPivot.rotation.x = -Math.PI * 0.92 * (1 - ctl.open);
+    if ((lastOpen < 0.5 && ctl.open >= 0.5) || (lastOpen >= 0.5 && ctl.open < 0.5)) {
+      // open/close threshold for sfx hook
+      ctl._flipEdge = true;
+    }
+    lastOpen = ctl.open;
+  });
+
+  layers.front.add(new THREE.Group()); // keep layer non-empty
+  const bat = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, h * 0.3, 3), new THREE.MeshStandardMaterial({ color: 0x26282e }));
+  layers.inner.add(bat);
+  anchors.battery = bat;
+
+  root.userData.formFactor = 'flip';
+  root.userData.keypadChassis = true;
+  root.userData.keypadArchetype = 'flip';
+  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return { root, layers, anchors, anim, ctl, dims: { w, h: h * 0.95, t }, screen: liveScreen, screenMaps };
+}
+
+/** 滑盖：上屏上滑露出键盘 */
+function buildSliderPhone(design, { liveScreen = null } = {}) {
+  const phys = physical(design);
+  const w = 48;
+  const h = 110;
+  const t = Math.max(phys.thickness, 16);
+  const { matId, backHex, frameHex } = baseKeypadMats(design);
+  const root = new THREE.Group();
+  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
+  Object.values(layers).forEach((g) => root.add(g));
+  const anchors = {};
+  const anim = [];
+  const screenMaps = [];
+  const ctl = { open: 0.6, id: null, t0: 0, until: 0 };
+
+  const lower = new THREE.Group();
+  layers.frame.add(lower);
+  lower.add(new THREE.Mesh(new THREE.BoxGeometry(w, h * 0.55, t - 2), frameMaterial(matId, frameHex)));
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 3; c++) {
+      const key = new THREE.Mesh(new THREE.BoxGeometry(9, 5.5, 1), new THREE.MeshStandardMaterial({ color: 0x2b2e36 }));
+      key.position.set((c - 1) * 12, -h * 0.05 - r * 8, t / 2 - 0.5);
+      lower.add(key);
+    }
+  }
+
+  const upper = new THREE.Group();
+  layers.front.add(upper);
+  upper.add(new THREE.Mesh(new THREE.BoxGeometry(w - 1, h * 0.55, t - 4), frameMaterial(matId, backHex)));
+  const map = keypadScreenMap(design, liveScreen);
+  const sm = new THREE.MeshBasicMaterial({ map, toneMapped: false });
+  screenMaps.push(sm);
+  const disp = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.75, h * 0.35), sm);
+  disp.position.set(0, 4, (t - 4) / 2 + 0.15);
+  upper.add(disp);
+  if (liveScreen) anim.push((now) => liveScreen.paint(now));
+  anchors.screen = disp;
+
+  anim.push((now) => {
+    if (!ctl.id) {
+      const phase = (now / 1000) % 5;
+      const raw = phase < 2.5 ? phase / 2.5 : 1 - (phase - 2.5) / 2.5;
+      // easeOutBack-ish
+      ctl.open = Math.min(1, raw * 1.08);
+    }
+    upper.position.y = ctl.open * h * 0.38;
+  });
+
+  layers.inner.add(new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, h * 0.35, 3), new THREE.MeshStandardMaterial({ color: 0x1e7a46 })));
+  root.userData.formFactor = 'slider';
+  root.userData.keypadChassis = true;
+  root.userData.keypadArchetype = 'slider';
+  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return { root, layers, anchors, anim, ctl, dims: { w, h, t }, screen: liveScreen, screenMaps };
+}
+
+/** 旋转屏：屏幕绕 Z 旋转 */
+function buildSwivelPhone(design, { liveScreen = null } = {}) {
+  const phys = physical(design);
+  const w = 50;
+  const h = 105;
+  const t = Math.max(phys.thickness, 15);
+  const { matId, backHex, frameHex } = baseKeypadMats(design);
+  const root = new THREE.Group();
+  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
+  Object.values(layers).forEach((g) => root.add(g));
+  const anchors = {};
+  const anim = [];
+  const screenMaps = [];
+  const ctl = { open: 0.5, id: null, t0: 0, until: 0 };
+
+  layers.frame.add(new THREE.Mesh(new THREE.BoxGeometry(w, h * 0.5, t - 2), frameMaterial(matId, frameHex)));
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const key = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 1), new THREE.MeshStandardMaterial({ color: 0x2b2e36 }));
+      key.position.set((c - 1) * 13, -h * 0.12 - r * 9, t / 2 - 0.4);
+      layers.frame.add(key);
+    }
+  }
+
+  const swivel = new THREE.Group();
+  layers.front.add(swivel);
+  swivel.add(new THREE.Mesh(new THREE.BoxGeometry(w - 2, h * 0.48, t - 4), frameMaterial(matId, backHex)));
+  const map = keypadScreenMap(design, liveScreen);
+  const sm = new THREE.MeshBasicMaterial({ map, toneMapped: false });
+  screenMaps.push(sm);
+  const disp = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.72, h * 0.32), sm);
+  disp.position.set(0, 2, (t - 4) / 2 + 0.2);
+  swivel.add(disp);
+  if (liveScreen) anim.push((now) => liveScreen.paint(now));
+  anchors.screen = disp;
+  swivel.position.y = h * 0.22;
+
+  anim.push((now) => {
+    if (!ctl.id) {
+      const phase = (now / 1000) % 8;
+      ctl.open = phase < 4 ? phase / 4 : 1 - (phase - 4) / 4;
+    }
+    swivel.rotation.z = ctl.open * Math.PI;
+  });
+
+  root.userData.formFactor = 'swivel';
+  root.userData.keypadChassis = true;
+  root.userData.keypadArchetype = 'swivel';
+  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return { root, layers, anchors, anim, ctl, dims: { w, h, t }, screen: liveScreen, screenMaps };
+}
+

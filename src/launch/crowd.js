@@ -175,7 +175,26 @@ const CM = {
  * ctx: { design, modelName, promisesBroken[], priceRatio, anchorLast, flop, buzz, completeness, novelty, chipLag, chipLead, extChip, gen }
  * 返回 [{ who, av, t, like(最终), hot, reply }]
  */
+
+const CM_KEYPAD = {
+  broken: { base: 900, hot: true, t: ['说好的「{p}」呢？营业厅体验不一样', '「{p}」写在海报上，机器上找不到'] },
+  pricy: { base: 700, hot: true, t: ['这价我还不如去交话费送机', '贵了，等合约机'] },
+  cheap: { base: 800, t: ['预存话费送手机真香', '这个价冲营业厅', '给学生党的福音'] },
+  fair: { base: 280, t: ['价格还行', '营业厅能接受'] },
+  standby: { base: 600, t: ['待机真的久，出差一星期没充电', '一周一充不是吹的'] },
+  tough: { base: 650, t: ['摔了几次没事，工程塑料牛', '砸核桃实测过，核桃碎了'] },
+  chord: { base: 500, t: ['铃声换成 64 和弦，全车厢都在听', '和弦铃声有年代感'] },
+  elder: { base: 700, t: ['给我妈买的，字大声大，她会用', 'SOS 键安心了不少'] },
+  flip: { base: 550, t: ['翻盖啪一声，仪式感满满', '合盖护屏，口袋不刮花'] },
+  good: { base: 350, t: ['已在营业厅下单', '键盘手感不错', '信号比想象中好'] },
+  meh: { base: 150, t: ['先观望论坛口碑', '等同学买了再看'] },
+  bbs: { base: 400, t: ['沙发！', '板凳留名', '地板前排', '顶！写得好', '纯属路过'] },
+};
+
 export function buildComments(ctx) {
+  if (productEraOf(ctx.design) === 'keypad') {
+    return buildKeypadComments(ctx);
+  }
   const used = new Set();
   const say = (k, vars = {}) => {
     const c = CM[k];
@@ -213,4 +232,34 @@ export function buildComments(ctx) {
   const list = out.filter(Boolean).slice(0, 12);
   const names = shuffle(NAMES);
   return list.map((c, i) => ({ ...c, who: names[i % names.length], av: AV[(i * 5 + (ctx.gen || 1)) % AV.length], reply: Math.round((c.like / 40) * Math.random()) }));
+}
+
+
+function buildKeypadComments(ctx) {
+  const used = new Set();
+  const say = (k, vars = {}) => {
+    const c = CM_KEYPAD[k];
+    if (!c) return null;
+    const free = c.t.filter((x) => !used.has(x));
+    if (!free.length) return null;
+    const t0 = pick(free);
+    used.add(t0);
+    const t = t0.replace('{p}', vars.p || '').replace('{m}', ctx.company || ctx.modelName || '');
+    return { t, like: Math.round(c.base * (0.6 + Math.random() * 0.8)), hot: !!c.hot, floor: true };
+  };
+  const out = [];
+  const push = (x) => x && out.push({ who: pick(['论坛老友', '营业厅偶遇', '数码版主', '学生党', '给爸妈选机', '信号党', '铃声控', '路过顶帖']), av: pick(['📟', '👴', '👩', '🧑', '📱', '☎️']), ...x, reply: Math.round(Math.random() * 12) });
+  for (const p of ctx.promisesBroken || []) push(say('broken', { p }));
+  if ((ctx.priceRatio || 1) > 1.1) push(say('pricy'));
+  else if ((ctx.priceRatio || 1) < 0.92) push(say('cheap'));
+  else push(say('fair'));
+  push(say('standby'));
+  push(say('tough'));
+  push(say('chord'));
+  if (ctx.design?.formFactor === 'elder') push(say('elder'));
+  if (ctx.design?.formFactor === 'flip') push(say('flip'));
+  push(say('good'));
+  push(say('meh'));
+  while (out.length < 8) push(say('bbs'));
+  return shuffle(out).slice(0, 10);
 }

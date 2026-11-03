@@ -2309,6 +2309,21 @@ export class PhoneStage {
     if (this._liveScreen) this._liveScreen.setScreenMode(this._screenMode, this._screenModeOpts);
   }
 
+  /** 翻盖/滑盖/旋转：开合 0..1；无 ctl.open 时忽略 */
+  setOpen(v) {
+    if (this.phone?.ctl && 'open' in this.phone.ctl) {
+      this.phone.ctl.open = Math.max(0, Math.min(1, v));
+      this.phone.ctl.id = 'hold';
+      this.phone.ctl.until = performance.now() + 4000;
+    }
+  }
+  toggleOpen() {
+    if (!this.phone?.ctl || !('open' in this.phone.ctl)) return false;
+    const cur = this.phone.ctl.open ?? 0;
+    this.setOpen(cur > 0.5 ? 0.05 : 0.95);
+    return true;
+  }
+
   setPresentationMode(on) {
     this._present = !!on;
     const dpr = window.devicePixelRatio || 1;

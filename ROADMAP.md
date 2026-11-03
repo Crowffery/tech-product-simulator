@@ -12,8 +12,10 @@
 | **v0.10** | ✅ 已上线 | 点了折叠，机器看起来就是折叠；信仰/口碑决策有分叉 | phone3d 形态绑定；资源文案+公式分叉；RP 拆解+飞字；清仓按机型；事件扩池+冷却 |
 | **v0.11** | ✅ 已上线（PARTIAL 体感） | 时间推开新形态；可点贷款。**注意：≠按键时代内容** | 年代科技树、形态解锁表、贷款/过桥、天使；完整「越早期越老」读/听/算属 v0.12+ |
 | **v0.11.1** | ✅ 已上线（机身） | 功能机/老年机舞台轮廓可辨 | **仅 chassis**：小屏+键盘 / 大键+SOS；**不是**按键时代 parts/keynote/BOM |
-| **v0.12** | ✅ 已上线（按键切片） | 「我做的是一台真正的按键机」：企划形态→按键配置/价→FeatureOS→过渡发布会 | EraPack 底座、A5 形态前移、按键 PARTS/BOM/价位、FeatureOS、过渡 keynote、黑名单 lint |
-| **v0.13–0.16** | 后置 | 老年/翻盖滑盖做透；完整 keynote·舆论·测试；60 月编年 | 见 ERA_PLAN |
+| **v0.12** | ✅ 已上线 | 企划形态→按键配置/价→FeatureOS→发布会 | EraPack 底座 |
+| **v0.13** | ✅ 已上线 | 翻盖啪 / 滑盖咔哒 / 旋转屏可辨；场景剪影跟形态 | flip/slider/swivel 3D + scenes/share |
+| **v0.14** | ✅ 已上线 | 按键发布会像那个年代：砸核桃、短信上墙、论坛帖、工程机测试 | 完整 keynote + films-keypad + crowd/bench |
+| **v0.15–0.16** | 后置 | 60 月编年、智能机革命、时代事件过滤 | 见 ERA_PLAN |
 
 ## 本轮已解决（v0.9–v0.10）
 
@@ -71,7 +73,20 @@
 - [x] 配置/BOM：功能机成本约 ¥150–600；无「跑分/高刷/大底」档文案
 - [x] 发布会 keypad 屏为 FeatureOS（待机/菜单/短信/来电），非现代 App 网格
 - [x] 过渡 keynote 文案无现代黑名单词；`npm run test:era` 绿
-- [ ] 完整翻盖滑盖 3D / 舆论短信上墙 / 60 月编年 → v0.13+
+- [x] 完整翻盖滑盖 3D（v0.13）/ 舆论短信上墙（v0.14）；60 月编年仍后置 v0.15+
+
+## v0.13 验收（自测）
+
+- [x] 形态时间轴含翻盖 / 滑盖 / 旋转屏（约 2/5/8 月解锁）
+- [x] 设计台 3D 可辨；flip/slider/swivel 带 ctl.open 自动开合；开合按钮
+- [x] 像素场景 / 分享卡无截图时按 formFactor 出按键剪影
+
+## v0.14 验收（自测）
+
+- [x] 按键节目单含外观/彩屏/铃声/待机/砸核桃/价格营业厅；老年机大字+SOS；有摄像头出拍照段
+- [x] films-keypad 合入 `films.js`；段落可播 kp_* 短片
+- [x] 弹幕短信上墙 + 评论区论坛帖；工程机测试五项非跑分
+- [x] FeatureOS 含 boot/bigfont/sos/camera/signal/snake/mp3 等模式
 
 ## 刻意不做 / 后置
 
@@ -92,6 +107,6 @@ npm test   # test-tail-sales + test-v011 + check-roadmap（PASS 矩阵）
 
 ## 试玩
 
-- 正式：https://tech-product-simulator.vercel.app?v=0.12
+- 正式：https://tech-product-simulator.vercel.app?v=0.14
 - 说明：v0.11.1 = 机身可视 + 发布会 keypad 禁现代 OS 贴皮；v0.12 = EraPack 按键内容（推进中以部署 query 为准）
 - 直链部署后以 Vercel 输出为准；别名保持正式域名。

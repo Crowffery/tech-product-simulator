@@ -288,6 +288,9 @@ export function physical(design) {
 export const FORM_FACTOR_MODS = {
   feature: { thickAdd: 1.8, costMul: 0.72, weightAdd: 8 },
   elder: { thickAdd: 2.2, costMul: 0.68, weightAdd: 14 },
+  flip: { thickAdd: 1.2, costMul: 0.85, weightAdd: 10 },
+  slider: { thickAdd: 1.6, costMul: 0.88, weightAdd: 12 },
+  swivel: { thickAdd: 1.0, costMul: 0.95, weightAdd: 9 },
   thick: { thickAdd: 1.4, costMul: 0.9, weightAdd: 6 },
   bar: { thickAdd: 0, costMul: 1, weightAdd: 0 },
   wide: { thickAdd: 0.2, costMul: 1.05, weightAdd: 10 },
@@ -297,6 +300,9 @@ export const FORM_FACTOR_MODS = {
 export const FORM_FACTOR_CAPS = {
   feature: { camera: -18, design: -8, battery: 6, os: -12 },
   elder: { camera: -22, design: -10, battery: 12, os: -16 },
+  flip: { camera: -10, design: 10, battery: 2, os: -6 },
+  slider: { camera: -8, design: 8, battery: 0, os: -4 },
+  swivel: { camera: -6, design: 12, battery: -2, os: -4 },
   thick: { camera: -4, design: -2, battery: 4 },
   bar: {},
   wide: { design: 4, battery: -2 },

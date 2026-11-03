@@ -782,6 +782,7 @@ export function createStudio(root, opts = {}) {
           <button type="button" data-view="side">侧面</button>
           <button type="button" data-view="hero">斜侧</button>
           <button type="button" id="btn-explode" data-act="explode">🔩 拆解</button>
+          <button type="button" id="btn-open" data-act="toggle-open" hidden>📖 开合</button>
         </div>
         <div id="plaque" class="plaque"></div>
       </section>
@@ -891,8 +892,9 @@ export function createStudio(root, opts = {}) {
         toast(`形态：${formOf(d.ff).name} — ${formOf(d.ff).desc}`);
         if (formOf(d.ff).fold && !exploded) {
           requestAnimationFrame(() => stage?.spotlight('fold', formOf(d.ff).name));
-        } else if ((d.ff === 'feature' || d.ff === 'elder') && !exploded) {
+        } else if (['feature','elder','flip','slider','swivel'].includes(d.ff) && !exploded) {
           requestAnimationFrame(() => stage?.spotlight('keypad', formOf(d.ff).name));
+          const btn = $('#btn-open'); if (btn) btn.hidden = !['flip','slider','swivel'].includes(d.ff);
         }
       } else if (d.pos) {
         sfx.click();
@@ -966,6 +968,7 @@ export function createStudio(root, opts = {}) {
         else if (act === 'confirm-design') opts.onConfirm?.(structuredClone(design));
         else if (act === 'skip') stage?.skipReveal();
         else if (act === 'explode') setExploded(!exploded);
+        else if (act === 'toggle-open') { if (stage?.toggleOpen()) sfx.click(); }
         else if (act === 'mute') {
           sfx.setMuted(!sfx.muted);
           t.textContent = sfx.muted ? '🔇' : '🔊';

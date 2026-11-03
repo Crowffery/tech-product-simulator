@@ -21,11 +21,14 @@ ok('feature 小屏+数字键盘', keypad.includes('keypadChassis') && keypad.inc
 ok('feature 天线+听筒', keypad.includes('hasAntenna') && keypad.includes('grilleY'));
 ok('elder SOS / 大键 / 手电筒', keypad.includes('SOS') && keypad.includes('hasSos') && keypad.includes('keyScale') && keypad.includes('flashlight'));
 ok('elder 键帽更大', keypad.includes('elder ? 1.55') || /keyScale = elder \? 1\.55/.test(keypad));
-ok('isKeypadForm 仅 feature/elder', isKeypadForm('feature') && isKeypadForm('elder') && !isKeypadForm('thick') && !isKeypadForm('bar') && !isKeypadForm('fold_s'));
+ok('isKeypadForm feature/elder/flip/slider/swivel', isKeypadForm('feature') && isKeypadForm('elder') && isKeypadForm('flip') && isKeypadForm('slider') && isKeypadForm('swivel') && !isKeypadForm('thick') && !isKeypadForm('bar') && !isKeypadForm('fold_s'));
 ok('forms 仍设 formFactor', forms.includes('design.formFactor = f.id'));
 ok('不强制 mutating keyboard 概念', !forms.includes("concepts.push('keyboard')") && !keypad.includes("concepts.push('keyboard')"));
 
 // GAP-V111-LIVE：发布会路径不得对 keypad 注入现代 createLiveScreen
+ok('forms 含 flip/slider/swivel', forms.includes("id: 'flip'") && forms.includes("id: 'slider'") && forms.includes("id: 'swivel'"));
+ok('keypad 含 flip/slider/swivel 构建', keypad.includes('buildFlipPhone') && keypad.includes('buildSliderPhone') && keypad.includes('buildSwivelPhone'));
+ok('scenes 读 formFactor 按键剪影', readFileSync(new URL('../src/scenes.js', import.meta.url), 'utf8').includes("ff === 'flip'"));
 ok(
   'keypad 发布会走 FeatureOS 而非现代 App 网格',
   phone3d.includes('createScreenFor')

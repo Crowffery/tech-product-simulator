@@ -125,6 +125,69 @@ export function createFeatureScreen(design, { width = 240, height = 320 } = {}) 
       const shake = Math.sin(now * 0.02) * 2;
       pg.fillText('♪ 铃声响…', pxW / 2 + shake, 80);
       softKeys(pg, pxW, pxH, '接听', '挂断');
+    } else if (mode === 'boot') {
+      pg.font = `bold ${elder ? 12 : 10}px monospace`;
+      pg.textAlign = 'center';
+      const msg = modeOpts.custom || design?.company || '华夏终端';
+      pg.fillText(msg.slice(0, 8), pxW / 2, pxH * 0.45);
+      pg.font = `${elder ? 9 : 7}px monospace`;
+      pg.fillText('启动中…', pxW / 2, pxH * 0.6);
+      softKeys(pg, pxW, pxH, '', '');
+    } else if (mode === 'bigfont') {
+      pg.font = `bold ${elder ? 22 : 18}px monospace`;
+      pg.textAlign = 'center';
+      pg.fillText('12:30', pxW / 2, pxH * 0.4);
+      pg.font = `${elder ? 12 : 10}px monospace`;
+      pg.fillText('星期三', pxW / 2, pxH * 0.58);
+      softKeys(pg, pxW, pxH, '菜单', '闹钟');
+    } else if (mode === 'sos') {
+      const flash = Math.sin(now * 0.02) > 0;
+      if (flash) { pg.fillStyle = '#c0392b'; pg.fillRect(0, 12, pxW, pxH - 24); pg.fillStyle = '#fff'; }
+      pg.font = `bold ${elder ? 14 : 11}px monospace`;
+      pg.textAlign = 'center';
+      pg.fillText('SOS', pxW / 2, pxH * 0.35);
+      pg.font = `${elder ? 10 : 8}px monospace`;
+      pg.fillText('正在呼叫：儿子', pxW / 2, pxH * 0.55);
+      softKeys(pg, pxW, pxH, '取消', '');
+    } else if (mode === 'camera') {
+      pg.fillStyle = pal.dim;
+      for (let y = 14; y < pxH - 16; y += 4) for (let x = 2; x < pxW - 2; x += 4) {
+        if (((x + y) / 4 + Math.floor(now / 200)) % 3) pg.fillRect(x, y, 3, 3);
+      }
+      pg.strokeStyle = pal.fg; pg.strokeRect(8, 20, pxW - 16, pxH - 44);
+      softKeys(pg, pxW, pxH, '快门', '返回');
+    } else if (mode === 'signal') {
+      pg.font = `${elder ? 10 : 8}px monospace`;
+      pg.textAlign = 'left';
+      pg.fillText('信号强度', 6, 28);
+      for (let s = 0; s < 2; s++) {
+        for (let i = 0; i < 5; i++) {
+          const h = 4 + i * 3;
+          const on = Math.sin(now * 0.003 + i + s) > -0.2;
+          pg.globalAlpha = on ? 1 : 0.25;
+          pg.fillRect(10 + s * 40 + i * 6, 50 - h, 4, h);
+        }
+      }
+      pg.globalAlpha = 1;
+      softKeys(pg, pxW, pxH, '刷新', '返回');
+    } else if (mode === 'snake') {
+      const gw = 10, gh = 8;
+      const cells = [];
+      for (let i = 0; i < 8; i++) cells.push({ x: (2 + i + Math.floor(now / 200)) % gw, y: 2 + (i % 3) });
+      cells.forEach((c, i) => {
+        pg.fillStyle = i === cells.length - 1 ? pal.fg : pal.dim;
+        pg.fillRect(8 + c.x * 8, 18 + c.y * 8, 7, 7);
+      });
+      softKeys(pg, pxW, pxH, '暂停', '退出');
+    } else if (mode === 'mp3' || mode === 'radio' || mode === 'ringtone') {
+      pg.font = `${elder ? 10 : 8}px monospace`;
+      pg.textAlign = 'center';
+      pg.fillText(mode === 'radio' ? 'FM 87.5' : mode === 'mp3' ? '♪ 正在播放' : '铃声试听', pxW / 2, pxH * 0.35);
+      for (let i = 0; i < 8; i++) {
+        const h = 6 + Math.abs(Math.sin(now * 0.01 + i)) * 18;
+        pg.fillRect(20 + i * 10, pxH * 0.55 - h, 6, h);
+      }
+      softKeys(pg, pxW, pxH, '上一首', '停止');
     } else {
       // standby
       pg.font = `${elder ? 11 : 9}px monospace`;

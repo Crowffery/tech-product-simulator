@@ -66,5 +66,16 @@ ok('phone3d 按键走 createScreenFor/FeatureOS', phone3d.includes('createScreen
 const ui = readFileSync(join(root, 'src/ui.js'), 'utf8');
 ok('企划形态前移 plan-form', ui.includes('plan-form') && ui.includes('formCardsHtml'));
 
+ok('productEraOf flip=keypad', productEraOf('flip') === 'keypad');
+const dFlip = { formFactor: 'flip', parts: { chip: 1, screen: 1, camera: 0, battery: 1, material: 0, size: 1, keyboard: 0, ringtone: 1, network: 0 }, concepts: [], color: '#444' };
+ok('flip BOM 按键价', physical(dFlip).unitCost >= 150 && physical(dFlip).unitCost <= 700, `unitCost=${physical(dFlip).unitCost}`);
+const kn = readFileSync(join(root, 'src/launch/keynote-keypad.js'), 'utf8');
+ok('keynote 含砸核桃/营业厅', kn.includes('砸核桃') && kn.includes('营业厅'));
+ok('films-keypad 注册', readFileSync(join(root, 'src/launch/films-keypad.js'), 'utf8').includes('kp_drop'));
+ok('films.js 合入 KEYPAD_FILMS', readFileSync(join(root, 'src/launch/films.js'), 'utf8').includes('KEYPAD_FILMS'));
+ok('bench 按键测试项', readFileSync(join(root, 'src/bench.js'), 'utf8').includes('KEYPAD_SUBS') && readFileSync(join(root, 'src/bench.js'), 'utf8').includes('跌落测试'));
+ok('crowd 论坛/短信', readFileSync(join(root, 'src/launch/crowd.js'), 'utf8').includes('CM_KEYPAD') && readFileSync(join(root, 'src/launch/crowd.js'), 'utf8').includes('buildKeypadComments'));
+ok('scenes/share 形态', readFileSync(join(root, 'src/scenes.js'), 'utf8').includes("ff === 'elder'") );
+
 console.log(fails ? `\nFAILED ${fails}` : '\nALL ERA LINT PASSED');
 process.exit(fails ? 1 : 0);

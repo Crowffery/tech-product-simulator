@@ -1,3 +1,4 @@
+import { productEraOf, packOf } from './game/eras/index.js';
 /**
  * 工程机跑分：玩家亲手点「开始跑分」，看五项子测试一项项跑完，
  * 总分滚动上涨，最后挤进跑分榜。
@@ -11,6 +12,13 @@ const SUBS = [
   { id: 'gpu', name: 'GPU 图形', w: 0.3 },
   { id: 'ai', name: 'AI 算力', w: 0.14 },
   { id: 'mem', name: '内存 · 存储', w: 0.12 },
+];
+const KEYPAD_SUBS = [
+  { id: 'drop', name: '跌落测试', w: 0.22 },
+  { id: 'standby', name: '待机测试', w: 0.22 },
+  { id: 'call', name: '通话音质', w: 0.2 },
+  { id: 'signal', name: '信号强度', w: 0.18 },
+  { id: 'keylife', name: '按键寿命', w: 0.18 },
 ];
 const SUB_MS = 1500;
 const W = 240;
@@ -120,6 +128,43 @@ const DRAW = {
       }),
     );
   },
+  drop(g, t) {
+    g.fillStyle = '#1a1408'; g.fillRect(0, 0, W, H);
+    const y = 20 + (t % 1.5) * 80;
+    g.fillStyle = '#3a3d46'; g.fillRect(100, y, 40, 55);
+    g.fillStyle = '#9bbc0f'; g.fillRect(108, y + 6, 24, 16);
+    g.fillStyle = '#f5b041'; g.font = 'bold 10px monospace'; g.fillText('1.5m', 8, 14);
+  },
+  standby(g, t) {
+    g.fillStyle = '#0a1a20'; g.fillRect(0, 0, W, H);
+    const day = Math.min(20, Math.floor(t * 5));
+    g.fillStyle = '#7ec8ff'; g.font = 'bold 16px monospace'; g.textAlign = 'center';
+    g.fillText(`待机 ${day} 天`, W / 2, H / 2);
+    g.textAlign = 'left';
+  },
+  call(g, t) {
+    g.fillStyle = '#102010'; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 20; i++) {
+      const h = 10 + Math.abs(Math.sin(t * 6 + i)) * 40;
+      g.fillStyle = '#82e0aa'; g.fillRect(20 + i * 10, 100 - h, 6, h);
+    }
+  },
+  signal(g, t) {
+    g.fillStyle = '#0a1520'; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 5; i++) {
+      const on = Math.sin(t * 3 + i) > -0.3;
+      g.fillStyle = on ? '#5dade2' : '#1a3040';
+      g.fillRect(40 + i * 30, 90 - i * 12, 20, 12 + i * 12);
+    }
+  },
+  keylife(g, t) {
+    g.fillStyle = '#181818'; g.fillRect(0, 0, W, H);
+    const n = Math.floor(t * 8000);
+    g.fillStyle = '#f5b041'; g.font = 'bold 14px monospace'; g.textAlign = 'center';
+    g.fillText(`${n.toLocaleString()} 次`, W / 2, H / 2);
+    g.font = '10px monospace'; g.fillText('按键寿命', W / 2, H / 2 + 18);
+    g.textAlign = 'left';
+  },
   mem(g, t) {
     g.fillStyle = '#081a1a';
     g.fillRect(0, 0, W, H);
@@ -150,13 +195,19 @@ function miniPhone(g, x, y, color) {
  * opts: { chipLabel, phoneName, color, theory, ratio, rivals:[{n,v}], heat, rewardable, onDone(result), play }
  */
 export function openBench(opts) {
+  const design = opts.design || opts.state?.design;
+  const keypad = design && productEraOf(design) === 'keypad';
+  const ACTIVE_SUBS = keypad ? KEYPAD_SUBS : SUBS;
+  const titleText = keypad ? '工程机测试' : '工程机跑分';
+  const startLabel = keypad ? '开始测试' : '开始跑分';
+
   const { chipLabel, phoneName, color, theory, ratio, rivals, heat = 1, rewardable, onDone, play = () => {} } = opts;
   const ov = document.createElement('div');
   ov.className = 'bench-ov';
   ov.innerHTML = `<div class="bench kbox">
-      <div class="bench-h"><b>工程机跑分</b><button type="button" class="bench-x" data-b="close">✕</button></div>
+      <div class="bench-h"><b>${titleText}</b><button type="button" class="bench-x" data-b="close">✕</button></div>
       <div class="bench-screen"><canvas width="${W}" height="${H}"></canvas>
-        <div class="bench-total"><small>总分</small><b>0</b></div>
+        <div class="bench-total"><small>${keypad ? "综合可靠性" : "总分"}</small><b>0</b></div>
         <div class="bench-temp" hidden>TEMP <b>32</b>°C</div>
       </div>
       <div class="bench-body"></div>
@@ -204,7 +255,7 @@ export function openBench(opts) {
   body.innerHTML = `<div class="bench-info"><div><small>测试机</small><b>${phoneName}</b></div><div><small>芯片</small><b>${chipLabel}</b></div>
       <div><small>性能调校</small><b>${tune}%</b></div></div>
     <p class="bench-tip">${tune < 60 ? '⚠ 调校才做了一半，现在跑分会偏低。' : tune < 95 ? '调校还没做满，分数还有上升空间。' : '调校已经做满，可以冲榜了。'}${rewardable ? '<br/>本代第一次正式跑分会被晒到数码论坛。' : ''}</p>
-    <button type="button" class="primary big bench-go" data-b="go">▶ 不服跑个分</button>`;
+    <button type="button" class="primary big bench-go" data-b="go">▶ ${startLabel}</button>`;
   idle();
 
   const run = () => {
@@ -212,26 +263,26 @@ export function openBench(opts) {
     play('benchStart');
     tempEl.hidden = false;
     const final = Math.round((theory * (0.55 + 0.45 * ratio) * (0.98 + Math.random() * 0.04)) / 100) * 100;
-    const parts = SUBS.map((s) => Math.round(final * s.w));
+    const parts = ACTIVE_SUBS.map((s) => Math.round(final * s.w));
     parts[parts.length - 1] += final - parts.reduce((a, b) => a + b, 0);
-    body.innerHTML = `<ul class="bench-list">${SUBS.map((s) => `<li data-id="${s.id}"><span>${s.name}</span><i><b></b></i><em>—</em></li>`).join('')}</ul>`;
+    body.innerHTML = `<ul class="bench-list">${ACTIVE_SUBS.map((s) => `<li data-id="${s.id}"><span>${s.name}</span><i><b></b></i><em>—</em></li>`).join('')}</ul>`;
     const t0 = performance.now();
     const maxTemp = 38 + heat * 6 + Math.random() * 3;
     let lastIdx = -1;
     const loop = (now) => {
       if (dead) return;
       const el = Math.max(0, now - t0);
-      const idx = Math.min(SUBS.length - 1, Math.floor(el / SUB_MS));
+      const idx = Math.min(ACTIVE_SUBS.length - 1, Math.floor(el / SUB_MS));
       const local = (el - idx * SUB_MS) / 1000;
       const k = Math.min(1, (el - idx * SUB_MS) / SUB_MS);
-      DRAW[SUBS[idx].id](g, local);
+      DRAW[ACTIVE_SUBS[idx].id](g, local);
       const done = parts.slice(0, idx).reduce((a, b) => a + b, 0);
-      const cur = el >= SUB_MS * SUBS.length ? final : Math.round(done + parts[idx] * k);
+      const cur = el >= SUB_MS * ACTIVE_SUBS.length ? final : Math.round(done + parts[idx] * k);
       totalEl.textContent = cur.toLocaleString('en-US');
-      tempEl.querySelector('b').textContent = Math.round(32 + (maxTemp - 32) * Math.min(1, el / (SUB_MS * SUBS.length)));
+      tempEl.querySelector('b').textContent = Math.round(32 + (maxTemp - 32) * Math.min(1, el / (SUB_MS * ACTIVE_SUBS.length)));
       if (idx !== lastIdx) {
         if (lastIdx >= 0) {
-          const li = body.querySelector(`[data-id="${SUBS[lastIdx].id}"]`);
+          const li = body.querySelector(`[data-id="${ACTIVE_SUBS[lastIdx].id}"]`);
           li.classList.add('ok');
           li.querySelector('em').textContent = parts[lastIdx].toLocaleString('en-US');
           play('benchTick');
@@ -239,15 +290,15 @@ export function openBench(opts) {
           play('benchTick');
         }
         if (idx === 2) play('benchHeat');
-        body.querySelector(`[data-id="${SUBS[idx].id}"]`)?.classList.add('on');
+        body.querySelector(`[data-id="${ACTIVE_SUBS[idx].id}"]`)?.classList.add('on');
         lastIdx = idx;
       }
-      const bar = body.querySelector(`[data-id="${SUBS[idx].id}"] b`);
+      const bar = body.querySelector(`[data-id="${ACTIVE_SUBS[idx].id}"] b`);
       if (bar) bar.style.width = `${Math.round(k * 100)}%`;
-      if (el < SUB_MS * SUBS.length) {
+      if (el < SUB_MS * ACTIVE_SUBS.length) {
         raf = requestAnimationFrame(loop);
       } else {
-        const li = body.querySelector(`[data-id="${SUBS[idx].id}"]`);
+        const li = body.querySelector(`[data-id="${ACTIVE_SUBS[idx].id}"]`);
         li.classList.add('ok');
         li.querySelector('em').textContent = parts[idx].toLocaleString('en-US');
         play('benchTick');

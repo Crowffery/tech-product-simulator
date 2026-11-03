@@ -643,7 +643,7 @@ P.factory = () => {
   const run = !draft.factoryDone;
   const units = stockedUnits();
   return {
-    scene: ['factory', { color: state.design.color, stockId: state.stockId, concepts: state.design?.concepts || [] }],
+    scene: ['factory', { color: state.design.color, stockId: state.stockId, concepts: state.design?.concepts || [], formFactor: state.design?.formFactor }],
     caption: run ? '流水线开足马力' : '首批货已装箱，等发布会开售',
     sheet: `<h2 class="sheet-h">${icon('factory', 22)} 量产 <small>${esc(state.design.modelName)} · ${esc(paletteName(state.design.color))}</small></h2>
       <div class="fac ${run ? 'running' : 'done'}">
@@ -770,7 +770,7 @@ P.score = () => {
   const W = state.wowResult || {};
   const heat = state.launchHeat ?? 60;
   return {
-    scene: ['score', { color: state.design?.color, grade: W.grade, flop: state.launchFlop, hidePhone: !!state.lastCut, concepts: state.design?.concepts || [] }],
+    scene: ['score', { color: state.design?.color, grade: W.grade, flop: state.launchFlop, hidePhone: !!state.lastCut, concepts: state.design?.concepts || [], formFactor: state.design?.formFactor }],
     imgs: state.lastCut ? [{ src: state.lastCut, x: 50, y: 50, h: 52, cls: 'hero' }] : [],
     caption: state.launchFlop ? '演示机卡住了，但发布会总算撑完了' : heat >= 85 ? '全场沸腾，掌声停不下来' : '发布会落幕，媒体开始写稿',
     sheet: `<h2 class="sheet-h">${icon('news', 22)} 媒体评测 <small>发布会结束 30 分钟后</small></h2>
@@ -812,7 +812,7 @@ P.sales = () => {
   const queue = r.stockState === 'short' ? 1 : r.stockState === 'over' ? 0.15 : 0.55;
   const pct = Math.round((r.sold / Math.max(1, r.stocked)) * 100);
   return {
-    scene: ['sales', { month: state.month, color: state.design?.color, state: r.stockState, queue, hidePhone: !!state.lastCut, concepts: state.design?.concepts || [] }],
+    scene: ['sales', { month: state.month, color: state.design?.color, state: r.stockState, queue, hidePhone: !!state.lastCut, concepts: state.design?.concepts || [], formFactor: state.design?.formFactor, positioningId: state.product?.positioningId }],
     imgs: state.lastCut ? [{ src: state.lastCut, x: 31, y: 41, h: 30 }] : [],
     caption: r.stockState === 'short' ? '门口排起长队，黄牛也来了' : r.stockState === 'over' ? '店里有点冷清，仓库在吃灰' : '门店生意不错',
     sheet: `<h2 class="sheet-h">${icon('cart', 22)} 首月战报</h2>
@@ -912,7 +912,7 @@ function investTab() {
 P.ending = () => {
   const E = endingTitles(state);
   return {
-    scene: ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut })), finale: true }],
+    scene: ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut, formFactor: m.design?.formFactor })), finale: true }],
     imgs: wallImgs(),
     caption: '三年过去了，年会大结算',
     sheet: `<h2 class="sheet-h">${icon('trophy', 22)} 三年结算</h2>
@@ -1503,6 +1503,10 @@ async function playReveal() {
     const { PhoneStage } = await import('./studio/phone3d.js');
     const { buildKeynote, txt } = await import('./launch/keynote.js');
     const { danmakuLines } = await import('./launch/crowd.js');
+    const { createFilmLayer } = await import('./launch/films.js');
+    const filmLayer = createFilmLayer(ov);
+    const keypadEra = productEraOf(state.design) === 'keypad';
+    const packLaunch = packOf(state.design);
     stage = new PhoneStage(ov.querySelector('.lo-stage'));
     const launchOpts = state.launchOpts || draft.launchOpts || L.defaultLaunchOpts('safe');
     stage.setPresentationMode?.(true);
@@ -1521,7 +1525,7 @@ async function playReveal() {
       rivals: rivalPhones(state.month).slice(0, 3),
       camCap: caps.camera,
       batCap: caps.battery,
-      price: state.product.price || PRICE_BANDS.find((p) => p.id === state.product.priceId)?.price || 3999,
+      price: state.product.price || packLaunch.priceBands.find((p) => p.id === state.product.priceId)?.price || packLaunch.priceRange?.ref || 3999,
       chipLag: L.chipLag(state),
       fair: state.product.fair,
       pf: state.review?.priceUser ?? 0,
@@ -1543,7 +1547,7 @@ async function playReveal() {
       { wall: (g, Wd, Hd, t) => { for (let i = 0; i < 16; i++) { g.fillStyle = ['#f1948a', '#f5b041', '#5dade2'][(i + Math.floor(t * 4)) % 3]; g.fillRect(8 + i * 14, 20 + (i % 2) * 18, 12, 14); } txt(g, '粉丝应援', Wd / 2, 68, 9, '#fff'); }, sub: '粉丝举起了应援灯牌，全场一起倒数！', react: ['冲冲冲', '🌟🌟🌟', '爱了'], mood: 'good' },
     ];
     const mid = Math.max(1, Math.min(seg.length - 2, 3));
-    if (!quick && Math.random() < 0.55) seg.splice(mid, 0, { key: 'moment', ...moments[Math.floor(Math.random() * moments.length)], ms: 2600 });
+    if (!keypadEra && !quick && Math.random() < 0.55) seg.splice(mid, 0, { key: 'moment', ...moments[Math.floor(Math.random() * moments.length)], ms: 2600 });
     if (state.launchFlop) {
       seg.splice(Math.min(seg.length - 2, mid + 1), 0, {
         key: 'flop',
@@ -1567,8 +1571,11 @@ async function playReveal() {
       });
     }
     // 开售倒计时 + 谢幕
-    seg.push({ key: 'cd3', wall: (g, Wd) => { txt(g, '今晚 20:00 开售', Wd / 2, 26, 12, '#ffd08a'); txt(g, '3', Wd / 2, 62, 30, '#fff', 'center', 'monospace'); }, sub: '今晚八点，<b>正式开售</b>！', react: ['定闹钟！', '手速准备'], mood: 'good', ms: 900, notap: true });
-    ['2', '1'].forEach((n) => seg.push({ key: `cd${n}`, wall: (g, Wd) => { txt(g, '今晚 20:00 开售', Wd / 2, 26, 12, '#ffd08a'); txt(g, n, Wd / 2, 62, 30, '#fff', 'center', 'monospace'); }, sub: null, react: [], ms: 700, notap: true, act: () => play('click') }));
+    const cdTitle = keypadEra ? '全国营业厅同步上市' : '今晚 20:00 开售';
+    const cdSub = keypadEra ? '营业厅门口已经开始排队了！' : '今晚八点，<b>正式开售</b>！';
+    const cdReact = keypadEra ? ['冲营业厅', '带身份证'] : ['定闹钟！', '手速准备'];
+    seg.push({ key: 'cd3', wall: (g, Wd) => { txt(g, cdTitle, Wd / 2, 26, 12, '#ffd08a'); txt(g, '3', Wd / 2, 62, 30, '#fff', 'center', 'monospace'); }, sub: cdSub, react: cdReact, mood: 'good', ms: 900, notap: true });
+    ['2', '1'].forEach((n) => seg.push({ key: `cd${n}`, wall: (g, Wd) => { txt(g, cdTitle, Wd / 2, 26, 12, '#ffd08a'); txt(g, n, Wd / 2, 62, 30, '#fff', 'center', 'monospace'); }, sub: null, react: [], ms: 700, notap: true, act: () => play('click') }));
     seg.push({
       key: 'end',
       wall: (g, Wd, Hd, t) => {
@@ -1622,7 +1629,12 @@ async function playReveal() {
         if (sl.shine) stage.shine(1800);
         if (sl.screen) stage.setScreenMode?.(sl.screen, { payload: sl.screenPayload || {}, t0: performance.now() });
         if (sl.light || launchOpts.light) stage.setLaunchOpts?.({ ...launchOpts, light: sl.light || launchOpts.light });
-        if (sl.wall) stage.wallAnim(sl.wall);
+        if (sl.film && filmLayer.has(sl.film)) {
+          filmLayer.play(sl.film, { design: d, phys: physical(d) });
+        } else {
+          filmLayer.stop();
+          if (sl.wall) stage.wallAnim(sl.wall);
+        }
         ov.classList.toggle('dim', !!sl.dim);
         kpi(sl.kpi);
         if (sl.sub !== null && sl.sub !== undefined) sub(typeof sl.sub === 'function' ? sl.sub() : sl.sub);
@@ -1644,10 +1656,10 @@ async function playReveal() {
         tapNext = null;
       }
       kpi(null);
+      filmLayer.stop();
       await sleep(300);
       finish();
     };
-
     ov.querySelector('.lo-skip').onclick = () => (stage.reveal?.fired.boom ? finish() : stage.skipReveal());
     stage.playReveal(d, {
       quick,
@@ -1664,12 +1676,15 @@ async function playReveal() {
           react(['哇！', '来了来了', '📸'], 'good');
           fireworks(2);
           const dm = ov.querySelector('.lo-dm');
+          if (keypadEra) dm.classList.add('sms');
           danmakuLines(d, { chipLag: L.chipLag(state), chipLead: L.chipLag(state) < 0 && d.chipSrc !== 'ext', price: state.product.price }, 9)
             .forEach((tx, i) => {
               const el = document.createElement('span');
-              el.className = 'dm';
-              el.textContent = tx;
-              el.style.top = `${44 + ((i * 17) % 22)}%`;
+              el.className = keypadEra ? 'dm sms-bubble' : 'dm';
+              el.textContent = keypadEra
+                ? `13${Math.floor(Math.random() * 10)}****${String(1000 + Math.floor(Math.random() * 9000)).slice(1)}：${tx}`
+                : tx;
+              el.style.top = keypadEra ? `${62 - (i % 7) * 8}%` : `${44 + ((i * 17) % 22)}%`;
               el.style.animationDelay = `${0.5 + i * 2.2}s`;
               dm.appendChild(el);
             });
@@ -1713,10 +1728,16 @@ function comments() {
 }
 
 function commentBlock() {
+  const bbs = productEraOf(state.design) === 'keypad';
+  if (bbs) {
+    return `<div class="comments live bbs"><div class="cm-h">📜 机锋论坛 · ${esc(state.design?.modelName || '新机')} 专帖 <small class="cm-status">● 顶帖中</small><em class="cm-count"></em></div><div class="cm-list"></div></div>`;
+  }
   return `<div class="comments live"><div class="cm-h">🗨 评论区 <small class="cm-status">● 实时</small><em class="cm-count"></em></div><div class="cm-list"></div></div>`;
 }
 
-const cmRow = (c) => `<div class="cm-av">${c.av}</div><div><b>${esc(c.who)}</b><span class="cm-badge"></span><p>${esc(c.t)}</p><small class="cm-reply"></small></div><i>👍 <span class="cm-like">0</span></i>`;
+const cmRow = (c) => productEraOf(state.design) === 'keypad'
+  ? `<div class="cm-av">${c.av}</div><div><b>${esc(c.who)}</b> <small>#${c.i != null ? c.i + 1 : '?'}楼</small><span class="cm-badge"></span><p>${esc(c.t)}</p><small class="cm-reply"></small></div><i>顶 <span class="cm-like">0</span></i>`
+  : `<div class="cm-av">${c.av}</div><div><b>${esc(c.who)}</b><span class="cm-badge"></span><p>${esc(c.t)}</p><small class="cm-reply"></small></div><i>👍 <span class="cm-like">0</span></i>`;
 
 /** 评论慢慢涌进来，点赞往上涨，按点赞重新排序；最后形成热评 */
 function liveComments(box, instant) {
@@ -1734,7 +1755,7 @@ function liveComments(box, instant) {
     reorder(false);
     [...data].sort((a, b) => b.like - a.like).slice(0, 3).forEach((c) => {
       c.el.classList.add('hot');
-      c.el.querySelector('.cm-badge').textContent = '🔥 热评';
+      c.el.querySelector('.cm-badge').textContent = productEraOf(state.design) === 'keypad' ? '精华' : '🔥 热评';
     });
     status.textContent = '热评已形成';
     status.classList.add('done');
