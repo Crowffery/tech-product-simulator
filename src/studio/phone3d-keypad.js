@@ -247,25 +247,28 @@ function earpiece(group, { cy, z, w = 12 }) {
  * 导航区 + 数字键盘：键帽是胶囊形，按「微笑弧线」排布（越靠两侧越高）；
  * etched = 超薄机型的金属蚀刻平板键盘。
  */
-function keypadFace(group, { padW, top, bottom, z, elder = false, etched = false, smile = 1, backHex, navStyle = 'oval' }) {
+function keypadFace(group, { padW, top, bottom, z, elder = false, etched = false, smile = 1, backHex, navStyle = 'oval', noNav = false }) {
   const keyMat = etched
     ? new THREE.MeshStandardMaterial({ color: shade(backHex, -0.05), metalness: 0.85, roughness: 0.28, envMapIntensity: 1.2 })
     : new THREE.MeshPhysicalMaterial({ color: elder ? 0x3a3f48 : 0x2a2d34, roughness: 0.42, clearcoat: 0.4, clearcoatRoughness: 0.3 });
   const keyTopMat = etched ? keyMat : new THREE.MeshPhysicalMaterial({ color: elder ? 0x4b515c : 0x3a3d46, roughness: 0.32, clearcoat: 0.6, clearcoatRoughness: 0.2 });
   // —— 导航区：中间圆 / 椭圆方向键，两侧弧形软键，下方接听 / 挂断 ——
-  const navH = elder ? 16 : 13;
+  const navH = noNav ? 0 : elder ? 16 : 13;
   const navY = top - navH / 2;
   const navRx = elder ? 7 : 5.8;
   const navRy = navStyle === 'joystick' ? navRx : navRx * 0.78;
   const navMat = new THREE.MeshPhysicalMaterial({ color: etched ? shade(backHex, 0.1) : 0x2e323a, metalness: etched ? 0.8 : 0.1, roughness: 0.3, clearcoat: 0.6 });
+  const navParts = new THREE.Group();
+  navParts.visible = !noNav;
+  group.add(navParts);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(navRx, 0.9, 10, 40), navMat);
   ring.scale.set(1, navRy / navRx, 0.6);
   ring.position.set(0, navY, z + 0.6);
-  group.add(ring);
+  navParts.add(ring);
   const center = new THREE.Mesh(new THREE.SphereGeometry(navStyle === 'joystick' ? 2.2 : navRx * 0.45, 20, 12), new THREE.MeshPhysicalMaterial({ color: navStyle === 'joystick' ? 0x9aa3ad : 0x50565f, metalness: 0.5, roughness: 0.25, clearcoat: 0.8 }));
   center.scale.set(1, navStyle === 'joystick' ? 1 : navRy / navRx, 0.45);
   center.position.set(0, navY, z + 0.8);
-  group.add(center);
+  navParts.add(center);
   const wing = (side, color, dy) => {
     const s = new THREE.Shape();
     const x0 = side * (navRx + 2.2);
@@ -280,7 +283,7 @@ function keypadFace(group, { padW, top, bottom, z, elder = false, etched = false
       color,
     );
     m.position.set(0, navY, z + 0.15);
-    group.add(m);
+    navParts.add(m);
   };
   const soft = new THREE.MeshPhysicalMaterial({ color: etched ? shade(backHex, 0.06) : 0x2b2e36, metalness: etched ? 0.8 : 0, roughness: 0.35, clearcoat: 0.5 });
   const green = new THREE.MeshPhysicalMaterial({ color: 0x27ae60, roughness: 0.35, clearcoat: 0.5, emissive: 0x145a32, emissiveIntensity: 0.25 });
@@ -298,7 +301,7 @@ function keypadFace(group, { padW, top, bottom, z, elder = false, etched = false
   const rows = 4;
   const gapX = elder ? 2.4 : 1.4;
   const gapY = elder ? 2.2 : 1.3;
-  const gridTop = top - navH - (elder ? 3 : 2.4);
+  const gridTop = top - navH - (noNav ? 0 : elder ? 3 : 2.4);
   const gridBottom = bottom;
   const gridH = gridTop - gridBottom;
   const kw = (padW - gapX * (cols - 1)) / cols;
@@ -332,7 +335,8 @@ function keypadFace(group, { padW, top, bottom, z, elder = false, etched = false
       const v0 = 1 - (idx + 1) / labels.length;
       const v1 = 1 - idx / labels.length;
       for (let i = 0; i < uvs.count; i++) uvs.setXY(i, uvs.getX(i), v0 + uvs.getY(i) * (v1 - v0));
-      label.position.set(kx, ky, z + 0.05 + keyDepth + (etched ? 0.08 : 0.35));
+      // 贴在键帽顶面（顶面 = 挤出深度 + 倒角厚度）
+      label.position.set(kx, ky, z + 0.05 + keyDepth + (etched ? 0.07 : elder ? 0.42 : 0.32));
       keypadGroup.add(label);
     }
   }
@@ -450,17 +454,20 @@ export function buildKeypadPhone(design, { hdScreen = false, liveScreen = null }
   }
 
   // —— 前脸 ——
+  // 舞台会把 front 层整体前移 t/2、back 层后移 t/2（拆解动画用），这里抵消掉，部件才贴在机身上
   const fa = new THREE.Group();
+  fa.position.z = -t / 2;
   layers.front.add(fa);
   faceplate(fa, w, h, profile, zf, faceHex, { matId, chrome: shapeId === 'waist' || matId === 2 });
   const fz = zf + 0.5;
   const dispW = w * (elder ? 0.66 : 0.6);
   const dispH = h * (elder ? 0.24 : 0.25);
-  const screenY = h / 2 - dispH / 2 - (elder ? 15 : 14);
+  const screenY = h * 0.44 - 8 - dispH / 2 - (elder ? 2 : 1.5);
   const map = liveScreen?.texture || standbyTexture(design, { elder });
   screenWindow(fa, { cy: screenY, dw: dispW, dh: dispH, z: fz, map, arch: shapeId === 'pebble' ? 0.22 : 0.12, screenMaps, anchors });
   if (liveScreen) anim.push((now) => liveScreen.paint(now));
-  const grilleY = h / 2 - 7;
+  // 听筒放在前脸面板之内（面板高约 0.88h）
+  const grilleY = h * 0.44 - 4;
   earpiece(fa, { cy: grilleY, z: fz + 0.1, w: elder ? 14 : 12 });
 
   const padW = w * (elder ? 0.7 : 0.7);
@@ -513,9 +520,9 @@ export function buildKeypadPhone(design, { hdScreen = false, liveScreen = null }
   // —— 后盖细节 ——
   const back = layers.back;
   back.rotation.y = Math.PI;
-  backDetails(back, { w, h, design, camY: h * 0.3, z: t / 2, elder });
+  backDetails(back, { w, h, design, camY: h * 0.3, z: 0, elder });
   anchors.back = new THREE.Object3D();
-  anchors.back.position.set(0, 0, t / 2);
+  anchors.back.position.set(0, 0, 0.2);
   back.add(anchors.back);
 
   // —— 内层（拆解可见）——
@@ -570,7 +577,7 @@ function buildFlipPhone(design, { liveScreen = null } = {}) {
   const slim = shapeId === 'slim';
   const w = slim ? 53 : 48;
   const L = slim ? 52 : 50; // 下盖长
-  const U = slim ? 52 : 50; // 上盖长
+  const U = slim ? 51 : 49; // 上盖长（合上时略短于下盖，不会伸出来）
   const tAll = slim ? 13.9 : Math.max(phys.thickness + 2, 19);
   const tL = tAll * 0.52;
   const tU = tAll - tL;
@@ -642,7 +649,7 @@ function buildFlipPhone(design, { liveScreen = null } = {}) {
   const lid = new THREE.Group();
   pivot.add(lid);
   const lidInner = new THREE.Group();
-  lidInner.position.set(0, U / 2 + hingeR * 0.4, -tU / 2);
+  lidInner.position.set(0, U / 2 + 0.5, -tU / 2);
   lid.add(lidInner);
   const lidProfile = slim ? PROFILES.slim : PROFILES.clamLid;
   lidInner.add(pillowBody(w, U, tU, lidProfile, bodyMaterial(matId, backHex), { bevel: slim ? 0.3 : 0.38 }));
@@ -744,7 +751,8 @@ function buildSliderPhone(design, { liveScreen = null } = {}) {
   const pad = new THREE.Mesh(new THREE.ShapeGeometry(roundedRectShape(w * 0.8, h * 0.44, 4, 0, -h * 0.24), 12), new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.5 }));
   pad.position.z = kz;
   keys.add(pad);
-  const { gridTop, gridBottom } = keypadFace(keys, { padW: w * 0.66, top: -h * 0.02 + 13, bottom: -h / 2 + 8, z: kz, backHex });
+  // 下片只有数字键（导航键在上片）
+  const { gridTop, gridBottom } = keypadFace(keys, { padW: w * 0.66, top: -h * 0.02 + 2, bottom: -h / 2 + 8, z: kz, backHex, noNav: true });
   anchors.keypad = new THREE.Object3D();
   anchors.keypad.position.set(0, (gridTop + gridBottom) / 2, kz + 1);
   lower.add(anchors.keypad);
@@ -755,7 +763,8 @@ function buildSliderPhone(design, { liveScreen = null } = {}) {
   backDetails(back, { w, h, design, camY: h * 0.3, z: tL / 2 });
 
   const upper = new THREE.Group();
-  upper.position.z = tL / 2;
+  // 上片中心在世界 z = tL/2（叠在下片正面上）；front 层自带 +tAll/2 偏移，需扣掉
+  upper.position.z = tL / 2 - tAll / 2;
   layers.front.add(upper);
   upper.add(pillowBody(w - 1, h * 0.98, tU, profile, bodyMaterial(matId, backHex)));
   const uz = tU / 2 + 0.05;
@@ -779,7 +788,11 @@ function buildSliderPhone(design, { liveScreen = null } = {}) {
     }),
   );
 
-  layers.inner.add(new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, h * 0.3, 3), new THREE.MeshStandardMaterial({ color: 0x1e7a46 })));
+  // 电路板藏在下片里面（只在拆解时露出）
+  const pcb = new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, h * 0.3, 1.2), new THREE.MeshStandardMaterial({ color: 0x1e7a46 }));
+  pcb.position.z = -tU / 2 - tL * 0.15;
+  layers.inner.add(pcb);
+  anchors.chip = pcb;
   root.userData.formFactor = 'slider';
   root.userData.keypadChassis = true;
   root.userData.keypadArchetype = 'slider';
@@ -827,7 +840,7 @@ function buildSwivelPhone(design, { liveScreen = null } = {}) {
   const px = -w / 2 + 7;
   const py = h / 2 - 7;
   const pivot = new THREE.Group();
-  pivot.position.set(px, py, tL / 2);
+  pivot.position.set(px, py, tL / 2 - tAll / 2);
   layers.front.add(pivot);
   const swivel = new THREE.Group();
   swivel.position.set(-px, -py, 0);
@@ -841,7 +854,7 @@ function buildSwivelPhone(design, { liveScreen = null } = {}) {
   earpiece(swivel, { cy: h / 2 - 7, z: sz + 0.5, w: 12 });
   const knob = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.8, 28), chromeMat());
   knob.rotation.x = Math.PI / 2;
-  knob.position.set(px, py, tL / 2 + tU + 0.2);
+  knob.position.set(px, py, tL / 2 + tU / 2 + 0.25 - tAll / 2);
   layers.front.add(knob);
 
   anim.push(
