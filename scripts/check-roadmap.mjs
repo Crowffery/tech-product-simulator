@@ -118,6 +118,12 @@ function check(ver, item, cond, how) {
   check('v0.11', '低现金入口更烫', ui.includes("finHot") && ui.includes("hud-btn finance") && cashPressure({ cash: 40 }) !== 'ok', 'HUD finance.hot + cashPressure');
   check('v0.11', '天使兜底不替代贷款', finance.includes('不替代贷款') && ui.includes('天使兜底仍是'), 'finance/ui 文案与分流');
 
+  // v0.11.1 hotfix：功能机/老年机 3D 机身必须读 formFactor（此前仅 thickAdd，轮廓仍是现代直板）
+  const keypadSrc = readFileSync(new URL('../src/studio/phone3d-keypad.js', import.meta.url), 'utf8');
+  check('v0.11.1', 'phone3d reads formFactor', phone3d.includes('formFactor') && phone3d.includes('buildKeypadPhone') && phone3d.includes('isKeypadForm'), 'buildPhone 分派 formFactor→keypad');
+  check('v0.11.1', 'feature keypad', keypadSrc.includes('keypadChassis') && keypadSrc.includes('labels') && keypadSrc.includes("1"), '功能机 T9/数字键盘机身');
+  check('v0.11.1', 'elder SOS/big keys', keypadSrc.includes('SOS') && keypadSrc.includes('hasSos') && (keypadSrc.includes('keyScale') || keypadSrc.includes('1.55')), '老年机 SOS + 大键');
+
   st.cash = 50;
   st.month = 8;
   st.phase = 'dev';

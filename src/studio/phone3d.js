@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { CORNERS, SCREEN_FORMS, physical, tier } from './parts.js';
 import { createLiveScreen } from './screenOS.js';
+import { buildKeypadPhone, isKeypadForm } from './phone3d-keypad.js';
 
 const FX = 1; // 不参与法线描边的图层（粒子、光柱、线条）
 
@@ -591,7 +592,7 @@ function cameraLayout(layoutId, w, h, lensCount, tierId) {
 
 /** 概念件聚焦：[x 占宽比, y 占高比, 面 F/B/E, 'lens'=跟随主摄, 视角] */
 export const SPOT = {
-  keyboard: [0, -0.3, 'F', 0, 'front'], slider: [0, 0.2, 'F', 0, 'front'], swivel: [0, 0, 'F', 0, 'front'], fold: [0, 0, 'F', 0, 'front'],
+  keypad: [0, -0.22, 'F', 0, 'front'], keyboard: [0, -0.3, 'F', 0, 'front'], slider: [0, 0.2, 'F', 0, 'front'], swivel: [0, 0, 'F', 0, 'front'], fold: [0, 0, 'F', 0, 'front'],
   trifold: [0, 0, 'F', 0, 'front'], rollable: [0.45, 0, 'F', 0, 'front'], popup: [-0.18, 0.56, 'E', 0, 'topfront'], stylus: [0.39, -0.55, 'E', 0, 'bottom'],
   projector: [0, 0.5, 'E', 0, 'top'], holo: [0, 0.35, 'F', 0, 'hero'], facelock: [0, 0.45, 'F', 0, 'front'], udc: [0, 0.42, 'F', 0, 'front'],
   paper: [0, 0, 'F', 0, 'front'], privacy: [0, 0, 'F', 0, 'front'], ultrasonic: [0, -0.3, 'F', 0, 'front'],
@@ -607,6 +608,11 @@ export const SPOT = {
 
 export function buildPhone(design, { hdScreen = false, liveScreen = null } = {}) {
   const phys = physical(design);
+  // v0.11.1：功能机 / 老年机走独立按键机身（不依赖 keyboard 概念件）
+  const ff = design.formFactor || phys.formFactor || 'thick';
+  if (isKeypadForm(ff)) {
+    return buildKeypadPhone(design, { hdScreen, liveScreen });
+  }
   const { w, h, thickness: t } = phys;
   const corner = CORNERS[design.corner] || CORNERS[1];
   const b = Math.min(corner.bevel, t / 2 - 0.5);

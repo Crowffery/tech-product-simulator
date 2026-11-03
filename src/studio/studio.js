@@ -889,6 +889,8 @@ export function createStudio(root, opts = {}) {
         toast(`形态：${formOf(d.ff).name} — ${formOf(d.ff).desc}`);
         if (formOf(d.ff).fold && !exploded) {
           requestAnimationFrame(() => stage?.spotlight('fold', formOf(d.ff).name));
+        } else if ((d.ff === 'feature' || d.ff === 'elder') && !exploded) {
+          requestAnimationFrame(() => stage?.spotlight('keypad', formOf(d.ff).name));
         }
       } else if (d.pos) {
         sfx.click();
