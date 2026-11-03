@@ -817,13 +817,29 @@ const SCENES = {
     s.sky(0, 70, d.month || 1);
     // 街对面楼
     for (let i = 0; i < 8; i++) s.rect(i * 32, 20 + hash(i) * 20, 30, 60, i % 2 ? '#aab7b8' : '#99a3a4');
-    // 店面
+    // 店面（按键时代：运营商营业厅，绿色门头 + 玻璃柜台 + 价签）
     const brand = d.color || '#e67e22';
-    s.rect(30, 30, 180, 76, '#fdfefe');
-    s.rect(26, 24, 188, 12, brand);
-    s.rect(26, 24, 188, 2, shade(brand, 0.35));
+    const carrier = !!d.keypad;
+    s.rect(30, 30, 180, 76, carrier ? '#f4f6f0' : '#fdfefe');
+    s.rect(26, 24, 188, 12, carrier ? '#2e7d32' : brand);
+    s.rect(26, 24, 188, 2, carrier ? '#66bb6a' : shade(brand, 0.35));
+    if (carrier) {
+      // 门头上的「营业厅」白色块字 + 运营商标志
+      s.rect(34, 27, 8, 7, '#fff');
+      s.rect(36, 29, 4, 3, '#2e7d32');
+      for (let i = 0; i < 5; i++) s.rect(50 + i * 9, 28, 7, 5, '#e8f5e9');
+      // 「存话费送手机」红色海报
+      s.rect(196, 40, 12, 30, '#c0392b');
+      for (let i = 0; i < 5; i++) s.rect(198, 43 + i * 5, 8, 3, '#f9e79f');
+    }
     s.rect(40, 42, 70, 50, '#d6eaf8');
     s.rect(130, 42, 70, 50, '#d6eaf8');
+    if (carrier) {
+      // 玻璃柜台
+      s.rect(132, 78, 66, 14, '#aed6f1');
+      s.rect(132, 78, 66, 2, '#ecf0f1');
+      s.rect(132, 92, 66, 2, '#7f8c8d');
+    }
     // 橱窗海报
     if (!d.hidePhone) s.phone(64, 48, 16, 28, brand, { concepts: d.concepts || [], formFactor: d.formFactor, open: Math.sin(s.t * 0.85) > 0 ? 1 : 0 });
     s.rect(110, 46, 20, 60, '#7f8c8d');
@@ -838,7 +854,10 @@ const SCENES = {
         if (hash(i) > 0.5) s.rect(x + 1, y, 3, 1, '#ecf0f1');
       }
     } else {
-      for (let i = 0; i < 4; i++) s.phone(138 + i * 15, 70, 10, 16, i % 2 ? brand : shade(brand, -0.3), { concepts: d.concepts || [], formFactor: d.formFactor, open: 0 });
+      for (let i = 0; i < 4; i++) {
+        s.phone(138 + i * 15, carrier ? 79 : 70, carrier ? 8 : 10, carrier ? 12 : 16, i % 2 ? brand : shade(brand, -0.3), { concepts: d.concepts || [], formFactor: d.formFactor, open: 0 });
+        if (carrier) s.rect(138 + i * 15, 73, 8, 4, i % 2 ? '#f9e79f' : '#fdfefe');
+      }
     }
     s.rect(0, 106, W, 4, '#95a5a6');
     s.rect(0, 110, W, 40, '#7f8c8d');

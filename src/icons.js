@@ -641,6 +641,11 @@ const CONCEPT_ICON = {
   fold: 'phone', trifold: 'phone', projector: 'spark', holo: 'spark',
   fastcharge: 'battery', ip68: 'drop', periscope: 'cam', oneinch: 'cam',
   ai: 'spark', jack: 'note', titanium: 'gem', ceramic: 'gem',
+  // 按键时代
+  torch: 'bulb', fm: 'speaker', irda: 'spark', mp3: 'note', loudspeaker: 'speaker', superstandby: 'battery', mms: 'news',
+  microsd: 'book', recorder: 'mic', camflash: 'bulb', dualsim: 'phone', colorshell: 'paint', whipant: 'rocket', marquee: 'star',
+  callflash: 'bulb', java: 'dice', bt: 'spark', rugged: 'gem', kstylus: 'paint', swivelcam: 'cam', bizcard: 'tag',
+  mobiletv: 'news', fingerprint: 'lock', videocall: 'cam',
 };
 
 /** 概念件展示用图标（渲染层，替代 emoji） */

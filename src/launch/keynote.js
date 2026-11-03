@@ -603,6 +603,7 @@ export function buildSmartKeynote(ctx) {
     screen: 'home',
     light: opts.light || 'brand',
     ms: 3600,
+    film: quick ? null : { name: 'material', data: { color: d.color, kind, name: matName, sub: kind === 'metal' ? `${C.has('titanium') || d.matSub === 'ti' ? '比不锈钢轻 45%' : '航空级铝材'} · CNC 一体精雕` : kind === 'glass' ? '康宁级玻璃 · 一抹流光' : kind === 'leather' ? '亲肤素皮 · 越用越有味道' : '多彩机身 · 耐摔耐磨' } },
   });
 
   // 材质特写（多一个状态）
@@ -634,6 +635,7 @@ export function buildSmartKeynote(ctx) {
       pose: camPose('side', 'push', { spin: 0, push: 1.2 }, cam),
       screen: 'home',
       ms: 3000,
+      film: quick ? null : { name: 'thin', data: { mm: phys.thickness, color: d.color } },
     });
   }
 
@@ -653,6 +655,7 @@ export function buildSmartKeynote(ctx) {
       pose: camPose('back', 'orbit', { spin: 0.45 }, cam),
       explode: true,
       screen: 'chip',
+      film: quick ? null : { name: 'chip', data: { chip: cs.label, bench: cs.bench } },
       screenPayload: {
         label: cs.label,
         score: cs.bench,
@@ -703,6 +706,7 @@ export function buildSmartKeynote(ctx) {
         pose: camPose('front', 'push', { spin: 0, push: 1.55 }, cam),
         screen: 'scrollHz',
         screenPayload: { hz: scr >= 1 ? 120 : 90 },
+        film: quick ? null : { name: 'display', data: { hz: scr >= 1 ? 120 : 90, nits: scr === 2 ? 3000 : 0 } },
         ms: 3400,
       });
     }
@@ -740,6 +744,7 @@ export function buildSmartKeynote(ctx) {
       sfx: 'shutter',
       screen: 'camera',
       ms: 3600,
+      film: quick ? null : { name: 'camera', data: { zoom: C.has('periscope') ? 10 : d.parts.camera === 2 ? 5 : 3, cap: camCap, title: C.has('oneinch') ? '一英寸大底' : d.parts.camera === 2 ? '2 亿像素三摄' : '5000 万主摄' } },
     });
     if (!quick && camCap >= 75) {
       out.push({
@@ -772,6 +777,7 @@ export function buildSmartKeynote(ctx) {
       pose: camPose('hero', 'low', { spin: 0.15 }, cam),
       screen: 'battery',
       screenPayload: { days, pct: 96 },
+      film: quick ? null : { name: 'battery', data: { days } },
       ms: 3200,
     });
   }
@@ -786,6 +792,7 @@ export function buildSmartKeynote(ctx) {
       mood: 'good',
       pose: camPose('front', 'bottom', { spin: 0, push: 0.9 }, cam),
       screen: 'charge',
+      film: { name: 'charge', data: {} },
       ms: 3200,
     });
   }
@@ -800,6 +807,7 @@ export function buildSmartKeynote(ctx) {
       mood: 'good',
       pose: camPose('front', 'push', { spin: 0.12, push: 1.25 }, cam),
       screen: 'ai',
+      film: { name: 'concept', data: { id: 'ai', icon: '🤖', name: '端侧 AI', desc: '离线大模型助手' } },
       ms: 3200,
     });
   }
@@ -840,6 +848,7 @@ export function buildSmartKeynote(ctx) {
         spotLabel: c.id === 'fold' || c.id === 'trifold' ? c.name : undefined,
         screen: c.cat === 'cam' ? 'camera' : 'home',
         ms: 3000,
+        film: { name: 'concept', data: { id: c.id, icon: c.icon, name: c.name, desc: c.desc } },
       });
     });
 
@@ -865,6 +874,7 @@ export function buildSmartKeynote(ctx) {
         spotLabel: c.id === 'fold' || c.id === 'trifold' ? c.name : undefined,
         screen: c.id === 'ai' ? 'ai' : 'home',
         ms: 3400,
+        film: { name: 'concept', data: { id: c.id, icon: c.icon, name: c.name, desc: c.desc, first: true } },
       });
     });
     out.push({

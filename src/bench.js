@@ -130,39 +130,63 @@ const DRAW = {
   },
   drop(g, t) {
     g.fillStyle = '#1a1408'; g.fillRect(0, 0, W, H);
-    const y = 20 + (t % 1.5) * 80;
-    g.fillStyle = '#3a3d46'; g.fillRect(100, y, 40, 55);
-    g.fillStyle = '#9bbc0f'; g.fillRect(108, y + 6, 24, 16);
-    g.fillStyle = '#f5b041'; g.font = 'bold 10px monospace'; g.fillText('1.5m', 8, 14);
+    g.fillStyle = '#3e2c1a'; g.fillRect(0, 112, W, 23);
+    g.strokeStyle = 'rgba(255,255,255,.3)'; g.beginPath(); g.moveTo(30, 12); g.lineTo(30, 112); g.stroke();
+    g.fillStyle = '#ecf0f1'; g.font = 'bold 9px monospace'; g.fillText('1.5m', 34, 18);
+    const ph = (t % 1.5) / 1.5;
+    const fall = Math.min(1, ph / 0.55);
+    const bounce = ph > 0.55 ? Math.abs(Math.sin((ph - 0.55) * 18)) * Math.exp(-(ph - 0.55) * 8) * 18 : 0;
+    const y = 14 + fall * fall * 58 - bounce;
+    g.save(); g.translate(120, y + 20); g.rotate(fall * 0.8);
+    g.fillStyle = '#3a3d46'; g.fillRect(-11, -20, 22, 40);
+    g.fillStyle = '#9bbc0f'; g.fillRect(-8, -16, 16, 12);
+    g.fillStyle = '#6b7280'; for (let i = 0; i < 6; i++) g.fillRect(-7 + (i % 3) * 5, 0 + Math.floor(i / 3) * 6, 4, 4);
+    g.restore();
+    if (ph > 0.55 && ph < 0.75) { g.fillStyle = 'rgba(245,176,65,.5)'; g.fillRect(96, 108, 48, 4); }
+    g.fillStyle = '#82e0aa'; g.font = 'bold 9px monospace'; g.textAlign = 'right';
+    g.fillText(`第 ${1 + Math.floor(t / 1.5)} 次 · 正常开机`, W - 8, 18); g.textAlign = 'left';
   },
   standby(g, t) {
     g.fillStyle = '#0a1a20'; g.fillRect(0, 0, W, H);
-    const day = Math.min(20, Math.floor(t * 5));
-    g.fillStyle = '#7ec8ff'; g.font = 'bold 16px monospace'; g.textAlign = 'center';
-    g.fillText(`待机 ${day} 天`, W / 2, H / 2);
-    g.textAlign = 'left';
+    const day = Math.min(20, 1 + Math.floor(t * 9));
+    g.fillStyle = '#ecf0f1'; g.fillRect(36, 30, 64, 72);
+    g.fillStyle = '#c0392b'; g.fillRect(36, 30, 64, 16);
+    g.fillStyle = '#fff'; g.font = 'bold 9px monospace'; g.textAlign = 'center'; g.fillText('待机第', 68, 41);
+    g.fillStyle = '#2c3e50'; g.font = 'bold 28px monospace'; g.fillText(String(day), 68, 86);
+    g.strokeStyle = '#ecf0f1'; g.strokeRect(140, 40, 36, 60); g.fillStyle = '#ecf0f1'; g.fillRect(152, 36, 12, 4);
+    const left = Math.max(0, 3 - Math.floor(day / 7));
+    for (let i = 0; i < 3; i++) { g.fillStyle = i < left ? '#2ecc71' : '#1a3040'; g.fillRect(144, 84 - i * 18, 28, 14); }
+    g.fillStyle = '#7ec8ff'; g.font = 'bold 10px monospace'; g.fillText('电量', 158, 116); g.textAlign = 'left';
   },
   call(g, t) {
     g.fillStyle = '#102010'; g.fillRect(0, 0, W, H);
-    for (let i = 0; i < 20; i++) {
-      const h = 10 + Math.abs(Math.sin(t * 6 + i)) * 40;
-      g.fillStyle = '#82e0aa'; g.fillRect(20 + i * 10, 100 - h, 6, h);
+    g.fillStyle = '#c6e48b'; g.font = 'bold 10px monospace'; g.fillText('通话中 00:' + String(Math.floor(t * 20) % 60).padStart(2, '0'), 10, 18);
+    for (let i = 0; i < 22; i++) {
+      const h = 6 + Math.abs(Math.sin(t * 7 + i * 0.6) * Math.cos(t * 3 + i)) * 46;
+      g.fillStyle = i % 2 ? '#82e0aa' : '#58d68d'; g.fillRect(12 + i * 10, 96 - h, 6, h * 2 - h);
     }
+    g.fillStyle = 'rgba(255,255,255,.4)'; g.fillRect(10, 96, W - 20, 1);
+    g.fillStyle = '#c6e48b'; g.fillText('杂音 低 · 回声 无', 10, 122);
   },
   signal(g, t) {
     g.fillStyle = '#0a1520'; g.fillRect(0, 0, W, H);
+    const spots = ['地下车库', '电梯', '山区'];
+    const k = Math.min(2, Math.floor(t / 0.5));
+    g.fillStyle = '#aed6f1'; g.font = 'bold 10px monospace'; g.fillText(`测试点：${spots[k]}`, 10, 18);
     for (let i = 0; i < 5; i++) {
-      const on = Math.sin(t * 3 + i) > -0.3;
+      const on = i < 5 - k - (Math.sin(t * 6) > 0.6 ? 1 : 0);
       g.fillStyle = on ? '#5dade2' : '#1a3040';
-      g.fillRect(40 + i * 30, 90 - i * 12, 20, 12 + i * 12);
+      g.fillRect(60 + i * 26, 100 - i * 14, 18, 14 + i * 14);
     }
   },
   keylife(g, t) {
     g.fillStyle = '#181818'; g.fillRect(0, 0, W, H);
-    const n = Math.floor(t * 8000);
-    g.fillStyle = '#f5b041'; g.font = 'bold 14px monospace'; g.textAlign = 'center';
-    g.fillText(`${n.toLocaleString()} 次`, W / 2, H / 2);
-    g.font = '10px monospace'; g.fillText('按键寿命', W / 2, H / 2 + 18);
+    const n = Math.min(100000, Math.floor(t * 70000));
+    const down = Math.sin(t * 40) > 0;
+    g.fillStyle = '#6b7280'; g.fillRect(100, 70 + (down ? 4 : 0), 40, 24);
+    g.fillStyle = '#ddd'; g.font = 'bold 14px monospace'; g.textAlign = 'center'; g.fillText('5', 120, 88 + (down ? 4 : 0));
+    g.fillStyle = '#9ca3af'; g.fillRect(116, 20, 8, 46 + (down ? 4 : 0));
+    g.fillStyle = '#f5b041'; g.font = 'bold 12px monospace'; g.fillText(`${n.toLocaleString()} 次`, W / 2, 118);
     g.textAlign = 'left';
   },
   mem(g, t) {
@@ -202,6 +226,7 @@ export function openBench(opts) {
   const startLabel = keypad ? '开始测试' : '开始跑分';
 
   const { chipLabel, phoneName, color, theory, ratio, rivals, heat = 1, rewardable, onDone, play = () => {} } = opts;
+  const fmtScore = (v) => (keypad ? `${Math.round(v)} 分` : `${(v / 10000).toFixed(v >= 1e6 ? 0 : 1)}万`);
   const ov = document.createElement('div');
   ov.className = 'bench-ov';
   ov.innerHTML = `<div class="bench kbox">
@@ -252,16 +277,20 @@ export function openBench(opts) {
 
   let mode = 'idle';
   const tune = Math.round(ratio * 100);
-  body.innerHTML = `<div class="bench-info"><div><small>测试机</small><b>${phoneName}</b></div><div><small>芯片</small><b>${chipLabel}</b></div>
+  body.innerHTML = keypad
+    ? `<div class="bench-info"><div><small>测试机</small><b>${phoneName}</b></div><div><small>基带</small><b>${chipLabel}</b></div>
+      <div><small>耐用调校</small><b>${tune}%</b></div></div>
+    <p class="bench-tip">${tune < 60 ? '⚠ 耐用调校才做了一半，现在测会有几项不过关。' : tune < 95 ? '还有提升空间。' : '调校已经做满，可以送检了。'}${rewardable ? '<br/>本代第一份测试报告会登在《电脑报》上。' : ''}</p>`
+    : `<div class="bench-info"><div><small>测试机</small><b>${phoneName}</b></div><div><small>芯片</small><b>${chipLabel}</b></div>
       <div><small>性能调校</small><b>${tune}%</b></div></div>
-    <p class="bench-tip">${tune < 60 ? '⚠ 调校才做了一半，现在跑分会偏低。' : tune < 95 ? '调校还没做满，分数还有上升空间。' : '调校已经做满，可以冲榜了。'}${rewardable ? '<br/>本代第一次正式跑分会被晒到数码论坛。' : ''}</p>
-    <button type="button" class="primary big bench-go" data-b="go">▶ ${startLabel}</button>`;
+    <p class="bench-tip">${tune < 60 ? '⚠ 调校才做了一半，现在跑分会偏低。' : tune < 95 ? '调校还没做满，分数还有上升空间。' : '调校已经做满，可以冲榜了。'}${rewardable ? '<br/>本代第一次正式跑分会被晒到数码论坛。' : ''}</p>`;
+  body.insertAdjacentHTML('beforeend', `<button type="button" class="primary big bench-go" data-b="go">▶ ${startLabel}</button>`);
   idle();
 
   const run = () => {
     mode = 'run';
     play('benchStart');
-    tempEl.hidden = false;
+    tempEl.hidden = keypad;
     const final = Math.round((theory * (0.55 + 0.45 * ratio) * (0.98 + Math.random() * 0.04)) / 100) * 100;
     const parts = ACTIVE_SUBS.map((s) => Math.round(final * s.w));
     parts[parts.length - 1] += final - parts.reduce((a, b) => a + b, 0);
@@ -278,7 +307,7 @@ export function openBench(opts) {
       DRAW[ACTIVE_SUBS[idx].id](g, local);
       const done = parts.slice(0, idx).reduce((a, b) => a + b, 0);
       const cur = el >= SUB_MS * ACTIVE_SUBS.length ? final : Math.round(done + parts[idx] * k);
-      totalEl.textContent = cur.toLocaleString('en-US');
+      totalEl.textContent = keypad ? String(cur) : cur.toLocaleString('en-US');
       tempEl.querySelector('b').textContent = Math.round(32 + (maxTemp - 32) * Math.min(1, el / (SUB_MS * ACTIVE_SUBS.length)));
       if (idx !== lastIdx) {
         if (lastIdx >= 0) {
@@ -338,7 +367,7 @@ export function openBench(opts) {
       g.fillText(rank === 1 ? 'NO.1' : rank === 2 ? 'NO.2' : '…', W / 2, 74 + Math.sin(t * 3) * 3);
       g.fillStyle = '#ffe8b0';
       g.font = 'bold 11px sans-serif';
-      g.fillText(rank === 1 ? '遥遥领先！' : `同期第 ${rank} 名`, W / 2, 112);
+      g.fillText(rank === 1 ? (keypad ? '同价位第一' : '遥遥领先！') : `同期第 ${rank} 名`, W / 2, 112);
       g.textAlign = 'left';
       raf = requestAnimationFrame(loop);
     };
@@ -346,11 +375,13 @@ export function openBench(opts) {
     body.innerHTML = `<div class="bench-board">${all
       .map(
         (r, i) => `<div class="bb-row ${r.me ? 'me' : ''}" style="--d:${r.me ? 0.5 : i * 0.08}s"><span class="bb-rank">${i + 1}</span><span class="bb-n">${r.n}</span>
-          <i><b style="--w:${Math.round((r.v / max) * 100)}%"></b></i><em>${(r.v / 10000).toFixed(r.v >= 1e6 ? 0 : 1)}万</em></div>`,
+          <i><b style="--w:${Math.round((r.v / max) * 100)}%"></b></i><em>${fmtScore(r.v)}</em></div>`,
       )
       .join('')}</div>
-      <p class="bench-verdict">${rank === 1 ? '跑分截图在数码论坛刷屏，#遥遥领先# 冲上热搜。' : beaten > 0 ? `超过了 ${beaten} 款竞品，还不是第一。` : '被竞品全面压制，论坛开始玩梗了……'}${ratio < 0.95 ? '<br/><small>调校做满后还能再涨一截。</small>' : ''}</p>
-      <div class="bench-btns"><button type="button" data-b="again">↻ 再跑一次</button><button type="button" class="primary" data-b="close">收好成绩 ✓</button></div>`;
+      <p class="bench-verdict">${keypad
+        ? rank === 1 ? '测试报告登上《电脑报》，经销商开始打电话订货。' : beaten > 0 ? `超过了 ${beaten} 款同价位手机，还不是第一。` : '几项测试都不如同价位的竞品，经销商在观望。'
+        : rank === 1 ? '跑分截图在数码论坛刷屏，#遥遥领先# 冲上热搜。' : beaten > 0 ? `超过了 ${beaten} 款竞品，还不是第一。` : '被竞品全面压制，论坛开始玩梗了……'}${ratio < 0.95 ? `<br/><small>${keypad ? '耐用调校做满后还能再提高。' : '调校做满后还能再涨一截。'}</small>` : ''}</p>
+      <div class="bench-btns"><button type="button" data-b="again">↻ ${keypad ? '再测一次' : '再跑一次'}</button><button type="button" class="primary" data-b="close">收好成绩 ✓</button></div>`;
   };
 
   ov.addEventListener('click', (e) => {

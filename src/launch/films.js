@@ -1,4 +1,4 @@
-import { KEYPAD_FILMS } from './films-keypad.js';
+import { makeKeypadFilms } from './films-keypad.js';
 /**
  * 发布会「产品短片」：每个卖点一段全屏高清动画，学的是真实发布会的讲法——
  *   芯片：从机身推进到晶圆，电流沿电路跑进 CPU / GPU / NPU，核心依次点亮
@@ -915,5 +915,5 @@ export function createFilmLayer(host) {
   };
 }
 
-Object.assign(FILMS, KEYPAD_FILMS);
+Object.assign(FILMS, makeKeypadFilms({ type, vignette, glow, rr, ease, easeIO, seg, clamp, rand, rgba, mix, FONT }));
 export { FILMS };

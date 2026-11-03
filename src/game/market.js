@@ -27,8 +27,13 @@ export function shares(slots) {
 }
 
 /** 匹配度 0～1，与倍率 ×0.7～×1.15 */
-export function matchOf(slots, positioningId) {
-  const ideal = IDEAL[positioningId] || KEYPAD_IDEAL[positioningId] || IDEAL.mainstream;
+export function matchOf(slots, positioningId, { noCamera = false } = {}) {
+  let ideal = IDEAL[positioningId] || KEYPAD_IDEAL[positioningId] || IDEAL.mainstream;
+  if (noCamera && ideal.camera) {
+    // 没有摄像头的机型：拍照不参与配比，其余按比例放大
+    const rest = 100 - ideal.camera;
+    ideal = Object.fromEntries(Object.entries(ideal).map(([k, v]) => [k, k === 'camera' ? 0 : (v * 100) / rest]));
+  }
   const sh = shares(slots);
   const dist = SLOTS.reduce((a, s) => a + Math.abs(sh[s.id] - (ideal[s.id] || 20)), 0);
   const match = Math.max(0, 1 - dist / 100);
@@ -197,8 +202,8 @@ export const POS_BASE_PRICE = { flagship: 5999, pro: 6499, mainstream: 3799, min
 export const roundPrice = (v) => Math.max(999, Math.round(v / 100) * 100 - 1);
 
 /** 价格越低，愿意掏钱的人群越大 */
-export function marketSize(price) {
-  return Math.max(0.45, Math.min(3.2, Math.pow(3999 / price, 1.3)));
+export function marketSize(price, ref = 3999) {
+  return Math.max(0.45, Math.min(3.2, Math.pow(ref / price, 1.3)));
 }
 
 /** 行业主流芯片代数：约 10 个月进一代 */

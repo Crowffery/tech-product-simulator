@@ -84,3 +84,37 @@ export function eraAllowsEvent(eras, worldEraId) {
 }
 
 export const KEYPAD_DEMAND_FORMS = ['feature', 'flip', 'slider', 'swivel'];
+
+/**
+ * 行业时钟：现代内容（芯片代数、竞品跑分 / 价格、现代概念件出现时间）都是按快速局 36 个月校准的。
+ * 编年模式下把「当前月」换算成快速局的等效月份，智能机萌芽 ≈ 快速局第 9 月，折叠兴起 ≈ 第 22 月。
+ */
+const CHRONICLE_TO_QUICK = [
+  [1, 1],
+  [19, 9],
+  [31, 10],
+  [36, 14],
+  [49, 22],
+  [54, 28],
+  [60, 36],
+];
+export function industryMonth(stateOrMonth, mode) {
+  const month = typeof stateOrMonth === 'object' ? stateOrMonth?.month || 1 : stateOrMonth || 1;
+  const m = mode || (typeof stateOrMonth === 'object' ? modeOf(stateOrMonth) : 'quick');
+  if (m !== 'chronicle') return month;
+  const P = CHRONICLE_TO_QUICK;
+  if (month >= P[P.length - 1][0]) return P[P.length - 1][1] + (month - P[P.length - 1][0]);
+  for (let i = 1; i < P.length; i++) {
+    const [a0, b0] = P[i - 1];
+    const [a1, b1] = P[i];
+    if (month <= a1) return Math.round(b0 + ((month - a0) / (a1 - a0)) * (b1 - b0));
+  }
+  return month;
+}
+
+/** 按键时钟：按键概念件按编年第 1–18 月校准；快速局按键时代只有 9 个月，换算成编年等效月份 */
+export function keypadMonth(stateOrMonth, mode) {
+  const month = typeof stateOrMonth === 'object' ? stateOrMonth?.month || 1 : stateOrMonth || 1;
+  const m = mode || (typeof stateOrMonth === 'object' ? modeOf(stateOrMonth) : 'quick');
+  return m === 'chronicle' ? month : month * 2;
+}

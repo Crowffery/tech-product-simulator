@@ -43,24 +43,24 @@ export const PRICE_BANDS = [
 export const SUPPLIERS = [
   {
     id: 'cheap',
-    name: '便宜不稳',
-    desc: '报价香，但事故多',
+    name: '小代工厂',
+    desc: '报价低 15%，但良品率和交期都不稳',
     costMul: 0.85,
     eventChance: 0.55,
     quality: 0.9,
   },
   {
     id: 'balanced',
-    name: '均衡之选',
-    desc: '中庸即正义',
+    name: '老牌代工厂',
+    desc: '价格适中，交货一般准时',
     costMul: 1.0,
     eventChance: 0.35,
     quality: 1.0,
   },
   {
     id: 'premium',
-    name: '贵但稳',
-    desc: '钱包瘦了，良率胖了',
+    name: '一线大厂',
+    desc: '贵 20%，良品率高、很少出事',
     costMul: 1.2,
     eventChance: 0.18,
     quality: 1.12,
@@ -68,9 +68,9 @@ export const SUPPLIERS = [
 ];
 
 export const STOCK_OPTS = [
-  { id: 'safe', name: '保守', mul: 0.7, note: '宁缺毋滥' },
-  { id: 'normal', name: '正常', mul: 1.0, note: '按直觉备' },
-  { id: 'aggressive', name: '激进', mul: 1.4, note: '仓库赌徒' },
+  { id: 'safe', name: '保守', mul: 0.7, note: '少备一点，宁可卖断货' },
+  { id: 'normal', name: '正常', mul: 1.0, note: '按市场部的预测备货' },
+  { id: 'aggressive', name: '激进', mul: 1.4, note: '多备四成，赌它大卖' },
 ];
 
 export const COMPANY_NAME_SEEDS = [

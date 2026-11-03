@@ -70,31 +70,61 @@ const DM_CONCEPT = {
 };
 
 const DM_KEYPAD = {
-  price: ['多少钱？', '营业厅有货吗', '求别太贵', '这个价能接受', '先问问价'],
-  wait: ['等营业厅开卖', '先问问爸妈意见', '等同学买了再看'],
-  buy: ['买了！', '给爸妈来一台', '冲营业厅', '这台我要了'],
-  look: ['键好大', '实体键真香', '外观朴实', '有年代感'],
-  standby: ['待机能撑多久', '一周一充？', '待机之王'],
-  chord: ['铃声好听吗', '64 和弦！', '换个彩铃'],
-  tough: ['耐不耐摔', '砸核桃级？', '工程塑料稳'],
-  signal: ['信号怎么样', '天线靠谱吗', '电梯里有信号吗'],
+  price: ['多少钱？', '营业厅什么时候有货', '别超过一千就行', '有没有合约机', '预存话费送不送'],
+  wait: ['等报纸上的测评', '先看看论坛怎么说', '等过年再换', '问问我爸意见'],
+  buy: ['明天就去营业厅', '给我爸也带一台', '这台我要了', '学校门口那家店会有吗'],
+  look: ['这颜色好看', '看着结实', '键盘手感怎么样', '能不能挂手机链'],
+  mono: ['单色屏省电', '黑白屏够用了'],
+  color: ['彩屏！', '能看彩信吗', '屏幕颜色真鲜'],
+  standby: ['待机多久？', '一礼拜一充就够了', '出差不用带充电器了'],
+  ring0: ['声音大不大', '在车上听得见吗'],
+  chord: ['铃声能自己换吗', '能下载铃声吗', '这铃声好听'],
+  tough: ['摔了会不会坏', '工地上用结实吗', '真能砸核桃？'],
+  signal: ['信号怎么样', '电梯里有信号吗', '农村能用吗'],
+  cam: ['能拍照？', '照片能传到电脑吗', '能发彩信吗'],
+  elder: ['给我妈买一台', '字够大吗', '老人会用吗', '有收音机吗'],
+  flip: ['翻盖帅', '翻盖的轴耐用吗'],
+  dual: ['双卡好', '两个号一部机'],
+  net: ['能上网？', '流量贵不贵', '能上 QQ 吗'],
+  music: ['能听歌吗', '能存几首歌', '有收音机吗'],
 };
+
+const DM_KEYPAD_SENDER = () => `13${Math.floor(Math.random() * 10)}****${String(1000 + Math.floor(Math.random() * 9000)).slice(1)}`;
+export { DM_KEYPAD_SENDER };
+
+function keypadIntents(design) {
+  const p = design.parts || {};
+  const C = new Set(design.concepts || []);
+  const out = ['price', 'wait', 'buy', 'look', 'standby', 'signal'];
+  out.push((p.screen ?? 0) === 0 ? 'mono' : 'color');
+  out.push((p.ringtone ?? 0) === 0 ? 'ring0' : 'chord');
+  if ((p.material ?? 0) !== 1) out.push('tough');
+  if ((p.camera ?? 0) >= 1) out.push('cam');
+  if (design.formFactor === 'elder') out.push('elder', 'elder');
+  if (design.formFactor === 'flip') out.push('flip');
+  if (C.has('dualsim')) out.push('dual');
+  if ((p.network ?? 0) >= 1) out.push('net');
+  if (C.has('mp3') || C.has('fm')) out.push('music');
+  return out;
+}
 
 /** 生成本场弹幕，按意图去重，保证句句不同 */
 export function danmakuLines(design, ctx = {}, n = 10) {
   if (productEraOf(design) === 'keypad') {
-    const intents = ['price', 'wait', 'buy', 'look', 'standby', 'chord', 'tough', 'signal'];
     const used = new Set();
     const out = [];
-    for (const intent of shuffle(intents)) {
-      const pool = (DM_KEYPAD[intent] || []).filter((s) => !used.has(s));
-      if (!pool.length) continue;
-      const line = pick(pool);
-      used.add(line);
-      out.push(line);
-      if (out.length >= n) break;
+    let guard = 0;
+    while (out.length < n && guard++ < 200) {
+      for (const intent of shuffle(keypadIntents(design))) {
+        const pool = (DM_KEYPAD[intent] || []).filter((x) => !used.has(x));
+        if (!pool.length) continue;
+        const line = pick(pool);
+        used.add(line);
+        out.push(line);
+        if (out.length >= n) break;
+      }
+      if (Object.values(DM_KEYPAD).every((pool) => pool.every((x) => used.has(x)))) break;
     }
-    while (out.length < n) out.push(pick(DM_KEYPAD.look));
     return out;
   }
   const p = physical(design);
@@ -177,19 +207,31 @@ const CM = {
  */
 
 const CM_KEYPAD = {
-  broken: { base: 900, hot: true, t: ['说好的「{p}」呢？营业厅体验不一样', '「{p}」写在海报上，机器上找不到'] },
-  pricy: { base: 700, hot: true, t: ['这价我还不如去交话费送机', '贵了，等合约机'] },
-  cheap: { base: 800, t: ['预存话费送手机真香', '这个价冲营业厅', '给学生党的福音'] },
-  fair: { base: 280, t: ['价格还行', '营业厅能接受'] },
-  standby: { base: 600, t: ['待机真的久，出差一星期没充电', '一周一充不是吹的'] },
-  tough: { base: 650, t: ['摔了几次没事，工程塑料牛', '砸核桃实测过，核桃碎了'] },
-  chord: { base: 500, t: ['铃声换成 64 和弦，全车厢都在听', '和弦铃声有年代感'] },
-  elder: { base: 700, t: ['给我妈买的，字大声大，她会用', 'SOS 键安心了不少'] },
-  flip: { base: 550, t: ['翻盖啪一声，仪式感满满', '合盖护屏，口袋不刮花'] },
-  good: { base: 350, t: ['已在营业厅下单', '键盘手感不错', '信号比想象中好'] },
-  meh: { base: 150, t: ['先观望论坛口碑', '等同学买了再看'] },
-  bbs: { base: 400, t: ['沙发！', '板凳留名', '地板前排', '顶！写得好', '纯属路过'] },
+  broken: { base: 900, hot: true, t: ['海报上写着「{p}」，拿到手根本不是那么回事', '「{p}」？我在营业厅试了，没感觉出来'] },
+  pricy: { base: 700, hot: true, t: ['这个价，我还不如去营业厅存话费送一台', '贵了。等过两个月降价再说', '同样的钱能买两台青橙'] },
+  cheap: { base: 800, t: ['这个价真厚道，给家里一人一台', '学生也买得起，好评', '性价比没得说'] },
+  fair: { base: 280, t: ['价格还算公道', '这个价可以接受'] },
+  standby: { base: 600, t: ['出差一个礼拜，回来还剩一格电', '待机是真的长，充电器都找不着了'] },
+  standbyShort: { base: 500, t: ['说好的待机呢？三天就没电了', '彩屏好看，就是太费电'] },
+  tough: { base: 650, t: ['从自行车上掉下去好几次，一点事没有', '砸核桃实测，核桃碎了，手机没事'] },
+  fragile: { base: 520, t: ['烤漆好看，就是摔了一下掉了块漆', '亮面机身，一礼拜全是指纹'] },
+  chord: { base: 500, t: ['铃声一响，整个车厢都回头看', '下载了好几首和弦铃声，真好听'] },
+  ring0: { base: 260, t: ['铃声是单音的，有点吵', '声音倒是够大'] },
+  mono: { base: 300, t: ['单色屏太阳底下看得清楚', '黑白屏，省电是真省电'] },
+  color: { base: 420, t: ['彩屏看彩信太舒服了', '屏幕颜色比我上一台鲜多了'] },
+  cam: { base: 450, t: ['拍了张全家福当屏保', '照片小是小了点，能看清人'] },
+  elder: { base: 700, hot: true, t: ['给我妈买的，字大声大，她自己就会用', '那个 SOS 键，我爸说用着安心', '我奶奶说比我那台好用'] },
+  flip: { base: 550, t: ['翻盖一合「啪」的一声，开会都不好意思', '合上就护着屏幕，兜里不怕刮'] },
+  slider: { base: 520, t: ['一推就是键盘，挺有意思', '滑盖手感顺，就怕时间长了松'] },
+  dual: { base: 560, t: ['终于不用揣两部手机了', '双卡双待，做生意的人都懂'] },
+  net: { base: 400, t: ['能上移动梦网看新闻，就是流量费心疼', '在公交上看小说，时间过得快'] },
+  music: { base: 430, t: ['存了二十多首歌，上学路上听', '耳机一插能听广播，早上听新闻'] },
+  good: { base: 350, t: ['已经在营业厅买了，手感不错', '按键回弹很清脆', '信号比我想的好，地下室也有一格'] },
+  meh: { base: 150, t: ['再观望一下', '等报纸上的测评出来再说', '看看用了半年的人怎么说'] },
+  bbs: { base: 400, t: ['沙发', '板凳', '顶一下', '楼主辛苦', '路过，帮顶'] },
 };
+const BBS_NAMES = ['老张在出差', '数码版主', '学生党小林', '给爸妈选机', '信号党', '铃声控', '营业厅小王', '路过的', '跑业务的', '退休教师', '工地老李', '大学宿舍长', '短信达人', '彩信爱好者', '县城代理'];
+const BBS_AV = ['📟', '👴', '👩', '🧑', '📱', '☎️', '👨‍🔧', '👩‍🏫', '🧓', '👦'];
 
 export function buildComments(ctx) {
   if (productEraOf(ctx.design) === 'keypad') {
@@ -237,6 +279,9 @@ export function buildComments(ctx) {
 
 function buildKeypadComments(ctx) {
   const used = new Set();
+  const d = ctx.design || {};
+  const p = d.parts || {};
+  const C = new Set(d.concepts || []);
   const say = (k, vars = {}) => {
     const c = CM_KEYPAD[k];
     if (!c) return null;
@@ -248,18 +293,31 @@ function buildKeypadComments(ctx) {
     return { t, like: Math.round(c.base * (0.6 + Math.random() * 0.8)), hot: !!c.hot, floor: true };
   };
   const out = [];
-  const push = (x) => x && out.push({ who: pick(['论坛老友', '营业厅偶遇', '数码版主', '学生党', '给爸妈选机', '信号党', '铃声控', '路过顶帖']), av: pick(['📟', '👴', '👩', '🧑', '📱', '☎️']), ...x, reply: Math.round(Math.random() * 12) });
-  for (const p of ctx.promisesBroken || []) push(say('broken', { p }));
+  const push = (x) => x && out.push(x);
+  for (const pr of ctx.promisesBroken || []) push(say('broken', { p: pr }));
   if ((ctx.priceRatio || 1) > 1.1) push(say('pricy'));
   else if ((ctx.priceRatio || 1) < 0.92) push(say('cheap'));
   else push(say('fair'));
-  push(say('standby'));
-  push(say('tough'));
-  push(say('chord'));
-  if (ctx.design?.formFactor === 'elder') push(say('elder'));
-  if (ctx.design?.formFactor === 'flip') push(say('flip'));
+  const standbyDays = (ctx.standbyDays ?? 0) || [7, 12, 20][p.battery ?? 0] - [0, 1, 2][p.screen ?? 0];
+  push(say(standbyDays >= 10 ? 'standby' : 'standbyShort'));
+  push(say((p.material ?? 0) === 1 ? 'fragile' : 'tough'));
+  push(say((p.ringtone ?? 0) >= 1 ? 'chord' : 'ring0'));
+  push(say((p.screen ?? 0) === 0 ? 'mono' : 'color'));
+  if ((p.camera ?? 0) >= 1) push(say('cam'));
+  if (d.formFactor === 'elder') {
+    push(say('elder'));
+    push(say('elder'));
+  }
+  if (d.formFactor === 'flip') push(say('flip'));
+  if (d.formFactor === 'slider') push(say('slider'));
+  if (C.has('dualsim')) push(say('dual'));
+  if ((p.network ?? 0) >= 1) push(say('net'));
+  if (C.has('mp3') || C.has('fm')) push(say('music'));
   push(say('good'));
   push(say('meh'));
-  while (out.length < 8) push(say('bbs'));
-  return shuffle(out).slice(0, 10);
+  const list = shuffle(out.filter(Boolean)).slice(0, 9);
+  // 前三楼是论坛惯例的短回复，放在最前面
+  const head = [say('bbs'), say('bbs')].filter(Boolean).map((x) => ({ ...x, like: Math.round(x.like * 0.2) }));
+  const names = shuffle(BBS_NAMES);
+  return [...head, ...list].map((x, i) => ({ ...x, who: names[i % names.length], av: BBS_AV[(i * 3 + (ctx.gen || 1)) % BBS_AV.length], reply: Math.round(Math.random() * 12) }));
 }

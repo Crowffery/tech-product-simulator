@@ -344,6 +344,34 @@ export const sfx = {
     noise(0.025, { vol: 0.08, at, hp: 3500 });
     noise(0.04, { vol: 0.05, at: at + 0.05, hp: 2500 });
   },
+  /** 按键机铃声：0 单音（方波哔哔）/ 1 16 和弦 / 2 64 和弦（旋律 + 和声 + 低音） */
+  ringtone(level = 2, at = 0) {
+    const mel = [659, 784, 880, 784, 659, 587, 523, 587, 659, 659, 587, 523];
+    const step = 0.16;
+    mel.forEach((f, i) => {
+      const t0 = at + i * step;
+      if (level <= 0) {
+        if (i % 2 === 0) tone(1760, 0.09, { type: 'square', vol: 0.05, at: t0 });
+        return;
+      }
+      tone(f, step * 0.9, { type: 'square', vol: 0.04, at: t0 });
+      if (level >= 1) tone(f / 2, step * 0.9, { type: 'triangle', vol: 0.05, at: t0 });
+      if (level >= 2) {
+        tone(f * 1.25, step * 0.85, { type: 'triangle', vol: 0.025, at: t0 });
+        if (i % 4 === 0) tone(f / 4, step * 3.5, { type: 'sine', vol: 0.07, at: t0 });
+        if (i % 2 === 1) noise(0.03, { vol: 0.03, at: t0, hp: 5000 });
+      }
+    });
+  },
+  /** 翻盖「啪」 */
+  flipOpen(at = 0) {
+    noise(0.03, { vol: 0.14, at, hp: 1200, lp: 6000 });
+    tone(220, 0.06, { type: 'triangle', vol: 0.08, at: at + 0.005, slide: 0.6 });
+  },
+  /** 按键音 */
+  keyBeep(at = 0) {
+    tone(1400, 0.05, { type: 'square', vol: 0.03, at });
+  },
   keep() {
     if (playFile('confirm', { volume: 0.65 })) return;
     [784, 988, 1175, 1568].forEach((f, i) => tone(f, i === 3 ? 0.25 : 0.08, { vol: 0.05, at: i * 0.08 }));

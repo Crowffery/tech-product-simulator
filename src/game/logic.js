@@ -6,7 +6,8 @@
 import { SLOTS, POSITIONING, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, MARKET_EVENTS, AFTERMATH_EVENTS, EXPANSIONS, RIVAL_SHARE } from './data.js';
 import { emptySlots } from './state.js';
 import { IDEAL, matchOf, promiseCheck, priceFit, windowAt, clashAt, expectationBar, RUN_MONTHS, runMonths, POS_BASE_PRICE, roundPrice, marketSize, marketChipGen, rivalPriceList, bandOf, rivalLaunches } from './market.js';
-import { packOf, productEraOf, worldEraOf, worldEraIdOf, eraAllowsEvent, KEYPAD_DEMAND_FORMS, modeOf } from './eras/index.js';
+import { KEYPAD_RECOMMENDED } from './eras/keypad.js';
+import { packOf, productEraOf, worldEraOf, worldEraIdOf, eraAllowsEvent, KEYPAD_DEMAND_FORMS, modeOf, industryMonth, networkWorldLevel } from './eras/index.js';
 import { applyRevolutionChoice, shouldTriggerRevolution, REVOLUTION_EVENT } from './eras/revolution.js';
 import {
   defaultDesign,
@@ -193,8 +194,9 @@ function slotBoost(state, slotId) {
 }
 
 function payroll(state) {
-  // 研发团队月薪（单位 ¥100 万）
-  return 6 + Object.values(state.depts).reduce((a, b) => a + b, 0) * 3 + office(state).pay;
+  // 研发团队月薪（单位 ¥100 万）；按键时代人工和场地都便宜，约为智能机时代的一半
+  const base = 6 + Object.values(state.depts).reduce((a, b) => a + b, 0) * 3 + office(state).pay;
+  return worldEraIdOf(state) === 'keypad' ? Math.round(base * 0.55) : base;
 }
 
 export function prLaunchBonus(state) {
@@ -258,6 +260,17 @@ export function trianglePreview(positioningId, priceId, formFactor) {
   };
 }
 
+/** 按键机起步配置：按定位推荐，制式不超过行业已有档位 */
+function keypadStartParts(state, positioningId, ff) {
+  const rec = { ...(KEYPAD_RECOMMENDED[positioningId] || KEYPAD_RECOMMENDED.student) };
+  rec.network = Math.min(rec.network, networkWorldLevel(state.month, modeOf(state), state.flags || {}));
+  if (ff === 'elder') {
+    rec.keyboard = Math.max(1, rec.keyboard === 2 ? 1 : rec.keyboard);
+    rec.size = 2;
+  }
+  return rec;
+}
+
 export function finishPlan(state, { positioningId, pointIds, priceId, bindEco, formFactor }) {
   if (state.pendingMarket) return { ok: false, msg: '先处理行业大事' };
   const ff = formFactor || defaultFormId(state.month);
@@ -288,17 +301,22 @@ export function finishPlan(state, { positioningId, pointIds, priceId, bindEco, f
     const d = defaultDesign();
     // 按键包没有 RECOMMENDED[parents] 等；用中档默认
     d.parts = { ...(RECOMMENDED[positioningId] || RECOMMENDED.mainstream || { chip: 1, screen: 1, camera: 0, battery: 1, material: 0, size: 1 }) };
-    if (productEraOf(ff) === 'keypad') {
-      d.parts = { chip: 1, screen: 0, camera: 0, battery: 1, material: 0, size: ff === 'elder' ? 2 : 1, keyboard: ff === 'elder' ? 1 : 0, ringtone: 1, network: 0 };
-    }
+    if (productEraOf(ff) === 'keypad') d.parts = keypadStartParts(state, positioningId, ff);
     d.modelName = `${state.companyName.slice(0, 4)} ${state.generation}`.slice(0, 8);
     d.formFactor = ff;
     applyFormToDesign(d, d.formFactor);
     syncFoldConcepts(d);
     state.designDraft = d;
   } else {
+    const prevEra = productEraOf(state.designDraft);
     state.designDraft.formFactor = ff;
     applyFormToDesign(state.designDraft, ff);
+    if (prevEra !== productEraOf(ff)) {
+      // 跨时代：换一套这个时代的起步配置，清掉上个时代的创新件
+      state.designDraft.parts = productEraOf(ff) === 'keypad' ? keypadStartParts(state, positioningId, ff) : { ...(RECOMMENDED[positioningId] || RECOMMENDED.mainstream) };
+      state.designDraft.redesign = 'major';
+    }
+    state.designDraft.concepts = (state.designDraft.concepts || []).filter((id) => (CONCEPTS.find((c) => c.id === id)?.era || 'smart') === productEraOf(ff));
     syncFoldConcepts(state.designDraft);
     if (productEraOf(ff) === 'keypad') {
       const p = state.designDraft.parts || (state.designDraft.parts = {});
@@ -355,7 +373,7 @@ export function pickLogistics(state, supplierId, stockId = 'normal', chipSrc = '
   if (chipSrc === 'ext' && marketMod(state, 'extBan')) chipSrc = 'own';
   if (state.design) {
     state.design.chipSrc = chipSrc;
-    state.design.chipGen = chipSrc === 'ext' ? marketChipGen(state.month) : state.chip.gen;
+    state.design.chipGen = chipSrc === 'ext' ? marketChipGen(industryMonth(state)) : state.chip.gen;
     state.design.chipSeries = chipSrc === 'ext' ? EXT_CHIP : state.chip.series;
   }
   state.phase = 'dev';
@@ -371,8 +389,9 @@ export function capsMap(state) {
 
 export function devRatio(state) {
   const caps = capsMap(state);
-  const vals = SLOTS.map((s) => Math.min(1, state.slots[s.id].progress / Math.max(1, caps[s.id])));
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
+  // 上限为 0 的槽（如没有摄像头的拍照）不计入
+  const vals = SLOTS.filter((s) => caps[s.id] > 0).map((s) => Math.min(1, state.slots[s.id].progress / Math.max(1, caps[s.id])));
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
 }
 
 export function avgSlotProgress(state) {
@@ -385,7 +404,7 @@ export function balancedAllocation(state, focus = []) {
   const caps = capsMap(state);
   const pos = state.product?.positioningId;
   // 团队直觉：半程贴近定位的理想配比；记下企划笔记后完全贴近
-  const ideal = pos ? IDEAL[pos] : null;
+  const ideal = pos ? (packOf(state.design || 'thick').ideal || IDEAL)[pos] || IDEAL[pos] : null;
   const k = pos && state.notes?.[pos] ? 1 : 0.5;
   const need = SLOTS.map((s) => ({
     id: s.id,
@@ -407,8 +426,16 @@ const COMMENTS = {
   os: ['卡顿偶发', '动画顺了', '软硬一体有那么点意思', '生态钩子挂上', '系统味对了'],
 };
 
-export function commentFor(slotId, progress) {
-  const arr = COMMENTS[slotId];
+const KEYPAD_COMMENTS = {
+  perf: ['菜单要等一下', '翻菜单不卡了', '短信秒开', '通讯录五百人也不卡', '按键一按就有反应'],
+  design: ['外壳还有毛边', '键盘对齐了', '握着挺顺手', '摆在柜台上显眼', '拿出来有面子'],
+  camera: ['照片糊成一片', '白天能认出人', '彩信能发了', '晚上也能拍', '能当拍照手机卖了'],
+  battery: ['两天一充', '三四天一充', '一礼拜一充', '摔了几次没事', '待机和耐用都过硬'],
+  os: ['铃声发闷', '铃声清楚了', '菜单好找了', '收音机、闹钟都顺手', '功能齐全又好用'],
+};
+
+export function commentFor(slotId, progress, era = 'smart') {
+  const arr = (era === 'keypad' ? KEYPAD_COMMENTS : COMMENTS)[slotId];
   return arr[Math.min(arr.length - 1, Math.floor(progress / 20))];
 }
 
@@ -427,7 +454,7 @@ export function advanceMonth(state, allocation) {
     const slot = state.slots[slotId];
     const before = slot.progress;
     slot.progress = Math.min(caps[slotId], slot.progress + Math.round(pts * 14 * slotBoost(state, slotId) * marketMod(state, 'rnd')));
-    slot.comment = commentFor(slotId, slot.progress);
+    slot.comment = commentFor(slotId, slot.progress, productEraOf(state.design));
     gains[slotId] = slot.progress - before;
   }
   const tail = sellTail(state);
@@ -640,7 +667,7 @@ export function resolveEvent(state, choiceIndex) {
   for (const [k, v] of Object.entries(eff.slotPenalty || {})) {
     if (state.slots[k]) {
       state.slots[k].progress = Math.max(0, Math.min(capsMap(state)[k] ?? 100, state.slots[k].progress - v));
-      state.slots[k].comment = commentFor(k, state.slots[k].progress);
+      state.slots[k].comment = commentFor(k, state.slots[k].progress, productEraOf(state.design));
     }
   }
   if (eff.gambleFail && Math.random() < (state.generation === 1 ? 0.25 : 0.45)) {
@@ -749,8 +776,48 @@ export const LAUNCH_OPT_FIELDS = {
   ],
 };
 
-export function defaultLaunchOpts(styleId = 'safe') {
+/** 按键时代发布会：风格与定制项（不出现现代发布会梗） */
+export const KEYPAD_LAUNCH_STYLES = [
+  { id: 'safe', label: '稳妥发布', desc: '照稿念，少出错', score: 22, risk: 0.06 },
+  { id: 'wow', label: '现场演示', desc: '当场砸核桃、打电话，效果好也可能出丑', score: 32, risk: 0.28 },
+  { id: 'specs', label: '运营商联合', desc: '请营业厅站台，稳中有亮点', score: 26, risk: 0.1 },
+];
+export const KEYPAD_LAUNCH_OPT_FIELDS = {
+  openTone: [
+    { id: 'formal', label: '正式致辞', hint: '稳重' },
+    { id: 'ringtone', label: '铃声开场', hint: '先放一段铃声' },
+    { id: 'rugged', label: '跌落录像开场', hint: '先放一段摔手机录像' },
+  ],
+  light: [
+    { id: 'warm', label: '红毯晚会', hint: '喜庆' },
+    { id: 'cool', label: '商务蓝', hint: '稳重' },
+    { id: 'brand', label: '品牌色', hint: '跟机身' },
+  ],
+  camera: [
+    { id: 'calm', label: '克制', hint: '稳、少晃' },
+    { id: 'cinema', label: '电影感', hint: '推拉 + 侧写' },
+    { id: 'wild', label: '夸张', hint: '大幅运镜', risk: 0.04 },
+  ],
+};
+const isKeypadDesign = (d) => productEraOf(d || 'thick') === 'keypad';
+export function launchStylesFor(design) {
+  return isKeypadDesign(design) ? KEYPAD_LAUNCH_STYLES : LAUNCH_STYLES;
+}
+export function launchOptFieldsFor(design) {
+  return isKeypadDesign(design) ? KEYPAD_LAUNCH_OPT_FIELDS : LAUNCH_OPT_FIELDS;
+}
+
+export function defaultLaunchOpts(styleId = 'safe', design = null) {
   const style = styleId || 'safe';
+  if (isKeypadDesign(design))
+    return {
+      style,
+      openTone: style === 'wow' ? 'rugged' : style === 'specs' ? 'formal' : 'formal',
+      light: style === 'wow' ? 'warm' : style === 'specs' ? 'cool' : 'brand',
+      camera: style === 'wow' ? 'wild' : style === 'specs' ? 'calm' : 'cinema',
+      emphasize: true,
+      easter: style === 'wow',
+    };
   return {
     style,
     openTone: style === 'wow' ? 'areyouok' : style === 'specs' ? 'minimal' : 'redefine',
@@ -764,8 +831,9 @@ export function defaultLaunchOpts(styleId = 'safe') {
 }
 
 export function resolveLaunchStyle(state, styleId, launchOpts = null) {
-  const style = LAUNCH_STYLES.find((s) => s.id === styleId) || LAUNCH_STYLES[0];
-  const opts = { ...defaultLaunchOpts(style.id), ...(launchOpts || {}), style: style.id };
+  const styles = launchStylesFor(state.design);
+  const style = styles.find((s) => s.id === styleId) || styles[0];
+  const opts = { ...defaultLaunchOpts(style.id, state.design), ...(launchOpts || {}), style: style.id };
   state.launchOpts = opts;
   let score = prLaunchBonus(state) + style.score;
   // 轻度挂钩：夸张运镜 / 彩蛋略增风险与上限
@@ -786,11 +854,11 @@ export function resolveLaunchStyle(state, styleId, launchOpts = null) {
   if (Math.random() < risk) {
     score -= 14;
     state.launchFlop = true;
-    state.eventLog.push(`发布会：${style.label} 翻车了一下`);
+    state.eventLog.push(`发布会：${style.label}，现场出了点状况`);
   } else {
     const bits = [style.label];
     if (opts.openTone === 'areyouok') bits.push('Are you OK');
-    if (opts.easter) bits.push('彩蛋');
+    if (opts.easter) bits.push(isKeypadDesign(state.design) ? '现场互动' : '彩蛋');
     state.eventLog.push(`发布会：${bits.join(' · ')}`);
   }
   state.launchScore = score;
@@ -801,7 +869,7 @@ export function resolveLaunchStyle(state, styleId, launchOpts = null) {
 
 export function experienceScore(state) {
   const sup = SUPPLIERS.find((s) => s.id === state.supplierId) || SUPPLIERS[1];
-  const m = matchOf(state.slots, state.product.positioningId);
+  const m = matchOf(state.slots, state.product.positioningId, { noCamera: (capsMap(state).camera || 0) === 0 });
   // 用户按定位的期待来打分：旗舰要求高，入门机要求低
   const posExp = packOf(state.design || state.product?.formFactor).positioning.find((p) => p.id === state.product.positioningId)?.exp || 1;
   let score = (avgSlotProgress(state) / posExp) * sup.quality * m.mult;
@@ -822,7 +890,16 @@ export function wowNow(state) {
   const buzz = Math.round(buzzOf(d, state.models) * [1, 1.2, 1.4][deptLevel(state, 'pr') - 1]);
   let headline;
   const st = staleness(state);
-  if (st >= 0.85) headline = '「找不同」——这和上一代有什么区别？';
+  if (productEraOf(d) === 'keypad') {
+    if (st >= 0.85) headline = '「找不同」——报纸说这和去年那台一模一样';
+    else if (buzz >= 40 && comp < 65) headline = '「做工粗糙，但论坛都在讨论」';
+    else if (n.score >= 55 && comp >= 85) headline = '「国产手机也能这么做」——报纸给了半个版面';
+    else if (n.score >= 55) headline = '「想法很好，做工还差口气」';
+    else if (n.score >= 30) headline = '「有新东西，但不够惊喜」';
+    else if (!state.models.length) headline = '「一台本分的手机」——先在营业厅柜台站稳';
+    else if (comp >= 80) headline = '「稳，但跟去年那台差不多」';
+    else headline = '「不新也不稳」——柜台前没几个人驻足';
+  } else if (st >= 0.85) headline = '「找不同」——这和上一代有什么区别？';
   else if (buzz >= 40 && comp < 65) headline = '「做工翻车，但全网都在讨论」';
   else if (n.score >= 55 && comp >= 85) headline = Math.random() < 0.5 ? `「Only ${state.companyName} can do」——外媒罕见点赞` : '「这才叫创新！」——科技媒体集体起立';
   else if (chipLag(state) < 0 && comp >= 80) headline = '「遥遥领先」——自研芯片让友商连夜改 PPT';
@@ -841,7 +918,7 @@ export function finalizeScores(state) {
   state.wowResult = W;
   state.hype = Math.max(0, state.hype + Math.round((W?.buzz || 0) / 4) - Math.round(Math.max(0, staleness(state) - 0.5) * 30));
   const phys = physical(state.design);
-  const m = matchOf(state.slots, state.product.positioningId);
+  const m = matchOf(state.slots, state.product.positioningId, { noCamera: (capsMap(state).camera || 0) === 0 });
   const promises = promiseCheck(state, phys);
   const price = state.product.price || PRICE_BANDS.find((p) => p.id === state.product.priceId)?.price || 3999;
   const pe = priceEffect(state, price);
@@ -901,7 +978,12 @@ export function staleness(state, design = state.design) {
 
 /** 你的芯片比行业主流落后几代（负数 = 领先） */
 export function chipLag(state, design = state.design) {
-  return marketChipGen(state.month) - (design?.chipGen || state.chip.gen);
+  // 按键机比的是网络制式（GSM / GPRS / EDGE / 3G），智能机比的是芯片代数
+  if (productEraOf(design || 'thick') === 'keypad') {
+    const world = networkWorldLevel(state.month, modeOf(state), state.flags || {});
+    return Math.max(0, Math.min(2, world - (design?.parts?.network ?? 0))) - (design?.parts?.network > world ? 1 : 0);
+  }
+  return marketChipGen(industryMonth(state)) - (design?.chipGen || state.chip.gen);
 }
 
 // ═════════════════════════ 定价 ═════════════════════════
@@ -930,7 +1012,7 @@ export function priceEffect(state, price) {
   // 惊艳度越高，用户越不在乎价格（「贵，但值」）
   const wow = (state.wowResult || (state.design ? wowNow(state) : null))?.score || 0;
   const elastic = Math.max(0.8, 1.8 - wow / 70);
-  const demandMul = Math.max(0.25, Math.min(2.6, Math.pow(V / price, elastic))) * marketSize(price);
+  const demandMul = Math.max(0.25, Math.min(2.6, Math.pow(V / price, elastic))) * marketSize(price, packOf(state.design || state.product?.formFactor || 'thick').priceRange?.ref || 3999);
   let user = Math.max(-18, Math.min(8, Math.round((1 - ratio) * 45)));
   const last = state.lastPrices?.[state.product.positioningId];
   let anchorNote = '';
@@ -955,8 +1037,12 @@ export function priceEffect(state, price) {
 /** 首批备货量（万台），按企划时的价位段决定 */
 export function stockedUnits(state) {
   const stock = STOCK_OPTS.find((s) => s.id === state.stockId) || STOCK_OPTS[1];
-  const band = PRICE_BANDS.find((p) => p.id === (state.product.bandId || state.product.priceId)) || PRICE_BANDS[1];
-  return Math.round(20 * stock.mul * (0.5 + marketSize(band.price) * 0.5));
+  const pack = packOf(state.design || state.product?.formFactor || 'thick');
+  const bands = pack.priceBands || PRICE_BANDS;
+  const band = bands.find((p) => p.id === (state.product.bandId || state.product.priceId)) || bands[1];
+  // 按键机走量：备货基数按需求基数放大
+  const base = 20 * ((pack.demandBase || 17) / 17);
+  return Math.round(base * stock.mul * (0.5 + marketSize(band.price, pack.priceRange?.ref || 3999) * 0.5));
 }
 
 /** 单台毛利（游戏内现金单位 / 万台） */
@@ -1117,11 +1203,19 @@ export function activeMods(state) {
 }
 
 /** 发布前拍板售价 */
+/** 定价范围与步进：按产品时代（按键机 ¥99 起、¥10 一档） */
+export function priceBounds(state) {
+  return productEraOf(state.design || state.product?.formFactor || 'thick') === 'keypad'
+    ? { floor: 99, ceil: 2999, step: 10, big: 100 }
+    : { floor: 999, ceil: 12999, step: 100, big: 500 };
+}
+
 export function setPrice(state, price) {
-  const p = Math.max(999, Math.min(12999, Math.round(price)));
+  const b = priceBounds(state);
+  const p = Math.max(b.floor, Math.min(b.ceil, Math.round(price)));
   state.product.fair = fairPrice(state);
   state.product.price = p;
-  state.product.priceId = bandOf(p);
+  state.product.priceId = productEraOf(state.design) === 'keypad' ? (p < 500 ? 'entry' : p < 1300 ? 'mid' : 'high') : bandOf(p);
   return { ok: true };
 }
 
@@ -1165,7 +1259,7 @@ export function runSales(state) {
     notes.push(`以旧换新 ${traded} 款（信仰 +${faithGain}）`);
   }
   if (kept.length) notes.push(`继续卖 ${kept.length} 款（按月续销）`);
-  oldNote = notes.join('；') || '无在售旧款';
+  oldNote = notes.join('；');
   state.onSale = kept;
   state.oldPolicy = 'keep';
   state.oldPolicyMap = {};

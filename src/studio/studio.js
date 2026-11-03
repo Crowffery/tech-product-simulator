@@ -47,7 +47,12 @@ import {
   similarity,
   layoutOf,
   moduleFit,
+  conceptsFor,
+  conceptEra,
+  conceptNeedsMissing,
+  combosFor,
 } from './parts.js';
+import { productEraOf, packOf, networkWorldLevel, KEYPAD_RECOMMENDED } from '../game/eras/index.js';
 import { sfx } from './sfx.js';
 import { icon, conceptIcon } from '../icons.js';
 import { term, installGlossary } from '../glossary.js';
@@ -103,6 +108,10 @@ export function createStudio(root, opts = {}) {
     return museum.length ? museum[museum.length - 1].design : null;
   }
   const minor = () => design.redesign === 'minor' && !!prevGen();
+  const kp = () => productEraOf(design) === 'keypad';
+  const monthMode = () => ({ month: opts.getMonth?.() || 1, mode: opts.getMode?.() || 'quick' });
+  const worldNet = () => networkWorldLevel(monthMode().month, monthMode().mode, opts.getFlags?.() || {});
+  const NET_AT = { chronicle: [1, 6, 12, 19], quick: [1, 4, 7, 10] };
   const lockAttr = () => (minor() ? 'disabled title="小改款不能改，切到大改款解锁"' : '');
 
   /** 小改款：形体与概念件锁定为上一代 */
@@ -126,10 +135,13 @@ export function createStudio(root, opts = {}) {
     const parts = partOrderOf(design).map((key) => {
       const P = partsTableOf(design)[key];
       const btns = P.tiers
-        .map(
-          (t) =>
-            `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}" ${key === 'size' ? lockAttr() : ''}>${esc(key === 'chip' ? chipName(design.chipSeries, design.chipGen || 1, t.id) : t.label)}</button>`,
-        )
+        .map((t) => {
+          // 按键机制式：行业还没有的档位锁住
+          const netLocked = kp() && key === 'network' && t.id > worldNet();
+          const label = key === 'chip' && !kp() ? chipName(design.chipSeries, design.chipGen || 1, t.id) : t.label;
+          const lockTxt = netLocked ? `约第 ${NET_AT[monthMode().mode]?.[t.id] || '?'} 月出现` : '';
+          return `<button type="button" class="tier ${design.parts[key] === t.id ? 'on' : ''}" data-part="${key}" data-tier="${t.id}" ${key === 'size' ? lockAttr() : ''} ${netLocked ? `disabled title="${lockTxt}"` : ''}>${esc(label)}${netLocked ? `<small>🔒 ${lockTxt}</small>` : ''}</button>`;
+        })
         .join('');
       const subs = key === 'material' && MAT_SUBS[design.parts.material];
       const sub = subs && matSub(design);
@@ -144,42 +156,49 @@ export function createStudio(root, opts = {}) {
       <div class="part-note ${misfit.length ? 'warn' : ''}">${esc(layoutOf(design).note)}${misfit.length ? `　⚠ ${misfit.map(conceptName).join('、')}塞不进这个模组，影像加成减半` : ''}</div>`;
     const formRow = `<div class="part-row"><span class="part-name">前摄开孔</span><div class="tiers">${forms}</div></div>
       <div class="part-note">${esc(FORM_COST_NOTE[design.screenForm] || '')}</div>`;
+    const posName = (packOf(design).positioning || []).find((p) => p.id === design.position)?.name || POSITIONS.find((p) => p.id === design.position)?.name || '';
     const posField = opts.lockPosition
-      ? `<div class="field"><span class="flabel">定位</span><b>${POSITIONS.find((p) => p.id === design.position)?.name || ''}</b> <small class="muted">（企划已定）</small></div>`
+      ? `<div class="field"><span class="flabel">定位</span><b>${esc(posName)}</b> <small class="muted">（企划已定）</small></div>`
       : `<div class="field"><span class="flabel">定位</span><div class="chips">${pos}</div></div>`;
+    if (kp()) return `${posField}${formTimelineUI()}${parts}${netChart()}`;
     return `${posField}${formTimelineUI()}${parts}${layRow}${formRow}
       ${chipChart()}
 `;
   }
 
-  /** v0.11 开罗式形态时间轴 */
+  /** 机身形态：只列出与当前产品同一时代、已经能做的形态；跨时代要回企划 */
   function formTimelineUI() {
-    const month = opts.getMonth?.() || 1;
-    const tl = formTimeline(month);
-    const eras = tl.eras
-      .map(
-        (e) =>
-          `<span class="ff-era ${e.active ? 'on' : ''} ${e.reached ? 'reached' : 'soon'}" title="${esc(e.blurb)}">${esc(e.name)}</span>`,
-      )
-      .join('<i class="ff-arrow">›</i>');
-    const cards = tl.forms
+    const mm = monthMode();
+    const tl = formTimeline(mm);
+    const era = productEraOf(design);
+    const same = tl.forms.filter((f) => productEraOf(f.id) === era);
+    const open = same.filter((f) => f.unlocked);
+    const next = same.find((f) => !f.unlocked);
+    const cards = open
       .map((f) => {
         const on = design.formFactor === f.id;
-        if (!f.unlocked) {
-          return `<button type="button" class="ff-card locked" data-ff="${f.id}" data-locked="1" title="${esc(f.unlockText)}">
-            <span class="ff-ico">${f.icon}</span><b>${esc(f.name)}</b><small>${esc(f.unlockText)}</small><em>🔒</em></button>`;
-        }
         return `<button type="button" class="ff-card ${on ? 'on' : ''}" data-ff="${f.id}" title="${esc(f.desc)}">
           <span class="ff-ico">${f.icon}</span><b>${esc(f.name)}</b><small>${esc(f.tag)}</small></button>`;
       })
       .join('');
     const cur = formOf(design.formFactor);
     return `<div class="ff-block">
-      <div class="ff-h"><span class="flabel">机身形态</span><div class="ff-eras">${eras}</div></div>
-      <p class="ff-blurb">${esc(tl.era.blurb)} · 当前 <b>${esc(cur.name)}</b></p>
-      <div class="ff-rail">${cards}</div>
-      <p class="ff-hint muted">开局只有功能机 / 老年机 / 厚直板；折叠要等到中后期才解锁。</p>
+      <div class="ff-h"><span class="flabel">机身形态</span><small class="muted">${esc(tl.era.name || '')}</small></div>
+      <p class="ff-blurb">当前 <b>${esc(cur.name)}</b> · ${esc(cur.desc || '')}</p>
+      ${open.length > 1 ? `<div class="ff-rail">${cards}</div>` : ''}
+      ${next ? `<p class="ff-hint muted">🔒 下一种：${esc(next.name)}（${esc(next.unlockText || '')}）</p>` : ''}
     </div>`;
+  }
+
+  /** 按键机：制式对比（你的制式 vs 行业主流） */
+  function netChart() {
+    const names = ['GSM', 'GPRS', 'EDGE', '3G'];
+    const mine = design.parts.network ?? 0;
+    const w = worldNet();
+    const note = mine < w ? `落后行业 ${w - mine} 档：报纸会说「还停在 ${names[mine]}」，心理价位会打折` : mine === w ? '和行业主流一致' : '';
+    return `<details class="chipchart"><summary class="cc-h">${icon('spark', 14)} 网络制式对比 <small>行业主流：${names[w]}</small></summary>${names
+      .map((n, i) => `<div class="cc-row ${i === mine ? 'on' : ''} ${i > w ? 'rival' : ''}"><span>${n}${i === w ? '（主流）' : i > w ? '（尚未商用）' : ''}</span><i style="width:${25 * (i + 1)}%"></i><b>${['通话短信', 'WAP 上网', '彩信更快', '视频通话'][i]}</b></div>`)
+      .join('')}${note ? `<p class="muted" style="margin:.3rem 0 0">${esc(note)}</p>` : ''}</details>`;
   }
 
   /** 芯片跑分对比：本代三档 vs 竞品同期 */
@@ -223,6 +242,7 @@ export function createStudio(root, opts = {}) {
 
   const appearCtx = () => (game ? opts.getAppearCtx?.() || null : null);
   const ICON = { design: '设计', camera: '影像', battery: '续航', os: '系统' };
+  const KP_ICON = { perf: '流畅', design: '外观', camera: '拍照', battery: '待机', os: '功能' };
 
   function innovationTab() {
     const mem = marketMemory(museum);
@@ -239,7 +259,7 @@ export function createStudio(root, opts = {}) {
     };
     const fxIcons = (c) =>
       [
-        ...Object.entries(c.caps).map(([k, v]) => `${ICON[k] || ''}${v > 0 ? '↑' : '↓'}`),
+        ...Object.entries(c.caps).map(([k, v]) => `${(kp() ? KP_ICON : ICON)[k] || ''}${v > 0 ? '↑' : '↓'}`),
         c.thick > 0.3 ? '📏厚' : '',
         c.weight > 8 ? '⚖️重' : '',
         c.cost >= 8 ? '💰贵' : '',
@@ -268,6 +288,9 @@ export function createStudio(root, opts = {}) {
       if (minor()) {
         why = '当前是小改款，切到大改款才能换创新件';
         block = 'minor';
+      } else if (conceptNeedsMissing(c.id, design)) {
+        why = conceptNeedsMissing(c.id, design);
+        block = 'needs';
       } else if (!formAllowsConcept(design.formFactor, c.id, month)) {
         why = '当前机身形态还装不下；先在「配置」解锁并选择折叠 / 智能机形态';
         block = 'form';
@@ -282,17 +305,18 @@ export function createStudio(root, opts = {}) {
       return `<button type="button" class="concept ${on ? 'on' : ''} ${block ? 'blocked' : ''}" data-concept="${c.id}" ${block ? `data-block="${block}" data-why="${esc(why)}"` : ''} title="${esc(why)}">
         <span class="c-icon">${ico}</span>
         <span class="c-main"><b>${c.name}${nw}</b><small>${esc(c.desc)}</small><i>${fxIcons(c)}</i></span>
-        <span class="c-tags"><span class="c-tag t-${cls}">${label}</span>${c.buzz >= 8 ? `<span class="c-tag t-buzz">${icon('spark', 10)}</span>` : ''}${block ? `<span class="c-tag t-crowd">${block === 'minor' ? '小改款' : block === 'clash' ? '冲突' : '名额满'}</span>` : ''}</span>
+        <span class="c-tags"><span class="c-tag t-${cls}">${label}</span>${c.buzz >= 8 ? `<span class="c-tag t-buzz">${icon('spark', 10)}</span>` : ''}${block ? `<span class="c-tag t-crowd">${block === 'minor' ? '小改款' : block === 'clash' ? '冲突' : block === 'needs' ? '缺部件' : block === 'form' ? '形态不支持' : '名额满'}</span>` : ''}</span>
       </button>`;
     };
-    const visible = CONCEPTS.filter((c) => hasAppeared(c.id, actx));
-    const hidden = CONCEPTS.length - visible.length;
+    const pool = conceptsFor(design);
+    const visible = pool.filter((c) => hasAppeared(c.id, actx ? { ...actx, era: productEraOf(design) } : { era: productEraOf(design) }));
+    const hidden = pool.length - visible.length;
     const practical = visible.filter((c) => PRACTICAL.has(c.id));
     const countOf = (k) => (k === 'practical' ? practical.length : visible.filter((c) => c.cat === k && !PRACTICAL.has(c.id)).length);
     // 只显示有东西的分类，后面带数量
     const FILTERS = [
       ['all', `全部 ${visible.length}`],
-      ...CATS.filter((c) => countOf(c.id)).map((c) => [c.id, `${c.name} ${countOf(c.id)}`]),
+      ...CATS.filter((c) => countOf(c.id)).map((c) => [c.id, `${kp() ? { cam: '拍照', form: '输入与外形', power: '待机', body: '机身', fun: '功能与娱乐' }[c.id] || c.name : c.name} ${countOf(c.id)}`]),
       ...(practical.length ? [['practical', `实用功能 ${practical.length}`]] : []),
       ...(sel.length ? [['on', `已选 ${sel.length}`]] : []),
     ];
@@ -308,16 +332,17 @@ export function createStudio(root, opts = {}) {
       CATS.map((cat) => {
         const list = visible.filter((c) => c.cat === cat.id && !PRACTICAL.has(c.id));
         if (!list.length) return '';
-        return `<h4 class="tier-h">${icon({cam:'cam',form:'phone',power:'battery',body:'gem',fun:'spark'}[cat.id]||'spark', 14)} ${cat.name}</h4><div class="concepts">${list.map(card).join('')}</div>`;
+        return `<h4 class="tier-h">${icon({cam:'cam',form:'phone',power:'battery',body:'gem',fun:'spark'}[cat.id]||'spark', 14)} ${kp() ? { cam: '拍照', form: '输入与外形', power: '待机', body: '机身', fun: '功能与娱乐' }[cat.id] || cat.name : cat.name}</h4><div class="concepts">${list.map(card).join('')}</div>`;
       }).join('') +
       (practical.length ? `<h3 class="sub">${icon('wrench', 16)} 实用功能 <small>常规配置，不占创新名额，但要加成本</small></h3><div class="concepts">${practical.map(card).join('')}</div>` : '');
-    const known = COMBOS.filter((c) => mem[c.id]);
+    const combos = combosFor(design);
+    const known = combos.filter((c) => mem[c.id]);
     return `${filterBar}<p class="hint">前沿创新 已选 <b>${innovCount(sel)}/${maxC()}</b> · 实用功能 ${sel.length - innovCount(sel)} 项${ctx ? ` · ${term('研发点')} <b>${ctx.rp}</b>` : ''}</p>
       ${groups}
-      ${hidden ? `<p class="teaser">🔭 还有 ${hidden} 项技术尚未出现在行业里……</p>` : ''}
+      ${hidden ? `<p class="teaser">🔭 还有 ${hidden} 项新功能，行业里还没人做出来……</p>` : ''}
       ${known.length ? `<h3 class="sub">品类组合</h3><div class="combos">${known
         .map((c) => `<span class="combo ${mem[c.id].first >= 0 && mem[c.id].rivals === 0 ? 'mine' : ''}">${c.name}</span>`)
-        .join('')}<span class="combo unknown">？×${COMBOS.length - known.length}</span></div>` : ''}`;
+        .join('')}<span class="combo unknown">？×${combos.length - known.length}</span></div>` : ''}`;
   }
 
   function redesignBar() {
@@ -334,7 +359,7 @@ export function createStudio(root, opts = {}) {
   function readouts() {
     const p = physical(design);
     const caps = slotCaps(design);
-    const checks = sellPointChecks(design);
+    const checks = sellPointChecks(design, opts.getPointIds?.());
     const ap = appearanceScore(design, null, prevGen());
     const W = wow(design, museum);
     const g = wowGrade(W.score);
@@ -344,7 +369,9 @@ export function createStudio(root, opts = {}) {
       <div class="readouts">
         <div class="ro"><span>厚度</span><b><i data-num="thick" data-v="${p.thickness}" data-dec="1">${p.thickness}</i><small>mm</small></b></div>
         <div class="ro"><span>重量</span><b><i data-num="weight" data-v="${p.weight}">${p.weight}</i><small>g</small></b></div>
-        <div class="ro"><span>蜂鸟实验室跑分</span><b><i data-num="bench" data-v="${p.bench}" data-sep="1">${p.bench.toLocaleString('en-US')}</i></b></div>
+        ${kp()
+          ? `<div class="ro"><span>待机</span><b><i data-num="standby" data-v="${p.standbyDays}">${p.standbyDays}</i><small>天</small></b></div>`
+          : `<div class="ro"><span>${esc(design.chipSeries || '蜂鸟')}实验室跑分</span><b><i data-num="bench" data-v="${p.bench}" data-sep="1">${p.bench.toLocaleString('en-US')}</i></b></div>`}
         <div class="ro"><span>单台成本</span><b>¥<i data-num="cost" data-v="${p.unitCost}">${p.unitCost}</i></b><em>建议 ${p.band}</em></div>
       </div>
       ${(() => {
@@ -402,8 +429,8 @@ export function createStudio(root, opts = {}) {
   }
 
   function renderNews() {
-    const n = marketNews(museum);
-    $('#news').innerHTML = `<span class="news-tag">行业快讯</span> 竞品扎堆：<b>${n.crowded.join(' · ')}</b>${
+    const n = marketNews(museum, productEraOf(design));
+    $('#news').innerHTML = `<span class="news-tag">行业快讯</span> ${kp() ? '柜台上最常见：' : '竞品扎堆：'}<b>${n.crowded.join(' · ')}</b>${
       n.copied.length ? `<span class="news-copy">📣 ${esc(n.copied[n.copied.length - 1])}</span>` : ''
     }`;
   }
@@ -586,13 +613,15 @@ export function createStudio(root, opts = {}) {
   function randomize() {
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
     for (const key of partOrderOf(design)) design.parts[key] = pick(partsTableOf(design)[key].tiers).id;
+    if (kp()) design.parts.network = Math.min(design.parts.network, worldNet());
     design.corner = pick(CORNERS).id;
     design.screenForm = pick(SCREEN_FORMS).id;
     design.layout = pick(LAYOUTS).id;
     design.concepts = [];
     const want = Math.floor(Math.random() * (maxC() + 1));
-    for (const c of [...CONCEPTS].sort(() => Math.random() - 0.5)) {
+    for (const c of [...conceptsFor(design)].sort(() => Math.random() - 0.5)) {
       if (innovCount(design.concepts) >= want) break;
+      if (!hasAppeared(c.id, appearCtx() ? { ...appearCtx(), era: productEraOf(design) } : null) || conceptNeedsMissing(c.id, design)) continue;
       if (!unlockStatus(c.id, unlockCtx()).unlocked) continue;
       if (design.concepts.some((x) => conceptsConflict(c.id, x))) continue;
       design.concepts.push(c.id);
@@ -607,7 +636,9 @@ export function createStudio(root, opts = {}) {
   }
 
   function recommend() {
-    design.parts = { ...RECOMMENDED[design.position] };
+    design.parts = kp()
+      ? { ...(KEYPAD_RECOMMENDED[design.position] || KEYPAD_RECOMMENDED.student), network: Math.min((KEYPAD_RECOMMENDED[design.position] || KEYPAD_RECOMMENDED.student).network, worldNet()) }
+      : { ...(RECOMMENDED[design.position] || RECOMMENDED.mainstream) };
     sfx.part(1);
     update({ panel: true });
     toast('已套用推荐配置：稳，但平庸');
@@ -882,6 +913,11 @@ export function createStudio(root, opts = {}) {
         }
         if (minor()) {
           toast('小改款不能换机身形态，请切到大改款');
+          sfx.cancel();
+          return;
+        }
+        if (game && productEraOf(d.ff) !== productEraOf(design)) {
+          toast('要做另一个时代的手机，得回到企划重新定方向');
           sfx.cancel();
           return;
         }

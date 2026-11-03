@@ -82,9 +82,9 @@ ok('productEraOf flip=keypad', productEraOf('flip') === 'keypad');
 const dFlip = { formFactor: 'flip', parts: { chip: 1, screen: 1, camera: 0, battery: 1, material: 0, size: 1, keyboard: 0, ringtone: 1, network: 0 }, concepts: [], color: '#444' };
 ok('flip BOM 按键价', physical(dFlip).unitCost >= 150 && physical(dFlip).unitCost <= 700, `unitCost=${physical(dFlip).unitCost}`);
 const kn = readFileSync(join(root, 'src/launch/keynote-keypad.js'), 'utf8');
-ok('keynote 含砸核桃/营业厅', kn.includes('砸核桃') && kn.includes('营业厅'));
+ok('keynote 含核桃/营业厅', kn.includes('核桃') && kn.includes('营业厅'));
 ok('films-keypad 注册', readFileSync(join(root, 'src/launch/films-keypad.js'), 'utf8').includes('kp_drop'));
-ok('films.js 合入 KEYPAD_FILMS', readFileSync(join(root, 'src/launch/films.js'), 'utf8').includes('KEYPAD_FILMS'));
+ok('films.js 合入按键短片', readFileSync(join(root, 'src/launch/films.js'), 'utf8').includes('makeKeypadFilms'));
 ok('bench 按键测试项', readFileSync(join(root, 'src/bench.js'), 'utf8').includes('KEYPAD_SUBS') && readFileSync(join(root, 'src/bench.js'), 'utf8').includes('跌落测试'));
 ok('crowd 论坛/短信', readFileSync(join(root, 'src/launch/crowd.js'), 'utf8').includes('CM_KEYPAD') && readFileSync(join(root, 'src/launch/crowd.js'), 'utf8').includes('buildKeypadComments'));
 ok('scenes/share 形态', readFileSync(join(root, 'src/scenes.js'), 'utf8').includes("ff === 'elder'"));
@@ -129,6 +129,74 @@ const mulE = marketMod(stC, 'demand', { formFactor: 'elder' });
 ok('老年机不吃按键衰减 mod', mulE === 1, `mulE=${mulE}`);
 ok('EVENTS 池存在', EVENTS.length >= 3);
 ok('modeOf chronicle', modeOf(stC) === 'chronicle');
+
+// ═══════════ 生成式检查：实际生成玩家会看到的文字，再扫现代词（防「测试全绿但游戏出戏」） ═══════════
+{
+  const { buildKeynote } = await import('../src/launch/keynote.js');
+  const { danmakuLines, buildComments } = await import('../src/launch/crowd.js');
+  const { commentFor, KEYPAD_LAUNCH_STYLES, KEYPAD_LAUNCH_OPT_FIELDS, launchOptFieldsFor } = await import('../src/game/logic.js');
+  const { conceptsFor, hasAppeared, sellPointChecks, wow, marketNews } = await import('../src/studio/parts.js');
+  const { FORM_FACTORS } = await import('../src/game/forms.js');
+  const { REVOLUTION_EVENT } = await import('../src/game/eras/revolution.js');
+  // 按键局里不该出现的现代 / 今天视角的词
+  const MODERN = /跑分|芯片|高刷|\d+\s*Hz|大底|三摄|全面屏|挖孔|潜望|模组|快充|\d+W\b|AI|NPU|GPU|5G|钛|折叠|铰链|遥遥领先|Are you OK|Only .+ can do|热搜|弹幕|App|直播|带货|种草|首销|开售|流片|彩蛋|年代感|真香|旗舰|影像|续航|生态|Pro\b|Max\b|全网|朋友圈|微博|抖音|二维码|扫码|蓝牙耳机|触屏|智能机/;
+  const texts = [];
+  const add = (src, t) => {
+    if (t == null) return;
+    const str = String(typeof t === 'function' ? '' : t).replace(/<[^>]+>/g, '');
+    if (str) texts.push([src, str]);
+  };
+  const forms = ['feature', 'elder', 'flip', 'slider', 'swivel'];
+  let n = 0;
+  for (const ff of forms)
+    for (const screen of [0, 1, 2])
+      for (const ringtone of [0, 1, 2])
+        for (const material of [0, 1, 2])
+          for (const camera of [0, 2]) {
+            const d = {
+              formFactor: ff, modelName: '像素 1', company: '像素工坊', color: '#3a3d46',
+              parts: { chip: 1, screen, camera, battery: 1, material, size: 1, keyboard: n % 3, ringtone, network: n % 4 },
+              concepts: [['dualsim', 'mp3'], ['torch', 'fm'], ['marquee'], []][n % 4],
+            };
+            n++;
+            const seg = buildKeynote({ d, phys: physical(d), price: 399 + n, fair: 450, points: ['standby', 'chord', 'tough'], promises: [{ id: 'chord', ok: n % 2 === 0 }], firsts: n % 5 ? [] : ['双卡双待'], launchOpts: { openTone: ['formal', 'ringtone', 'rugged'][n % 3] } });
+            for (const sl of seg) {
+              add(`keynote:${sl.key}:sub`, sl.sub);
+              add(`keynote:${sl.key}:filmSub`, sl.filmSub);
+              add(`keynote:${sl.key}:chap`, sl.chap);
+              (sl.react || []).forEach((r) => add(`keynote:${sl.key}:react`, r));
+              if (sl.kpi) add(`keynote:${sl.key}:kpi`, `${sl.kpi.label} ${sl.kpi.text || ''}`);
+            }
+            danmakuLines(d, {}, 14).forEach((t) => add('sms', t));
+            buildComments({ design: d, priceRatio: [0.8, 1, 1.3][n % 3], gen: 1, promisesBroken: n % 4 ? [] : ['和弦铃声'] }).forEach((c) => { add('bbs', c.t); add('bbs:who', c.who); });
+            sellPointChecks(d, ['standby', 'loud', 'tough', 'chord', 'camphone', 'dualsim', 'value']).forEach((c) => add('checks', `${c.name} ${c.why}`));
+            add('headline', wow(d, []).headline);
+          }
+  for (const id of ['perf', 'design', 'camera', 'battery', 'os']) for (let p = 0; p <= 100; p += 20) add('slotComment', commentFor(id, p, 'keypad'));
+  conceptsFor({ formFactor: 'feature' }).forEach((c) => add(`concept:${c.id}`, `${c.name} ${c.desc}`));
+  KEYPAD_LAUNCH_STYLES.forEach((x) => add('launchStyle', `${x.label} ${x.desc}`));
+  Object.values(KEYPAD_LAUNCH_OPT_FIELDS).flat().forEach((x) => add('launchOpt', `${x.label} ${x.hint}`));
+  keypadPack.positioning.forEach((x) => add('positioning', `${x.name} ${x.who} ${x.desc}`));
+  keypadPack.sellPoints.forEach((x) => add('sellPoint', `${x.name} ${x.desc}`));
+  keypadPack.slots.forEach((x) => add('slot', `${x.name} ${x.blurb}`));
+  Object.values(keypadPack.parts).forEach((P) => P.tiers.forEach((t) => add(`part:${P.name}`, `${t.label} ${t.note}`)));
+  FORM_FACTORS.filter((f) => productEraOf(f.id) === 'keypad').forEach((f) => add(`form:${f.id}`, `${f.name} ${f.tag} ${f.desc}`));
+  add('marketNews', marketNews([], 'keypad').crowded.join(' '));
+  ok('按键概念件池 ≥ 22 项', conceptsFor({ formFactor: 'feature' }).length >= 22, String(conceptsFor({ formFactor: 'feature' }).length));
+  ok('按键创新池不混入现代件', !conceptsFor({ formFactor: 'feature' }).some((c) => ['lights', 'fastcharge', 'shutter', 'ai'].includes(c.id)));
+  ok('现代件在按键时代不出现', !hasAppeared('lights', { month: 5, mode: 'chronicle', era: 'keypad', gen: 3 }));
+  ok('launchOptFieldsFor 按键无 Are you OK', !JSON.stringify(launchOptFieldsFor({ formFactor: 'feature' })).includes('Are you OK'));
+  const bad = texts.filter(([, t]) => MODERN.test(t));
+  const uniqBad = [...new Map(bad.map(([src, t]) => [t, src])).entries()].slice(0, 12);
+  ok(`按键局生成文本 ${texts.length} 条 · 0 条现代词`, bad.length === 0, uniqBad.map(([t, src]) => `\n    [${src}] ${t}  ← ${t.match(MODERN)[0]}`).join(''));
+  // 同一场短信墙不重复
+  const dd = { formFactor: 'elder', parts: { screen: 0, ringtone: 1, material: 0, camera: 0, battery: 2 }, concepts: ['torch'] };
+  const lines = danmakuLines(dd, {}, 14);
+  ok('短信墙同场不重复', new Set(lines).size === lines.length, lines.join('|'));
+  // 革命事件文案不出现数值术语
+  add('revolution', REVOLUTION_EVENT.body);
+  ok('革命选项是玩家语言（无 +10 / −10% 这类数值）', !REVOLUTION_EVENT.choices.some((c) => /[+−-]\d+/.test(c.blurb)));
+}
 
 console.log(fails ? `\nFAILED ${fails}` : '\nALL ERA LINT PASSED');
 process.exit(fails ? 1 : 0);

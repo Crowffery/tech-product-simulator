@@ -1,4 +1,5 @@
-import { productEraOf, packOf, KEYPAD_PARTS, KEYPAD_PART_ORDER } from '../game/eras/index.js';
+import { productEraOf, packOf, KEYPAD_PARTS, KEYPAD_PART_ORDER, industryMonth, keypadMonth } from '../game/eras/index.js';
+import { KEYPAD_CONCEPTS, KEYPAD_PRACTICAL, KEYPAD_COMBOS } from '../game/eras/keypad.js';
 /** 外观台 Demo：部件档位、外观预设与计分（纯数据 + 纯函数，日后可并入正式游戏） */
 
 export const POSITIONS = [
@@ -260,7 +261,7 @@ export function physical(design) {
   const ring = era === 'keypad' ? tier(design, 'ringtone') : null;
   const net = era === 'keypad' ? tier(design, 'network') : null;
   const form = era === 'keypad' ? { cost: 0 } : (SCREEN_FORMS.find((f) => f.id === design.screenForm) || SCREEN_FORMS[0]);
-  const conceptList = era === 'keypad' && pack.concepts ? pack.concepts : CONCEPTS;
+  const conceptList = CONCEPTS;
   const cs = (design.concepts || []).map((id) => conceptList.find((c) => c.id === id)).filter(Boolean);
   const cThick = cs.reduce((a, c) => a + (c.thick || 0), 0);
   const cWeight = cs.reduce((a, c) => a + (c.weight || 0), 0);
@@ -321,7 +322,7 @@ export function slotCaps(design) {
   const mat = tier(design, 'material');
   const sz = design.parts?.size ?? 1;
   const c = (v) => Math.max(20, Math.min(100, Math.round(v)));
-  const conceptList = era === 'keypad' && pack.concepts ? pack.concepts : CONCEPTS;
+  const conceptList = CONCEPTS;
   const cs = (design.concepts || []).map((id) => conceptList.find((x) => x.id === id)).filter(Boolean);
   const add = (k) => cs.reduce((a, x) => a + (x.caps?.[k] || 0), 0);
   const ffCaps = FORM_FACTOR_CAPS[design.formFactor] || {};
@@ -350,8 +351,23 @@ export function slotCaps(design) {
 }
 
 /** 卖点承诺检查（部件层） */
-export function sellPointChecks(design) {
+const KEYPAD_POINT_CHECKS = {
+  standby: (d, p) => ({ name: '超长待机', ok: (d.parts.battery ?? 0) >= 1 && p.standbyDays >= 10, why: `电池至少中档、待机 ≥10 天（现在 ${p.standbyDays} 天）` }),
+  loud: (d) => ({ name: '字大声大', ok: d.formFactor === 'elder' || (d.parts.keyboard ?? 0) >= 1, why: '老年机，或者选大字键' }),
+  tough: (d) => ({ name: '砸不坏', ok: [0, 2].includes(d.parts.material ?? 0), why: '工程塑料或金属机身（烤漆怕摔）' }),
+  chord: (d) => ({ name: '和弦铃声', ok: (d.parts.ringtone ?? 0) >= 2, why: '铃声选 64 和弦' }),
+  camphone: (d) => ({ name: '拍照手机', ok: (d.parts.camera ?? 0) >= 1, why: '要有摄像头' }),
+  dualsim: (d) => ({ name: '双卡双待', ok: (d.concepts || []).includes('dualsim'), why: '装上「双卡双待」' }),
+  value: () => ({ name: '性价比之王', ok: true, why: '定价时决定：售价要低于心理价位' }),
+};
+
+/** 卖点承诺检查（部件层）：按产品时代；传入企划选的卖点时只检查这几个 */
+export function sellPointChecks(design, pointIds = null) {
   const p = physical(design);
+  if (productEraOf(design) === 'keypad') {
+    const ids = pointIds?.length ? pointIds.filter((id) => KEYPAD_POINT_CHECKS[id]) : Object.keys(KEYPAD_POINT_CHECKS);
+    return ids.map((id) => KEYPAD_POINT_CHECKS[id](design, p));
+  }
   return [
     { name: '极致轻薄', ok: p.thickness <= 7.6 && p.weight <= 175, why: `需 ≤7.6mm 且 ≤175g（现 ${p.thickness}mm / ${p.weight}g）` },
     { name: '续航焦虑终结者', ok: design.parts.battery === 2, why: '需大电池' },
@@ -508,11 +524,20 @@ export const CONCEPTS = [
   { id: 'oneinch', cat: 'cam', appear: {month:18}, tier: 3, name: '一英寸大底', icon: '📷', desc: '主摄大得像相机（要方形或圆形模组）', cost: 10, thick: 0.6, weight: 14, caps: { camera: 14 }, buzz: 8, risk: 12, conflicts: [] },
   { id: 'udc', cat: 'cam', appear: {month:20}, tier: 3, name: '屏下摄像头', icon: '🫥', desc: '前摄藏在屏幕下面', cost: 8, thick: 0, weight: 2, caps: { design: 8, camera: -4 }, buzz: 8, risk: 14, conflicts: ['popup'] },
   { id: 'ai', cat: 'fun', appear: {chip:3}, tier: 3, name: '端侧 AI 芯片', icon: '🤖', desc: '离线大模型助手', cost: 8, thick: 0, weight: 2, caps: { os: 12, battery: -4 }, buzz: 9, risk: 12, conflicts: [] },
+  // ── 按键时代（只在按键机的创新池里出现） ──
+  ...KEYPAD_CONCEPTS,
 ];
+/** 概念件属于哪个产品时代（现代件不写 era） */
+export const conceptEra = (c) => c?.era || 'smart';
+/** 当前设计所属时代的概念件池 */
+export function conceptsFor(design) {
+  const era = productEraOf(design);
+  return CONCEPTS.filter((c) => conceptEra(c) === era);
+}
 export const MAX_CONCEPTS = 3;
 
 /** 实用功能：常规配置，不占「创新」名额 */
-export const PRACTICAL = new Set(['jack', 'ir', 'sdcard', 'ip68', 'haptics', 'ultrasonic', 'reverse', 'fastcharge', 'shutter', 'facelock', 'magcharge', 'paper', 'privacy', 'sicarbon']);
+export const PRACTICAL = new Set(['jack', 'ir', 'sdcard', 'ip68', 'haptics', 'ultrasonic', 'reverse', 'fastcharge', 'shutter', 'facelock', 'magcharge', 'paper', 'privacy', 'sicarbon', ...KEYPAD_PRACTICAL]);
 export const innovCount = (ids = []) => ids.filter((id) => !PRACTICAL.has(id)).length;
 
 export const CATS = [
@@ -529,19 +554,37 @@ export const CATS = [
  */
 export function hasAppeared(id, ctx) {
   const c = CONCEPTS.find((x) => x.id === id);
-  if (!ctx || !c?.appear) return true;
+  if (!c) return false;
+  if (ctx?.era && conceptEra(c) !== ctx.era) return false;
+  if (!ctx || !c.appear) return true;
   const a = c.appear;
+  if (conceptEra(c) === 'keypad') {
+    if (a.kmonth && keypadMonth(ctx.month || 1, ctx.mode) < a.kmonth) return false;
+    return true;
+  }
+  const im = industryMonth(ctx.month || 1, ctx.mode);
   if (a.gen && (ctx.gen || 1) < a.gen) return false;
-  if (a.month && (ctx.month || 1) < a.month) return false;
+  if (a.month && im < a.month) return false;
   if (a.chip && (ctx.chipGen || 1) < a.chip) return false;
   if (a.after) {
     const used = new Set((ctx.models || []).flatMap((m) => m.design.concepts || []));
-    if (!used.has(a.after) && !((ctx.month || 1) >= 30)) return false;
+    if (!used.has(a.after) && !(im >= 30)) return false;
   }
-  // v0.11：折叠族概念需已解锁对应形态（时间轴），未解锁时不出现在创新池
+  // 折叠族概念需已解锁对应形态（时间轴），未解锁时不出现在创新池
   const foldish = { fold: 22, trifold: 28, rollable: 28, wrap: 22 };
-  if (foldish[id] && (ctx.month || 1) < foldish[id]) return false;
+  if (foldish[id] && im < foldish[id]) return false;
   return true;
+}
+
+/** 部件依赖（如补光灯要有摄像头）：不满足时返回原因 */
+export function conceptNeedsMissing(id, design) {
+  const c = CONCEPTS.find((x) => x.id === id);
+  if (!c?.needs) return '';
+  const names = { screen: ['', '彩屏', '大彩屏'], camera: ['', '摄像头'], network: ['', 'GPRS', 'EDGE', '3G'] };
+  for (const [k, v] of Object.entries(c.needs)) {
+    if ((design.parts?.[k] ?? 0) < v) return `需要先在「配置」里选${names[k]?.[v] || k}`;
+  }
+  return '';
 }
 const CBYID = Object.fromEntries(CONCEPTS.map((c) => [c.id, c]));
 
@@ -578,7 +621,7 @@ export function buzzOf(design, museum) {
     const m = mem[id];
     b += c.buzz * (!m ? 1.6 : m.first >= 0 && m.rivals === 0 ? 1.1 : 0.6);
   }
-  for (const c of COMBOS) if (c.test(design) && !mem[c.id]) b += 4;
+  for (const c of combosFor(design)) if (c.test(design) && !mem[c.id]) b += 4;
   return Math.round(b);
 }
 
@@ -596,7 +639,9 @@ export const COMBOS = [
   { id: 'cyberpet', name: '赛博宠物', test: (d) => hasC(d, 'holo') && hasC(d, 'pet') },
   { id: 'offgrid', name: '永不断电', test: (d) => hasC(d, 'solar') && hasC(d, 'battswap') },
   { id: 'ultimate', name: '全面屏终极形态', test: (d) => hasC(d, 'wrap') && d.screenForm === 'full' },
+  ...KEYPAD_COMBOS.map((c) => ({ ...c, era: 'keypad' })),
 ];
+export const combosFor = (d) => COMBOS.filter((c) => (c.era || 'smart') === productEraOf(d));
 
 export function hasC(d, id) {
   return (d.concepts || []).includes(id);
@@ -629,7 +674,7 @@ export function marketMemory(museum) {
   }
   museum.forEach((entry, i) => {
     const d = entry.design;
-    const ids = [...(d.concepts || []), ...COMBOS.filter((c) => c.test(d)).map((c) => c.id)];
+    const ids = [...(d.concepts || []), ...combosFor(d).filter((c) => c.test(d)).map((c) => c.id)];
     for (const id of ids) {
       const m = get(id);
       if (m.first < 0 && m.rivals === 0) m.first = i;
@@ -664,7 +709,7 @@ export function novelty(design, museum) {
     else if (m.rivals === 1) items.push({ label: `「${name}」已有 1 家在做`, v: 10 });
     else items.push({ label: `「${name}」已经烂大街`, v: 3 });
   }
-  for (const c of COMBOS) {
+  for (const c of combosFor(design)) {
     if (!c.test(design)) continue;
     const m = mem[c.id];
     if (!m) items.push({ label: `品类首创「${c.name}」`, v: 15, first: true });
@@ -717,7 +762,16 @@ export function wow(design, museum) {
   const score = Math.round((Math.min(100, n.score * 1.3) * c.score) / 100);
   let headline;
   const bz = buzzOf(design, museum);
-  if (bz >= 40 && c.score < 65) headline = '「做工翻车，但全网都在讨论」';
+  const kp = productEraOf(design) === 'keypad';
+  if (kp) {
+    if (bz >= 40 && c.score < 65) headline = '「做工粗糙，但论坛都在讨论」';
+    else if (n.score >= 55 && c.score >= 85) headline = '「国产手机也能这么做」——报纸给了半个版面';
+    else if (n.score >= 55) headline = '「想法很好，做工还差口气」';
+    else if (n.score >= 30) headline = '「有新东西，但不够惊喜」';
+    else if (!museum.length) headline = '「一台本分的手机」——先站稳营业厅柜台';
+    else if (c.score >= 80) headline = '「稳，但跟去年那台差不多」';
+    else headline = '「不新也不稳」——柜台前没几个人驻足';
+  } else if (bz >= 40 && c.score < 65) headline = '「做工翻车，但全网都在讨论」';
   else if (n.score >= 55 && c.score >= 85) headline = '「这才叫创新！」——科技媒体集体起立';
   else if (n.score >= 55) headline = '「概念满分，做工还差口气」';
   else if (n.score >= 30) headline = '「有新意，但不够炸」';
@@ -729,9 +783,10 @@ export function wow(design, museum) {
 }
 
 /** 年度新闻：告诉玩家哪里已是红海 */
-export function marketNews(museum) {
+const KEYPAD_CROWD = ['彩屏', '和弦铃声', '拍照手机', '双卡双待', '超长待机'];
+export function marketNews(museum, era = 'smart') {
   const mem = marketMemory(museum);
-  const crowded = RIVALS.flatMap((r) => r.crowd);
+  const crowded = era === 'keypad' ? KEYPAD_CROWD.slice(0, 3) : RIVALS.flatMap((r) => r.crowd);
   const copied = Object.entries(mem)
     .filter(([, m]) => m.first >= 0 && m.copiedBy.length)
     .map(([id, m]) => `${m.copiedBy[m.copiedBy.length - 1]} 跟进了你的「${conceptName(id)}」`);
@@ -748,7 +803,7 @@ export function wowGrade(score) {
  */
 export function similarity(a, b) {
   if (!a || !b) return 0;
-  const keys = PART_ORDER;
+  const keys = partOrderOf(a);
   const parts = keys.filter((k) => a.parts?.[k] === b.parts?.[k]).length / keys.length;
   const ca = new Set(a.concepts || []);
   const cb = new Set(b.concepts || []);
