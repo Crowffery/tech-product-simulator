@@ -4,12 +4,12 @@
 import { formTimeline } from '../game/forms.js';
 
 /**
- * @param {number} month
+ * @param {number|object} monthOrState 游戏月或完整 state（含 mode）
  * @param {string} currentId
  * @param {string} act  data-act，如 plan-form
  */
-export function formCardsHtml(month, currentId, act = 'plan-form') {
-  const { forms } = formTimeline(month);
+export function formCardsHtml(monthOrState, currentId, act = 'plan-form') {
+  const { forms } = formTimeline(monthOrState);
   return `<div class="form-cards chips" style="flex-wrap:wrap;gap:8px">
     ${forms
       .map((f) => {

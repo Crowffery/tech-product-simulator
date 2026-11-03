@@ -4,6 +4,7 @@
  */
 
 import { financeTier, SAFE_CASH, CRITICAL_CASH, syncDebt } from './finance.js';
+import { worldEraIdOf, eraAllowsEvent } from './eras/timeline.js';
 
 function bookCash(state, label, v, note = '') {
   const n = Math.round(v);
@@ -101,6 +102,7 @@ export const ANGEL_CARDS = [
   },
   {
     id: 'supply',
+    eras: ['smart', 'fold', 'smart_dawn'],
     meme: 'angel_supply',
     kind: '供应链',
     title: '铰链厂老板是他同学',
@@ -221,11 +223,13 @@ function tierOk(card, state) {
 /** 可抽卡池（同梗冷却 + 档位 + when） */
 export function angelPool(state) {
   const cool = new Set(state.recentMemes || []);
+  const wid = worldEraIdOf(state);
   return ANGEL_CARDS.filter((c) => {
     if (c.meme && cool.has(c.meme)) return false;
     if (!tierOk(c, state)) return false;
     if (c.when && !c.when(state)) return false;
     if (state.lastAngelId === c.id) return false;
+    if (!eraAllowsEvent(c.eras, wid)) return false;
     return true;
   });
 }

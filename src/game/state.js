@@ -6,9 +6,13 @@ export function emptySlots() {
   return Object.fromEntries(SLOTS.map((s) => [s.id, { progress: 0, comment: '尚未动手' }]));
 }
 
-export function createNewGame(companyName, chipSeries = '蜂鸟') {
+export function createNewGame(companyName, chipSeries = '蜂鸟', mode = 'chronicle') {
   return {
-    version: 2,
+    version: 4,
+    mode: mode === 'quick' ? 'quick' : 'chronicle',
+    flags: {},
+    chronicle: [],
+    revolution: null,
     phase: 'plan',
     companyName,
     generation: 1,
@@ -89,7 +93,7 @@ export function loadGame() {
     const raw = lsGet(SAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    if (!data || data.version !== 2) return null;
+    if (!data || (data.version || 0) < 2) return null;
     // migrate old phases
     if (data.phase === 'supplier' || data.phase === 'stock') data.phase = 'logistics';
     if (data.phase === 'launchPrep') data.phase = 'launch';
@@ -120,6 +124,16 @@ export function loadGame() {
     );
     if (data.design === undefined) data.design = null;
     if (data.designDraft === undefined) data.designDraft = null;
+    // v0.12 EraPack
+    if ((data.version || 1) < 3) data.version = 3;
+    // v0.15 编年：旧档一律快速局
+    if ((data.version || 1) < 4) {
+      if (!data.mode) data.mode = 'quick';
+      data.flags = data.flags || {};
+      data.chronicle = data.chronicle || [];
+      if (data.revolution === undefined) data.revolution = null;
+      data.version = 4;
+    }
     return data;
   } catch {
     return null;

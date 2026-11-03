@@ -31,7 +31,7 @@ syncFoldConcepts(d);
 ok('小折自动带 fold 概念', d.concepts.includes('fold'));
 
 // 2) 贷款进账本有流水
-const st = createNewGame('测试社');
+const st = createNewGame('测试社', '蜂鸟', 'quick');
 st.cash = 80; // 低于安全线，过桥可点
 const before = st.ledger.length;
 const r = takeLoan(st, 'bank');

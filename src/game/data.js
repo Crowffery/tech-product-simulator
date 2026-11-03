@@ -303,6 +303,7 @@ export function randomCompanyName() {
 export const MARKET_EVENTS = [
   {
     id: 'ban',
+    eras: ['smart', 'fold', 'smart_dawn'],
     icon: '🚫',
     title: '外购芯片被断供',
     body: '上游芯片厂收到出口限制，接下来一年外购芯片供不应求。自研的公司在偷笑。',
@@ -358,6 +359,7 @@ export const MARKET_EVENTS = [
   },
   {
     id: 'influencer',
+    eras: ['smart', 'fold', 'smart_dawn'],
     icon: '📱',
     title: '头部带货主播想合作',
     body: '一场直播能卖几十万台，但坑位费不便宜，翻车了也会连累你。',
@@ -368,10 +370,67 @@ export const MARKET_EVENTS = [
   },
   {
     id: 'subsidy',
+    eras: ['smart', 'fold', 'smart_dawn'],
     icon: '🏛',
     title: '国补来了：买新手机有补贴',
     body: '政策刺激消费，接下来半年大家换机的意愿明显变高。',
     choices: [{ label: '好耶（销量 +12%，6 个月）', effect: { mod: { key: 'demand', val: 1.12, months: 6 } } }],
+  },
+  {
+    id: 'carrier_deal',
+    eras: ['keypad', 'smart_dawn'],
+    icon: '📡',
+    title: '运营商找上门：要定制机',
+    body: '营业厅渠道开口要十万台定制机，贴他们的商标。量大，但利润薄，品牌也被冲淡。',
+    choices: [
+      { label: '接单（立刻入账，品牌略降）', effect: { cash: 120, brand: -0.03 } },
+      { label: '婉拒，做自己的牌子', effect: { faith: 3, hype: 2 } },
+    ],
+  },
+  {
+    id: 'knockoff_wave',
+    eras: ['keypad', 'smart_dawn'],
+    icon: '📦',
+    title: '山寨机铺天盖地',
+    body: '批发市场冒出一堆贴着你外观的杂牌机，论坛有人问「正版和高仿差在哪」。',
+    choices: [
+      { label: '找律师发函', effect: { cash: -40, faith: 2 } },
+      { label: '降价清库存抢份额', effect: { mod: { key: 'demand', val: 1.08, months: 4 }, brand: -0.04 } },
+      { label: '装作没看见', effect: { faith: -3, hype: -4 } },
+    ],
+  },
+  {
+    id: 'license_3g',
+    eras: ['keypad', 'smart_dawn'],
+    icon: '📶',
+    title: '3G 牌照传闻坐实',
+    body: '工信部放风：第三代移动通信牌照将发。能上网的手机，突然从「噱头」变成「标配预期」。',
+    choices: [
+      { label: '加急上 3G 基带（烧钱）', effect: { cash: -100, flag: 'license3g', mod: { key: 'demand', val: 1.1, months: 6 } } },
+      { label: '观望一季', effect: { flag: 'license3g' } },
+    ],
+  },
+  {
+    id: 'ringtone_chart',
+    eras: ['keypad'],
+    icon: '🔔',
+    title: '铃声榜成了新战场',
+    body: '用户论坛开始晒「开机铃」和和弦铃。好听的机型，营业厅柜员更愿意推。',
+    choices: [
+      { label: '买断热门铃版权', effect: { cash: -60, hype: 8, faith: 2 } },
+      { label: '自己做几首免费铃', effect: { hype: 3 } },
+    ],
+  },
+  {
+    id: 'village_agent',
+    eras: ['keypad', 'smart_dawn'],
+    icon: '🏪',
+    title: '县城代理商愿意压货',
+    body: '一位代理商说：「你这机子耐摔，下面镇上都好卖。」先打一笔订金。',
+    choices: [
+      { label: '答应独家半年', effect: { cash: 80, mod: { key: 'demand', val: 1.12, months: 6 } } },
+      { label: '多渠道走量，不独家', effect: { cash: 30, mod: { key: 'demand', val: 1.05, months: 4 } } },
+    ],
   },
 ];
 
@@ -379,6 +438,7 @@ export const MARKET_EVENTS = [
 export const AFTERMATH_EVENTS = [
   {
     id: 'heatgate',
+    eras: ['smart', 'fold', 'smart_dawn'],
     icon: '🔥',
     title: '上一代被曝「发热门」',
     body: '顶级芯片塞进薄机身又没有散热，测评博主用热成像仪拍出了 52°C。',
@@ -409,6 +469,9 @@ export const AFTERMATH_EVENTS = [
  *   need(state) 解锁条件，needText 条件说明
  */
 export const EXPANSIONS = [
+  { id: 'hall_counter', icon: '🏢', name: '营业厅专柜', cost: 180, upkeep: 2, demand: 1.1, eras: ['keypad', 'smart_dawn'], desc: '运营商柜台主推。按键时代销量 +10%。' },
+  { id: 'county_agent', icon: '🗺', name: '县城代理商网络', cost: 220, upkeep: 2, demand: 1.14, eras: ['keypad', 'smart_dawn'], desc: '下沉渠道。耐用机型走量 +14%。' },
+  { id: 'smt_line', icon: '🔧', name: '自建贴片线', cost: 500, upkeep: 4, costMul: 0.94, eras: ['keypad', 'smart_dawn', 'smart'], desc: '单台成本 -6%。少受代工厂卡脖子。' },
   { id: 'stores', icon: '🏬', name: '开线下体验店', cost: 400, upkeep: 4, demand: 1.08, faith: 5, desc: '销量 +8%，信仰 +5。用户能摸到真机。' },
   { id: 'sea', icon: '🌏', name: '进军东南亚', cost: 350, upkeep: 3, demand: 1.12, desc: '销量 +12%。性价比机型在那里很吃香。', need: (st) => st.generation >= 2, needText: '第 2 代起' },
   { id: 'fab', icon: '🏭', name: '自建工厂', cost: 1200, upkeep: 6, costMul: 0.93, cap: 1.5, desc: '单台成本 -7%，产能 +50%（爆款不再断货）。', need: (st) => (st.cumSold || 0) >= 80, needText: '累计卖出 80 万台' },

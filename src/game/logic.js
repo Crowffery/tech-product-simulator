@@ -5,8 +5,9 @@
  */
 import { SLOTS, POSITIONING, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, MARKET_EVENTS, AFTERMATH_EVENTS, EXPANSIONS, RIVAL_SHARE } from './data.js';
 import { emptySlots } from './state.js';
-import { IDEAL, matchOf, promiseCheck, priceFit, windowAt, clashAt, expectationBar, RUN_MONTHS, POS_BASE_PRICE, roundPrice, marketSize, marketChipGen, rivalPriceList, bandOf, rivalLaunches } from './market.js';
-import { packOf, productEraOf } from './eras/index.js';
+import { IDEAL, matchOf, promiseCheck, priceFit, windowAt, clashAt, expectationBar, RUN_MONTHS, runMonths, POS_BASE_PRICE, roundPrice, marketSize, marketChipGen, rivalPriceList, bandOf, rivalLaunches } from './market.js';
+import { packOf, productEraOf, worldEraOf, worldEraIdOf, eraAllowsEvent, KEYPAD_DEMAND_FORMS, modeOf } from './eras/index.js';
+import { applyRevolutionChoice, shouldTriggerRevolution, REVOLUTION_EVENT } from './eras/revolution.js';
 import {
   defaultDesign,
   slotCaps,
@@ -31,6 +32,19 @@ import { defaultFormId, applyFormToDesign, syncFoldConcepts, formOf, formUnlocke
 export { takeLoan, loanSummary, canExpand, SAFE_CASH, cashPressure, syncDebt, tickLoans, availableLoans, LOAN_PRODUCTS } from './finance.js';
 export { rollAngel, applyAngelChoice, resolveAngelWager, angelById } from './angels.js';
 export { formTimeline, FORM_FACTORS, formUnlocked, formOf, defaultFormId, applyFormToDesign, syncFoldConcepts, formAllowsConcept, formUnlockText } from './forms.js';
+export { applyRevolutionChoice, shouldTriggerRevolution, REVOLUTION_EVENT } from './eras/revolution.js';
+export { runMonths } from './market.js';
+export { worldEraOf, worldEraIdOf } from './eras/index.js';
+
+/** 若革命待决，把它塞进 pendingMarket 供企划卡复用 */
+export function syncRevolutionMarket(state) {
+  if (state?.pendingRevolution || shouldTriggerRevolution(state)) {
+    state.pendingRevolution = true;
+    state.pendingMarket = 'smart_revolution';
+  }
+  return state;
+}
+
 
 // ═════════════════════════ 账本 ═════════════════════════
 
@@ -247,7 +261,7 @@ export function trianglePreview(positioningId, priceId, formFactor) {
 export function finishPlan(state, { positioningId, pointIds, priceId, bindEco, formFactor }) {
   if (state.pendingMarket) return { ok: false, msg: '先处理行业大事' };
   const ff = formFactor || defaultFormId(state.month);
-  if (!formUnlockedSafe(ff, state.month)) return { ok: false, msg: '该形态尚未解锁' };
+  if (!formUnlockedSafe(ff, state)) return { ok: false, msg: '该形态尚未解锁' };
   const pack = packOf(ff);
   const pos = pack.positioning.find((p) => p.id === positioningId);
   const price = pack.priceBands.find((p) => p.id === priceId);
@@ -412,7 +426,7 @@ export function advanceMonth(state, allocation) {
     if (!pts) continue;
     const slot = state.slots[slotId];
     const before = slot.progress;
-    slot.progress = Math.min(caps[slotId], slot.progress + Math.round(pts * 14 * slotBoost(state, slotId)));
+    slot.progress = Math.min(caps[slotId], slot.progress + Math.round(pts * 14 * slotBoost(state, slotId) * marketMod(state, 'rnd')));
     slot.comment = commentFor(slotId, slot.progress);
     gains[slotId] = slot.progress - before;
   }
@@ -430,8 +444,9 @@ export function advanceMonth(state, allocation) {
   const chance = sup.eventChance * [1, 0.8, 0.6][deptLevel(state, 'supply') - 1] * (state.generation === 1 ? 0.5 : 1);
   if (Math.random() < chance) {
     const cool = new Set(state.recentMemes || []);
-    let pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)) && !(e.meme && cool.has(e.meme)));
-    if (!pool.length) pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)));
+    const wid = worldEraIdOf(state);
+    let pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)) && !(e.meme && cool.has(e.meme)) && eraAllowsEvent(e.eras, wid));
+    if (!pool.length) pool = EVENTS.filter((e) => e.id !== state.lastEventId && (!e.when || e.when(state)) && eraAllowsEvent(e.eras, wid));
     const ev = pool[Math.floor(Math.random() * pool.length)];
     state.pendingEvent = ev.id;
     state.phase = 'event';
@@ -801,7 +816,8 @@ export function wowNow(state) {
   const n = novelty(d, state.models);
   const c = completeness(d, state.models);
   const penalty = c.items.reduce((a, b) => a + b.v, 0);
-  const comp = Math.max(30, Math.min(100, Math.round(devRatio(state) * 100 + penalty)));
+  const touch = state.flags?.touchExp || 0;
+  const comp = Math.max(30, Math.min(100, Math.round(devRatio(state) * 100 + penalty + touch)));
   const score = Math.round((Math.min(100, n.score * 1.3) * comp) / 100);
   const buzz = Math.round(buzzOf(d, state.models) * [1, 1.2, 1.4][deptLevel(state, 'pr') - 1]);
   let headline;
@@ -969,12 +985,19 @@ function demandUnits(state, { price, media, user, W, tradeBoost = 1 }) {
   // 和上一代几乎一样：老用户没理由换，新用户也没新鲜感
   const st = staleness(state);
   const fatigue = st > 0.5 ? 1 - Math.min(0.3, (st - 0.5) * 0.6) : 1;
-  // 按键形态：早期走量基数更高（单台利润低）
+  // 按键形态：早期走量基数更高；老年机为独立刚需小市场（智能机时代后约 35%）
   let formMul = 1;
   const ff = state.design?.formFactor || state.product?.formFactor;
   if (ff === 'feature') formMul = 1.15;
-  if (ff === 'elder') formMul = 1.25;
-  const demand = assetMul(state, 'demand') * fatigue * chipD * (win?.mul || 1) * clashF * pe.demandMul * quality * (state.reputation / 55) * tradeBoost * (state.generation === 1 ? 1.15 : 1) * marketMod(state, 'demand') * formMul;
+  if (ff === 'elder') {
+    formMul = 1.25;
+    const we = worldEraIdOf(state);
+    if (we === 'smart' || we === 'fold' || (we === 'smart_dawn' && (state.revolution || state.flags?.revolution))) {
+      formMul *= 0.35; // 相对按键时代普通市场的独立盘子
+    }
+  }
+  const design = state.design || { formFactor: ff };
+  const demand = assetMul(state, 'demand') * fatigue * chipD * (win?.mul || 1) * clashF * pe.demandMul * quality * (state.reputation / 55) * tradeBoost * (state.generation === 1 ? 1.15 : 1) * marketMod(state, 'demand', design) * formMul;
   return { units: Math.round((pack.demandBase || 17) * demand), win, clash, clashF, pe, fatigue };
 }
 
@@ -1002,10 +1025,27 @@ export function salesForecast(state, price) {
 export const overstockLoss = (units, unitCost) => Math.round((units * unitCost * 0.1) / 100);
 
 /** 行业事件对市场的修正（见 marketEvents） */
-export function marketMod(state, key) {
-  const on = (state.mods || []).filter((m) => m.until >= state.month && m.key === key);
+export function marketMod(state, key, design) {
+  const month = state.month || 1;
+  const ff = design?.formFactor || state.design?.formFactor || state.product?.formFactor;
+  const on = (state.mods || []).filter((m) => {
+    if (m.key !== key) return false;
+    if (m.until != null && month > m.until) return false;
+    if (m.forms && ff && !m.forms.includes(ff)) return false;
+    if (m.forms && !ff) return false;
+    return true;
+  });
   if (key === 'extBan') return on.length > 0;
-  return on.reduce((a, m) => a * m.val, 1);
+  return on.reduce((a, m) => {
+    let v = m.val != null ? m.val : 1;
+    if (m.decay) {
+      const from = m.decay.from || month;
+      const n = Math.max(0, month - from);
+      v = Math.pow(1 - m.decay.perMonth, n);
+      if (m.floor != null) v = Math.max(m.floor, v);
+    }
+    return a * v;
+  }, 1);
 }
 
 // ═════════════════════════ 行业大事件 ═════════════════════════
@@ -1013,17 +1053,19 @@ export function marketMod(state, key) {
 /** 每代开局掷一次：先看上一代有没有「物理代价」，再看行业大事 */
 export function rollMarketEvent(state, last) {
   if (last) {
-    const a = AFTERMATH_EVENTS.find((e) => e.test(last.design, last));
+    const wid = worldEraIdOf(state);
+    const a = AFTERMATH_EVENTS.find((e) => e.test(last.design, last) && eraAllowsEvent(e.eras, wid));
     if (a && Math.random() < 0.7) return (state.pendingMarket = a.id);
   }
   if (state.generation < 2 || Math.random() > 0.6) return (state.pendingMarket = null);
   const seen = state.seenMarket || [];
-  const pool = MARKET_EVENTS.filter((e) => (!e.when || e.when(state)) && !seen.slice(-3).includes(e.id));
+  const wid = worldEraIdOf(state);
+  const pool = MARKET_EVENTS.filter((e) => (!e.when || e.when(state)) && !seen.slice(-3).includes(e.id) && eraAllowsEvent(e.eras, wid));
   if (!pool.length) return (state.pendingMarket = null);
   return (state.pendingMarket = pool[Math.floor(Math.random() * pool.length)].id);
 }
 
-export const marketEventById = (id) => MARKET_EVENTS.find((e) => e.id === id) || AFTERMATH_EVENTS.find((e) => e.id === id);
+export const marketEventById = (id) => (id === 'smart_revolution' ? REVOLUTION_EVENT : null) || MARKET_EVENTS.find((e) => e.id === id) || AFTERMATH_EVENTS.find((e) => e.id === id);
 
 function applyMarketEffect(state, eff, label) {
   if (eff.gamble) {
@@ -1036,8 +1078,13 @@ function applyMarketEffect(state, eff, label) {
   if (eff.rep) state.reputation = Math.max(0, Math.min(100, state.reputation + eff.rep));
   if (eff.faith) state.faith = Math.max(0, Math.min(100, state.faith + eff.faith));
   if (eff.hype) state.hype = Math.max(0, state.hype + eff.hype);
+  if (eff.brand) state.brand = Math.max(0.7, Math.min(1.35, (state.brand || 1) + eff.brand));
+  if (eff.flag) {
+    state.flags = state.flags || {};
+    state.flags[eff.flag] = true;
+  }
   if (eff.priceWar) state.priceWar = { until: state.month + eff.priceWar };
-  if (eff.mod) (state.mods ||= []).push({ key: eff.mod.key, val: eff.mod.val, until: state.month + eff.mod.months, label });
+  if (eff.mod) (state.mods ||= []).push({ key: eff.mod.key, val: eff.mod.val, until: state.month + (eff.mod.months || 0), label });
   return '';
 }
 
@@ -1045,6 +1092,13 @@ export function resolveMarketEvent(state, i) {
   const ev = marketEventById(state.pendingMarket);
   if (!ev) return { ok: false };
   const c = ev.choices[i] || ev.choices[0];
+  if (ev.id === 'smart_revolution') {
+    applyRevolutionChoice(state, c.id || ['pivot', 'dual', 'hold'][i] || 'dual');
+    state.pendingMarket = null;
+    state.pendingRevolution = null;
+    state.eventLog.push(`${ev.title}：${c.label}`);
+    return { ok: true, msg: c.label };
+  }
   const res = applyMarketEffect(state, c.effect, ev.title);
   state.seenMarket = [...(state.seenMarket || []), ev.id].slice(-6);
   state.pendingMarket = null;
@@ -1054,7 +1108,12 @@ export function resolveMarketEvent(state, i) {
 
 /** 当前生效的市场修正（给 UI 展示） */
 export function activeMods(state) {
-  return (state.mods || []).filter((m) => m.until >= state.month);
+  const month = state.month || 1;
+  return (state.mods || []).filter((m) => {
+    if (m.until != null && month > m.until) return false;
+    if (m.decay) return month >= (m.decay.from || 0);
+    return m.until == null || m.until >= month;
+  });
 }
 
 /** 发布前拍板售价 */
@@ -1214,7 +1273,7 @@ export function shelfSell(state, months = 2) {
   let income = 0;
   for (let i = 0; i < n; i++) {
     if (!(state.onSale || []).length) break;
-    if (state.month >= RUN_MONTHS) break;
+    if (state.month >= runMonths(state)) break;
     const tail = sellTail(state);
     const loanTick = tickLoans(state);
     state.month += 1;
@@ -1248,6 +1307,23 @@ export function enterNext(state) {
     });
     if (state.models.length > 12) state.models = state.models.slice(-12);
     state.archived = true;
+    const lastM = state.models[state.models.length - 1];
+    if (lastM) {
+      lastM.era = worldEraIdOf(state);
+      lastM.month = state.month;
+      state.chronicle = state.chronicle || [];
+      state.chronicle.push({
+        gen: lastM.gen,
+        month: state.month,
+        era: lastM.era,
+        form: lastM.design?.formFactor,
+        name: lastM.design?.modelName,
+        sold: lastM.sold,
+        lifeSold: lastM.lifeSold,
+        profit: lastM.lifeProfit,
+        revolutionChoice: state.revolution || null,
+      });
+    }
   }
   // 首月只结了首月；这里再跑货架月，把续销真正记进账本
   shelfSell(state, 2);
@@ -1264,7 +1340,7 @@ export function enterNext(state) {
     state.rank = sh.rank;
     state.bestRank = Math.min(state.bestRank || 9, sh.rank);
   }
-  state.phase = state.month >= RUN_MONTHS ? 'ending' : 'next';
+  state.phase = state.month >= runMonths(state) ? 'ending' : 'next';
 }
 
 export function goNextGen(state) {
@@ -1291,8 +1367,13 @@ export function goNextGen(state) {
   state.salesResult = null;
   state.hype = Math.max(0, Math.round(state.hype * 0.3));
   state.phase = 'plan';
-  const last = state.models[state.models.length - 1];
-  rollMarketEvent(state, last ? { design: last.design, thickness: physical(last.design).thickness, supplierId: last.supplierId } : null);
+  if (shouldTriggerRevolution(state)) {
+    state.pendingRevolution = true;
+    state.pendingMarket = 'smart_revolution';
+  } else {
+    const last = state.models[state.models.length - 1];
+    rollMarketEvent(state, last ? { design: last.design, thickness: physical(last.design).thickness, supplierId: last.supplierId } : null);
+  }
 }
 
 export const PHASE_STEPS = [

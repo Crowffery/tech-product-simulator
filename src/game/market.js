@@ -1,4 +1,5 @@
 import { packOf, productEraOf } from './eras/index.js';
+import { modeOf, KEYPAD_DEMAND_FORMS, worldEraOf } from './eras/timeline.js';
 import { KEYPAD_POINT_RULES, KEYPAD_IDEAL, KEYPAD_POS_BASE } from './eras/keypad.js';
 /**
  * V4 市场规则（GAME_DESIGN §3.4）：纯函数，便于调平衡
@@ -154,11 +155,26 @@ export function endingTitles(state) {
   if ((state.brand || 1) >= 1.2) titles.push({ t: 'Pro Max 定价大师', d: `品牌溢价 ×${state.brand.toFixed(2)}，卖得贵还有人排队` });
   if ((state.brand || 1) <= 0.85) titles.push({ t: '交个朋友', d: '价格屠夫，用户心中的「厚道」代名词' });
   if (state.rescued && state.cash >= 800) titles.push({ t: '绝地翻盘', d: '差点倒闭，最后把投资人的钱挣回来了' });
+  // v0.15 编年称号
+  const elderSold = ms.filter((m) => m.design?.formFactor === 'elder').reduce((a, m) => a + (m.lifeSold || m.sold || 0), 0);
+  if (elderSold >= 300) titles.push({ t: '老年机之王', d: `老年机累计出货 ${Math.round(elderSold)} 万台` });
+  if (state.revolution === 'pivot' && (state.flags?.pivotedSmart || ms.some((m) => m.month >= 19 && !['feature','elder','flip','slider','swivel'].includes(m.design?.formFactor)))) {
+    titles.push({ t: '时代的弄潮儿', d: '智能机革命后迅速转型并站住脚跟' });
+  }
+  if (state.revolution === 'hold' && state.cash >= 400) titles.push({ t: '最后的按键机', d: '坚守按键机路线，仍然活到了结局' });
+  const erasHit = new Set((state.chronicle || []).map((c) => c.era).filter(Boolean));
+  if (erasHit.size >= 4 || (modeOf(state) === 'chronicle' && new Set(ms.map((m) => m.era).filter(Boolean)).size >= 3)) {
+    titles.push({ t: '全时代玩家', d: '在多个世界时代都推出过产品' });
+  }
   if (!titles.length) titles.push({ t: '稳健经营者', d: '不惊艳，但活下来了' });
-  return { titles, stats: { gens: ms.length, firsts, avgWow: Math.round(avgWow), sold, cash: state.cash } };
+  const years = modeOf(state) === 'chronicle' ? 5 : 3;
+  return { titles, stats: { gens: ms.length, firsts, avgWow: Math.round(avgWow), sold, cash: state.cash, years, chronicle: state.chronicle || [] } };
 }
 
-export const RUN_MONTHS = 36;
+export const RUN_MONTHS = 36; // quick 默认；编年请用 runMonths(state)
+export function runMonths(state) {
+  return modeOf(state) === 'chronicle' ? 60 : 36;
+}
 
 /** 同期竞品机型的跑分（跑分榜 / 发布会对比用） */
 export function rivalPhones(month) {

@@ -1,9 +1,22 @@
-/** v0.12：按键包可见文案不得命中现代词黑名单；EraPack 入口存在 */
-import { readFileSync, readdirSync } from 'fs';
+/** v0.12+：按键包黑名单 + EraPack；v0.15 编年门闩 */
+import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { KEYPAD_BANNED, keypadPack, packOf, productEraOf } from '../src/game/eras/index.js';
+import {
+  TIMELINES,
+  worldEraIdOf,
+  formUnlockMonth,
+  eraAllowsEvent,
+  modeOf,
+} from '../src/game/eras/timeline.js';
 import { physical, tier, partOrderOf } from '../src/studio/parts.js';
+import { runMonths } from '../src/game/market.js';
+import { createNewGame } from '../src/game/state.js';
+import { formTimeline, formUnlocked, defaultFormId } from '../src/game/forms.js';
+import { MARKET_EVENTS, EVENTS } from '../src/game/data.js';
+import { shouldTriggerRevolution, applyRevolutionChoice } from '../src/game/eras/revolution.js';
+import { marketMod } from '../src/game/logic.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 let fails = 0;
@@ -45,7 +58,6 @@ const dSmart = {
 const ps = physical(dSmart);
 ok('smart BOM 仍是千元级+', ps.unitCost > 1000, `unitCost=${ps.unitCost}`);
 
-// 扫描按键包静态文案
 const blobs = [];
 blobs.push(JSON.stringify(keypadPack.positioning));
 blobs.push(JSON.stringify(keypadPack.sellPoints));
@@ -58,13 +70,13 @@ const joined = blobs.join('\n');
 const hit = joined.match(KEYPAD_BANNED);
 ok('按键包黑名单 0 命中', !hit, hit ? hit[0] : '');
 
-// phone3d present 不得对 keypad 使用现代 createLiveScreen 独占路径
 const phone3d = readFileSync(join(root, 'src/studio/phone3d.js'), 'utf8');
 ok('phone3d 按键走 createScreenFor/FeatureOS', phone3d.includes('createScreenFor') && phone3d.includes('isKeypadForm(ff)'));
 
-// A5：企划含形态
 const ui = readFileSync(join(root, 'src/ui.js'), 'utf8');
 ok('企划形态前移 plan-form', ui.includes('plan-form') && ui.includes('formCardsHtml'));
+ok('创立可选编年模式', ui.includes('set-mode') && ui.includes('完整编年'));
+ok('HUD 时代徽章', ui.includes('era-badge') && ui.includes('worldEraOf'));
 
 ok('productEraOf flip=keypad', productEraOf('flip') === 'keypad');
 const dFlip = { formFactor: 'flip', parts: { chip: 1, screen: 1, camera: 0, battery: 1, material: 0, size: 1, keyboard: 0, ringtone: 1, network: 0 }, concepts: [], color: '#444' };
@@ -75,7 +87,48 @@ ok('films-keypad 注册', readFileSync(join(root, 'src/launch/films-keypad.js'),
 ok('films.js 合入 KEYPAD_FILMS', readFileSync(join(root, 'src/launch/films.js'), 'utf8').includes('KEYPAD_FILMS'));
 ok('bench 按键测试项', readFileSync(join(root, 'src/bench.js'), 'utf8').includes('KEYPAD_SUBS') && readFileSync(join(root, 'src/bench.js'), 'utf8').includes('跌落测试'));
 ok('crowd 论坛/短信', readFileSync(join(root, 'src/launch/crowd.js'), 'utf8').includes('CM_KEYPAD') && readFileSync(join(root, 'src/launch/crowd.js'), 'utf8').includes('buildKeypadComments'));
-ok('scenes/share 形态', readFileSync(join(root, 'src/scenes.js'), 'utf8').includes("ff === 'elder'") );
+ok('scenes/share 形态', readFileSync(join(root, 'src/scenes.js'), 'utf8').includes("ff === 'elder'"));
+
+// v0.15
+ok('chronicle 时间轴 60 月四段', TIMELINES.chronicle.length === 4 && TIMELINES.chronicle.at(-1).to === 60);
+ok('quick 时间轴 36 月三段', TIMELINES.quick.length === 3 && TIMELINES.quick.at(-1).to === 36);
+ok('worldEra 编年第1月=keypad', worldEraIdOf(1, 'chronicle') === 'keypad');
+ok('worldEra 编年第19月=smart_dawn', worldEraIdOf(19, 'chronicle') === 'smart_dawn');
+ok('worldEra 编年第49月=fold', worldEraIdOf(49, 'chronicle') === 'fold');
+ok('worldEra 快速第10月=smart', worldEraIdOf(10, 'quick') === 'smart');
+ok('编年 thick 第19月解锁', formUnlockMonth('thick', 'chronicle') === 19);
+ok('编年 bar 第31月解锁', formUnlockMonth('bar', 'chronicle') === 31);
+ok('快速 thick 第1月解锁', formUnlockMonth('thick', 'quick') === 1);
+ok('快速 fold_s 第22月', formUnlockMonth('fold_s', 'quick') === 22);
+
+const stC = createNewGame('编年社', '蜂鸟', 'chronicle');
+ok('新局编年 version4', stC.mode === 'chronicle' && stC.version === 4 && runMonths(stC) === 60);
+ok('编年开局默认功能机', defaultFormId(stC) === 'feature');
+ok('编年开局无厚直板', !formUnlocked('thick', stC));
+ok('编年形态卡功能机解锁', !!formTimeline(stC).forms.find((f) => f.id === 'feature')?.unlocked);
+
+const stQ = createNewGame('快速社', '蜂鸟', 'quick');
+ok('快速局 36 月', stQ.mode === 'quick' && runMonths(stQ) === 36);
+ok('快速开局 thick 解锁', formUnlocked('thick', stQ));
+
+ok('国补事件标了 smart eras', !!MARKET_EVENTS.find((e) => e.id === 'subsidy')?.eras?.includes('smart'));
+ok('运营商事件属 keypad', !!MARKET_EVENTS.find((e) => e && e.id === 'carrier_deal')?.eras?.includes('keypad'));
+ok('keypad 时代滤掉国补', !eraAllowsEvent(['smart', 'fold', 'smart_dawn'], 'keypad'));
+ok('keypad 时代放行运营商', eraAllowsEvent(['keypad', 'smart_dawn'], 'keypad'));
+
+stC.month = 19;
+ok('第19月应触发革命', shouldTriggerRevolution(stC));
+applyRevolutionChoice(stC, 'pivot');
+ok('革命后 flags.revolution', stC.flags.revolution === 'pivot');
+ok('革命后不再触发', !shouldTriggerRevolution(stC));
+stC.design = { formFactor: 'feature' };
+stC.month = 25;
+const mul = marketMod(stC, 'demand', { formFactor: 'feature' });
+ok('按键需求衰减已生效', mul < 0.9 && mul >= 0.25, `mul=${mul}`);
+const mulE = marketMod(stC, 'demand', { formFactor: 'elder' });
+ok('老年机不吃按键衰减 mod', mulE === 1, `mulE=${mulE}`);
+ok('EVENTS 池存在', EVENTS.length >= 3);
+ok('modeOf chronicle', modeOf(stC) === 'chronicle');
 
 console.log(fails ? `\nFAILED ${fails}` : '\nALL ERA LINT PASSED');
 process.exit(fails ? 1 : 0);

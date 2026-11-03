@@ -4,7 +4,7 @@
  * 设计阶段换成 3D 工作台；发布会换成全屏 3D 演出。
  */
 import { SLOTS, POSITIONING, SELL_POINTS, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, EXPANSIONS, randomCompanyName } from './game/data.js';
-import { packOf, productEraOf } from './game/eras/index.js';
+import { packOf, productEraOf, worldEraOf, worldEraIdOf, eraAllowsEvent } from './game/eras/index.js';
 import { formCardsHtml } from './ui/formCards.js';
 import { defaultFormId } from './game/forms.js';
 import { createNewGame, saveGame, loadGame, clearSave, hasSave } from './game/state.js';
@@ -16,7 +16,7 @@ import { buildComments } from './launch/crowd.js';
 import { money, moneyShort } from './game/money.js';
 import { icon, conceptIcon } from './icons.js';
 import { physical, tier, CONCEPTS, hasAppeared, danmaku, paletteName, novelty, buzzOf, chipSpec, chipName, chipBench, rivalBench, CHIP_SERIES_SEEDS } from './studio/parts.js';
-import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, IDEAL, rivalPhones, marketChipGen, rivalPriceList, roundPrice } from './game/market.js';
+import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, runMonths, IDEAL, rivalPhones, marketChipGen, rivalPriceList, roundPrice } from './game/market.js';
 
 let state = null;
 let screen = 'title'; // title | create | game
@@ -26,7 +26,8 @@ let sfx = null;
 let busy = false; // 演出中禁止操作
 const draft = {
   companyName: randomCompanyName(),
-  plan: L.recommendedPlan(defaultFormId(1)),
+  mode: 'chronicle',
+  plan: L.recommendedPlan(defaultFormId({ month: 1, mode: 'chronicle' })),
   supplierId: 'balanced',
   stockId: 'normal',
   focus: [],
@@ -163,8 +164,9 @@ function hud() {
   const press = L.cashPressure(state);
   const debt = state.debt || 0;
   const finHot = press === 'critical' || press === 'low';
+  const we = worldEraOf(state);
   return `
-    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>第${state.generation}代 · ${Math.floor((state.month - 1) / 12) + 1}年${monthOfYear(state.month)}月${debt ? ` · 债¥${debt}` : ''}</small></div>
+    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>第${state.generation}代 · ${Math.floor((state.month - 1) / 12) + 1}年${monthOfYear(state.month)}月${debt ? ` · 债¥${debt}` : ''} · <button type="button" class="era-badge" data-act="era-info" style="border:0;background:${we.color};color:#111;border-radius:999px;padding:0 8px;font:inherit;cursor:pointer">${esc(we.name)}</button>${state.mode === 'chronicle' ? ' · 编年' : ' · 快速'}</small></div>
     ${Object.entries(STATS)
       .map(([id, s]) => `<button type="button" class="hud-stat s-${id} ${id === 'cash' && press !== 'ok' ? (press === 'critical' ? 'critical' : 'low') : ''}" data-act="stat" data-id="${id}" aria-label="${s.name}">${icon(s.icon, 16)}<span><b>${statVal(id)}</b><small>${s.name}</small></span></button>`)
       .join('')}
@@ -288,7 +290,7 @@ function rail() {
 
 const P = {};
 
-const VERSION = 'v1.4';
+const VERSION = 'v0.15';
 function saveSummary() {
   const s = hasSave() ? loadGame() : null;
   if (!s) return '';
@@ -304,7 +306,7 @@ P.title = () => {
     overlay: `<div class="logo"><small>TECH TYCOON</small><h1>电子产品发展国</h1><p>从车库出发，造一部让世界尖叫的手机</p></div>`,
     sheet: `<div class="menu">
         ${sum ? `<button type="button" class="menu-btn primary" data-act="continue"><b>▶ 继续经营</b><small>${sum}</small></button>` : ''}
-        <button type="button" class="menu-btn ${sum ? '' : 'primary'}" data-act="new"><b>${sum ? '🏁 创立新公司' : '▶ 开始游戏'}</b><small>${sum ? '会覆盖当前存档' : '三年时间，从车库做到科技园'}</small></button>
+        <button type="button" class="menu-btn ${sum ? '' : 'primary'}" data-act="new"><b>${sum ? '🏁 创立新公司' : '▶ 开始游戏'}</b><small>${sum ? '会覆盖当前存档' : '编年 60 月或快速 36 月，从车库做到科技园'}</small></button>
         ${import.meta.env.VITE_STUDIO_HREF === 'none' ? '' : `<a class="menu-btn" href="${import.meta.env.VITE_STUDIO_HREF || './studio.html'}"><b>🎨 自由设计工坊</b><small>所有部件和黑科技全开，随便造</small></a>`}
         <details class="menu-set"><summary>⚙ 设置</summary>
           <label><span>全部声音</span><button type="button" data-act="mute">${sfx?.muted ? '🔇 已关闭' : '🔊 已开启'}</button></label>
@@ -328,17 +330,26 @@ P.create = () => ({
       <div class="row"><input id="chipname" maxlength="4" value="${esc(draft.chipSeries || (draft.chipSeries = CHIP_SERIES_SEEDS[Math.floor(Math.random() * CHIP_SERIES_SEEDS.length)]))}" /><button type="button" data-act="rand-chip" title="换一个">🎲</button></div>
       <small class="muted">第一颗芯片叫「<span id="chiphint">${esc(draft.chipSeries)}</span> X1」，以后每次流片升级一代。</small>
     </label>
+    <div class="field-l">游戏模式
+      <div class="chips">
+        <button type="button" class="chip ${draft.mode !== 'quick' ? 'on' : ''}" data-act="set-mode" data-id="chronicle">📜 完整编年 · 60 月</button>
+        <button type="button" class="chip ${draft.mode === 'quick' ? 'on' : ''}" data-act="set-mode" data-id="quick">⚡ 快速局 · 36 月</button>
+      </div>
+      <small class="muted">${draft.mode === 'quick' ? '与旧版时间轴一致：约三年，智能机很快登场。' : '默认推荐：从按键时代走到折叠兴起，中途会迎来智能机革命。'}</small>
+    </div>
     <div class="brief">
       <b>你的任务</b>
       <span>📋 定方向 → 🎨 做设计 → 🔬 带研发 → 🎤 开发布会 → 🛒 卖出去</span>
-      <span>三年后看你的公司能走多远。具体的活儿，交给手下四个部门。</span>
+      <span>${draft.mode === 'quick' ? '三年' : '五年编年'}后看你的公司能走多远。具体的活儿，交给手下四个部门。</span>
     </div>`,
   cta: `<button type="button" class="primary big" data-act="confirm-create">开张！</button>`,
 });
 
 P.plan = () => {
+  if (L.syncRevolutionMarket) L.syncRevolutionMarket(state);
+  else if (state.pendingRevolution) state.pendingMarket = 'smart_revolution';
   const p = draft.plan;
-  if (!p.formFactor) p.formFactor = defaultFormId(state.month);
+  if (!p.formFactor) p.formFactor = defaultFormId(state);
   const pack = packOf(p.formFactor);
   const tri = L.trianglePreview(p.positioningId, p.priceId, p.formFactor);
   const chips = (list, cur, act, multi = false) =>
@@ -352,7 +363,7 @@ P.plan = () => {
       ${marketEventCard()}
       ${newsCard()}
       ${marketNotice()}
-      <div class="field-l">${term('形态')} <small>第一步 · ${pack.name}</small>${formCardsHtml(state.month, p.formFactor, 'plan-form')}</div>
+      <div class="field-l">${term('形态')} <small>第一步 · ${pack.name}</small>${formCardsHtml(state, p.formFactor, 'plan-form')}</div>
       <div class="field-l">${term('定位')}<div class="chips">${chips(pack.positioning, p.positioningId, 'plan-pos')}</div>${posCard(p.positioningId, !draft.planPosSeen, p.formFactor)}</div>
       <div class="field-l">${term('卖点')} <small>选 1～3 个，发布会上的承诺</small><div class="chips">${chips(pack.sellPoints, p.pointIds, 'toggle-point', true)}</div>${pointsCard(p)}</div>
       <div class="field-l">${term('售价带')} <small>决定备货规模；具体售价发布会前再定</small><div class="chips">${chips(pack.priceBands, p.priceId, 'plan-price')}</div></div>
@@ -498,17 +509,21 @@ function marketEventCard() {
     if (e.priceWar) bits.push('价格战');
     return bits.length ? `<i>${bits.join(' · ')}</i>` : '';
   };
-  return `<div class="mkt-ev"><div class="me-h"><span>${ev.icon}</span><div><small>行业大事</small><b>${esc(ev.title)}</b></div></div>
+  const head = ev.id === 'smart_revolution' ? '智能机革命' : '行业大事';
+  return `<div class="mkt-ev"><div class="me-h"><span>${ev.icon || '📰'}</span><div><small>${head}</small><b>${esc(ev.title)}</b></div></div>
     <p>${esc(ev.body)}</p>
-    <div class="ev-choices">${ev.choices.map((c, i) => `<button type="button" class="choice" data-act="market-choice" data-i="${i}">${esc(c.label)}${tag(c.effect)}</button>`).join('')}</div></div>`;
+    <div class="ev-choices">${ev.choices.map((c, i) => `<button type="button" class="choice" data-act="market-choice" data-i="${i}">${esc(c.label)}${c.blurb ? `<i>${esc(c.blurb)}</i>` : tag(c.effect || {})}</button>`).join('')}</div></div>`;
 }
 
 /** 行业动态：芯片代差、价格战 */
 function marketNotice() {
   const bits = [];
   L.activeMods(state).forEach((m) => {
-    const txt = m.key === 'extBan' ? '外购芯片断供中' : m.key === 'cost' ? `整机成本 ×${m.val}` : `销量 ×${m.val}`;
-    bits.push(`<p class="warn-line ${m.key === 'demand' && m.val > 1 ? 'good' : 'bad'}">📰 ${esc(m.label)}：${txt}（到 ${monthOfYear(m.until)} 月）</p>`);
+    let txt = m.key === 'extBan' ? '外购芯片断供中' : m.key === 'cost' ? `整机成本 ×${m.val}` : m.key === 'rnd' ? `研发效率 ×${m.val}` : `销量修正`;
+    if (m.decay) txt = `按键机需求每月 ${m.decay.perMonth > 0 ? '−' : '+'}${Math.abs(Math.round(m.decay.perMonth * 100))}%（下限 ${Math.round((m.floor || 0) * 100)}%）`;
+    else if (m.val != null && m.key === 'demand') txt = `销量 ×${m.val}`;
+    const until = m.until != null ? `（到 ${monthOfYear(m.until)} 月）` : '';
+    bits.push(`<p class="warn-line ${m.key === 'demand' && m.val > 1 ? 'good' : 'bad'}">📰 ${esc(m.label || m.id || '市场')}：${txt}${until}</p>`);
   });
   const mg = marketChipGen(state.month);
   const lag = mg - state.chip.gen;
@@ -849,7 +864,7 @@ P.sales = () => {
         })()}
         <div class="unit-econ"><span>售价 <b>¥${r.price}</b></span><span>− 成本 <b>¥${r.unitCost}</b></span><span>− 渠道营销 <b>¥${r.channel}</b></span><span>= 每台赚 <b class="${r.perUnit < 0 ? 'neg' : ''}">¥${r.perUnit}</b></span></div>
       </div>`,
-    cta: `<button type="button" class="primary big" data-act="to-next">${state.month >= RUN_MONTHS ? '三年结算 ▶' : '年终总结，规划下一代 ▶'}</button>`,
+    cta: `<button type="button" class="primary big" data-act="to-next">${state.month >= runMonths(state) ? (state.mode === 'chronicle' ? '编年结算 ▶' : '三年结算 ▶') : '年终总结，规划下一代 ▶'}</button>`,
   };
 };
 
@@ -911,16 +926,27 @@ function investTab() {
 
 P.ending = () => {
   const E = endingTitles(state);
+  const years = E.stats.years || (state.mode === 'chronicle' ? 5 : 3);
+  const chron = (state.chronicle || []).filter((c) => c.kind === 'revolution' || c.gen);
+  const chronHtml = chron.length
+    ? `<div class="chronicle-strip" style="display:flex;gap:8px;overflow:auto;padding:8px 0">
+        ${chron.map((c) => c.kind === 'revolution'
+          ? `<div class="title-card" style="min-width:140px"><b>📺 智能机革命</b><small>第${c.month}月 · ${{ pivot: '全力转型', dual: '双线并行', hold: '坚守按键' }[c.choice] || c.choice}</small></div>`
+          : `<div class="title-card" style="min-width:140px"><b>${esc(c.name || ('第' + c.gen + '代'))}</b><small>${esc(c.era || '')} · ${esc(c.form || '')} · 卖 ${c.lifeSold ?? c.sold ?? 0}</small></div>`
+        ).join('')}
+      </div>`
+    : '';
   return {
     scene: ['next', { models: state.models.map((m) => ({ color: m.design.color, grade: m.grade, firsts: m.firsts?.length, cut: !!m.cut, formFactor: m.design?.formFactor })), finale: true }],
     imgs: wallImgs(),
-    caption: '三年过去了，年会大结算',
-    sheet: `<h2 class="sheet-h">${icon('trophy', 22)} 三年结算</h2>
+    caption: years === 5 ? '五年编年落幕，年会大结算' : '三年过去了，年会大结算',
+    sheet: `<h2 class="sheet-h">${icon('trophy', 22)} ${years === 5 ? '编年结算' : '三年结算'}</h2>
       <div class="titles">${E.titles.map((t, i) => `<div class="title-card ${i === 0 ? 'main' : ''}"><b>${t.t}</b><small>${esc(t.d)}</small></div>`).join('')}</div>
       <div class="stat-grid">
         <div><b>${E.stats.gens}</b><span>代产品</span></div><div><b>${E.stats.firsts}</b><span>项首创</span></div>
         <div><b>${E.stats.avgWow}</b><span>平均惊艳</span></div><div><b>${E.stats.sold}</b><span>总销量(万台)</span></div>
       </div>
+      ${chronHtml ? `<h3 class="sub-h">公司编年史</h3>${chronHtml}` : ''}
       ${shareBlock(true)}
       <div class="ending-wall">${state.models.map((m) => `<span title="${esc(m.design.modelName)}">${m.thumb ? `<img src="${m.thumb}" alt="" />` : '📱'}<i>${m.grade || ''}</i></span>`).join('')}</div>`,
     cta: `<button type="button" class="primary big" data-act="hard-restart">再来一局</button>
@@ -942,7 +968,7 @@ function shareBlock(final = false) {
 /** 战略投资：后期的钱往哪花 */
 function expansionBlock() {
   return `<h3 class="sub-h">🌐 战略投资 <small class="have">${icon('coin', 13)} 现有资金 ${money(state.cash)}</small></h3><p class="muted sm">一次投入 + 每月运营费，长期收益。</p>
-    <div class="expand">${EXPANSIONS.map((e) => {
+    <div class="expand">${EXPANSIONS.filter((e) => !e.eras || eraAllowsEvent(e.eras, worldEraIdOf(state))).map((e) => {
       const own = L.hasAsset(state, e.id);
       const ok = !e.need || e.need(state);
       return `<div class="ex ${own ? 'own' : ok ? '' : 'lock'}"><span class="ex-i">${e.icon}</span><div><b>${e.name}</b><small>${e.desc}</small>
@@ -1036,8 +1062,8 @@ function gauge(label, pct, cls = '') {
 
 // ═════════════════════════ 新手引导 ═════════════════════════
 
-const TUT = {
-  plan: '欢迎！你有<b>三年</b>，做出让人惊艳的手机，别破产。<br/>先定这一代卖给谁、卖多少钱、主打什么。带虚线的词都可以点开看解释。',
+const TUT_SMART = {
+  plan: '欢迎！你有一段时间，做出让人惊艳的手机，别破产。<br/>先定这一代卖给谁、卖多少钱、主打什么。带虚线的词都可以点开看解释。',
   design: '这是设计部。<b>🔧 配置</b>选部件，<b>💡 创新</b>挑让人眼前一亮的东西，<b>🎨 外观</b>随你喜欢。<br/>拖动手机能转着看。满意了就「定稿」。',
   supply: '选一家代工厂，再决定首批备多少货。<br/>备少了会断货，备多了压在仓库里。',
   dev: '每推进一个月，团队就往前做一点，觉得哪项重要就点 ⭐。<br/>性能调校过半以后，可以拿工程机<b>跑个分</b>，成绩好会在论坛刷屏。',
@@ -1048,16 +1074,35 @@ const TUT = {
   sales: '首月卖得怎么样？之后它还会继续卖一段时间。',
   next: '一轮结束了。可以升级部门、扩建办公室、让芯片升级——也可以先攒着钱。<br/>剩下的，靠你自己摸索。',
 };
+const TUT_KEYPAD = {
+  plan: '欢迎！先做一台大家买得起、摔不坏的手机。<br/>选形态（功能机 / 老年机…）、定位和售价带。带虚线的词可以点开看解释。',
+  design: '配置台按这个年代来：基带、彩屏、摄像头、键盘手感、铃声和制式。<br/>拖动手机能转着看。满意了就「定稿」。',
+  supply: '找代工厂、谈备货。按键机走量，别压太多货在仓库。',
+  dev: '每个月推进研发。觉得哪项重要就点 ⭐。<br/>工程机可以做<b>跌落 / 待机</b>测试，别指望现代跑分。',
+  event: '出状况了！选一个你能接受的代价。',
+  factory: '流水线开工了。等它跑完的时候，可以随手<b>抽检</b>一台。',
+  launch: '先定价，再上台讲——砸核桃、铃声、待机，才是这个年代的戏。<br/><b>轻点屏幕就能翻页</b>。',
+  score: '看看短信墙和论坛帖怎么说。复盘会提示下一代该补哪块。',
+  sales: '首月卖得怎么样？营业厅和代理商还会继续帮你走量。',
+  next: '一轮结束了。营业厅专柜、县城代理、贴片线都可以布局。<br/>编年模式里，智能机革命会找上门——到时候再选转型还是坚守。',
+  revolution: '蓝莓的大屏触控机来了。普通按键机会慢慢过时，老年机还能撑一阵。<br/>转型、双线还是坚守——三种都能玩到结局，但市场会记住你的选择。',
+};
+function TUT(phase) {
+  const we = state ? worldEraOf(state).id : 'smart';
+  const pack = (we === 'keypad' || we === 'smart_dawn') && !(state?.revolution) ? TUT_KEYPAD : TUT_SMART;
+  return pack[phase] || TUT_SMART[phase] || TUT_KEYPAD[phase];
+}
 const TUT_ORDER = ['plan', 'design', 'supply', 'dev', 'event', 'factory', 'launch', 'score', 'sales', 'next'];
 
 function tutorial(phase) {
-  if (!state?.tutorial || state.tutSeen?.[phase] || !TUT[phase] || busy || document.querySelector('.tut')) return;
+  const tutText = TUT(phase);
+  if (!state?.tutorial || state.tutSeen?.[phase] || !tutText || busy || document.querySelector('.tut')) return;
   const el = document.createElement('div');
   el.className = 'tut';
   const step = TUT_ORDER.indexOf(phase) + 1;
   el.innerHTML = `<div class="tut-card kbox">
       <div class="tut-who"><span class="tut-av">🧑‍🏫</span><div><b>老周</b><small>创业导师 · 新手引导 ${step}/${TUT_ORDER.length}</small></div></div>
-      <p>${TUT[phase]}</p>
+      <p>${tutText}</p>
       <div class="tut-btns"><button type="button" class="primary" data-tut="ok">知道了</button><button type="button" data-tut="skip">跳过引导</button></div>
     </div>`;
   document.body.appendChild(el);
@@ -1867,7 +1912,7 @@ async function shareCard(ending) {
 function startGame(s) {
   state = s;
   screen = 'game';
-  draft.plan = L.recommendedPlan(defaultFormId(state.month));
+  draft.plan = L.recommendedPlan(defaultFormId(state));
   draft.factoryDone = state.phase !== 'factory';
   render();
 }
@@ -2127,11 +2172,17 @@ function onClick(e) {
     $('#cname').value = draft.companyName;
     return;
   }
+  if (act === 'set-mode') {
+    draft.mode = id === 'quick' ? 'quick' : 'chronicle';
+    draft.plan = L.recommendedPlan(defaultFormId({ month: 1, mode: draft.mode }));
+    render();
+    return;
+  }
   if (act === 'confirm-create') {
     const name = ($('#cname')?.value || draft.companyName).trim() || randomCompanyName();
     const chip = ($('#chipname')?.value || draft.chipSeries || '蜂鸟').trim().slice(0, 4) || '蜂鸟';
     play('confirm');
-    startGame(createNewGame(name, chip));
+    startGame(createNewGame(name, chip, draft.mode || 'chronicle'));
     persist();
     play('save');
     flash('开张大吉');
@@ -2330,6 +2381,11 @@ function onClick(e) {
       flash('重新出发');
       break;
     case 'share-launch':
+    case 'era-info': {
+      const we = worldEraOf(state);
+      toast(`${we.name}：${we.blurb}`);
+      break;
+    }
     case 'share-ending':
       shareCard(act === 'share-ending');
       return;
@@ -2388,7 +2444,7 @@ function onClick(e) {
       draft.showHQ = false;
       draft.nextTab = 'review';
       L.goNextGen(state);
-      draft.plan = { ...L.recommendedPlan(state.designDraft?.formFactor || defaultFormId(state.month)), positioningId: state.designDraft?.position || L.recommendedPlan(state.designDraft?.formFactor || defaultFormId(state.month)).positioningId };
+      draft.plan = { ...L.recommendedPlan(state.designDraft?.formFactor || defaultFormId(state)), positioningId: state.designDraft?.position || L.recommendedPlan(state.designDraft?.formFactor || defaultFormId(state)).positioningId };
       draft.planPosSeen = false;
       flash(`第 ${state.generation} 代`);
       break;

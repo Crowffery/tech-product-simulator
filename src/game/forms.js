@@ -1,3 +1,5 @@
+import { formUnlockMonth, modeOf, TIMELINES, WORLD_ERAS, worldEraOf } from './eras/timeline.js';
+
 /**
  * v0.11 开罗式形态时间轴：按游戏月份解锁机身形态，开局不是全家桶。
  * 现阶段只做手机；平板 / 电脑后置。
@@ -195,30 +197,49 @@ export const FORM_FACTORS = [
 
 export const formOf = (id) => FORM_FACTORS.find((f) => f.id === id) || FORM_FACTORS.find((f) => f.id === 'thick');
 
-export function eraOfMonth(month = 1) {
-  const m = Math.max(1, month | 0);
+/** @param {number|object} monthOrState */
+export function eraOfMonth(monthOrState = 1) {
+  if (monthOrState && typeof monthOrState === 'object') {
+    const we = worldEraOf(monthOrState);
+    const map = { keypad: 'early', smart_dawn: 'early', smart: 'smart', fold: 'fold' };
+    const id = map[we.id] || 'early';
+    return FORM_ERAS.find((e) => e.id === id) || FORM_ERAS[0];
+  }
+  const m = Math.max(1, monthOrState | 0);
   return FORM_ERAS.find((e) => m >= e.from && m <= e.to) || FORM_ERAS[FORM_ERAS.length - 1];
 }
 
-export function formUnlocked(id, month = 1) {
-  const f = formOf(id);
-  return (month || 1) >= (f?.unlockMonth || 999);
+function resolveMonthMode(monthOrState, mode) {
+  if (monthOrState && typeof monthOrState === 'object') {
+    return { month: monthOrState.month || 1, mode: mode || modeOf(monthOrState) };
+  }
+  return { month: monthOrState || 1, mode: mode || 'quick' };
 }
 
-export function availableForms(month = 1) {
-  return FORM_FACTORS.filter((f) => formUnlocked(f.id, month));
+export function formUnlocked(id, monthOrState = 1, mode) {
+  const { month, mode: m } = resolveMonthMode(monthOrState, mode);
+  const unlock = formUnlockMonth(id, m);
+  return month >= unlock;
 }
 
-/** 默认形态：早期厚直板；已过智能机时代则默认直板 */
-export function defaultFormId(month = 1) {
-  if (formUnlocked('bar', month)) return 'bar';
+export function availableForms(monthOrState = 1, mode) {
+  return FORM_FACTORS.filter((f) => formUnlocked(f.id, monthOrState, mode));
+}
+
+/** 默认形态：编年早期功能机；快速局仍偏厚直板；已解锁直板则默认直板 */
+export function defaultFormId(monthOrState = 1, mode) {
+  const { month, mode: m } = resolveMonthMode(monthOrState, mode);
+  if (formUnlocked('bar', month, m)) return 'bar';
+  if (m === 'chronicle' && month < formUnlockMonth('thick', 'chronicle')) return 'feature';
   return 'thick';
 }
 
-export function formUnlockText(f, month = 1) {
-  if (formUnlocked(f.id, month)) return '已解锁';
-  const y = Math.floor((f.unlockMonth - 1) / 12) + 1;
-  const mo = ((f.unlockMonth - 1) % 12) + 1;
+export function formUnlockText(f, monthOrState = 1, mode) {
+  const { month, mode: m } = resolveMonthMode(monthOrState, mode);
+  const unlock = formUnlockMonth(f.id, m);
+  if (month >= unlock) return '已解锁';
+  const y = Math.floor((unlock - 1) / 12) + 1;
+  const mo = ((unlock - 1) % 12) + 1;
   return `${y}年${mo}月解锁 · ${f.hint || ''}`;
 }
 
@@ -254,34 +275,40 @@ export function syncFoldConcepts(design) {
 }
 
 /** 形态是否允许装备某概念（折叠类必须先解锁对应形态） */
-export function formAllowsConcept(formId, conceptId, month = 1) {
+export function formAllowsConcept(formId, conceptId, monthOrState = 1, mode) {
+  const { month, mode: m } = resolveMonthMode(monthOrState, mode);
   const foldish = new Set(['fold', 'trifold', 'rollable', 'slider', 'swivel', 'wrap']);
   if (!foldish.has(conceptId)) return true;
   const f = formOf(formId);
   if (conceptId === 'fold' || conceptId === 'trifold' || conceptId === 'rollable') {
-    return !!(f?.fold && formUnlocked(formId, month));
+    return !!(f?.fold && formUnlocked(formId, month, m));
   }
-  // 滑盖 / 旋转 / 环绕：智能机时代起，且非功能机/老年机
   if (f?.id === 'feature' || f?.id === 'elder') return false;
-  if (conceptId === 'slider' || conceptId === 'swivel') return formUnlocked('bar', month) && (month || 1) >= 16;
-  if (conceptId === 'wrap') return formUnlocked('fold_s', month);
+  if (conceptId === 'slider' || conceptId === 'swivel') return formUnlocked('bar', month, m) && month >= (m === 'chronicle' ? 31 : 16);
+  if (conceptId === 'wrap') return formUnlocked('fold_s', month, m);
   return true;
 }
 
-/** 时间轴 UI 用的节点（含锁定态） */
-export function formTimeline(month = 1) {
-  const era = eraOfMonth(month);
+/** 时间轴 UI 用的节点（含锁定态）。可传 state 以读 mode。 */
+export function formTimeline(monthOrState = 1, mode) {
+  const { month, mode: m } = resolveMonthMode(monthOrState, mode);
+  const era = eraOfMonth(monthOrState && typeof monthOrState === 'object' ? monthOrState : month);
+  const erasSrc = m === 'chronicle'
+    ? TIMELINES.chronicle.map((e) => ({ id: e.id, name: (WORLD_ERAS[e.id] || {}).name || e.id, from: e.from, to: e.to, blurb: (WORLD_ERAS[e.id] || {}).blurb || '' }))
+    : FORM_ERAS;
+  const activeId = era?.id || (m === 'chronicle' ? worldEraOf({ month, mode: m }).id : eraOfMonth(month).id);
   return {
-    era,
-    eras: FORM_ERAS.map((e) => ({
+    era: m === 'chronicle' ? { id: activeId, name: (WORLD_ERAS[activeId] || {}).name, from: 0, to: 0, blurb: (WORLD_ERAS[activeId] || {}).blurb } : era,
+    eras: erasSrc.map((e) => ({
       ...e,
-      active: e.id === era.id,
+      active: e.id === activeId || (activeId === 'smart_dawn' && e.id === 'early'),
       reached: month >= e.from,
     })),
     forms: FORM_FACTORS.map((f) => ({
       ...f,
-      unlocked: formUnlocked(f.id, month),
-      unlockText: formUnlockText(f, month),
+      unlockMonth: formUnlockMonth(f.id, m),
+      unlocked: formUnlocked(f.id, month, m),
+      unlockText: formUnlockText(f, month, m),
     })),
   };
 }
