@@ -72,6 +72,13 @@
 
 每个版本上线前按 QUALITY_BAR 抽查：文案不口语注水、关键循环可感知、移动竖屏可读、正式域名可强刷验证。朋友能说清「这代我在养什么、旧机还在不在赚钱、这台机器长什么样」。
 
+## 验收脚本
+
+```bash
+npm test   # test-tail-sales + test-v011 + check-roadmap（PASS 矩阵）
+```
+
 ## 试玩
 
 - 正式：https://tech-product-simulator.vercel.app?v=0.11
+- 直链部署后以 Vercel 输出为准；别名保持正式域名。

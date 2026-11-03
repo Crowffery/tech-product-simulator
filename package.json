@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:v011": "node scripts/test-v011.mjs",
+    "test:tail": "node scripts/test-tail-sales.mjs",
+    "check:roadmap": "node scripts/check-roadmap.mjs",
+    "test": "npm run test:tail && npm run test:v011 && npm run check:roadmap"
   },
   "devDependencies": {
     "vite": "^5.4.11"
