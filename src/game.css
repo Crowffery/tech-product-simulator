@@ -887,3 +887,8 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
   font: 900 12px/1 "Noto Sans SC", sans-serif; color: #fff; background: rgba(0,0,0,.5); padding: 3px 6px; border: 1px solid rgba(255,255,255,.6);
 }
 .launch-overlay.tvad .lo-meter, .launch-overlay.tvad .lo-dm, .launch-overlay.tvad .lo-react { opacity: 0; }
+
+/* 语言切换 */
+.lang-pick { display: inline-flex; gap: 4px; }
+.lang-pick button { padding: 2px 8px; font-size: .78rem; }
+.lang-pick button.on { background: var(--orange, #e67e22); color: #fff; }

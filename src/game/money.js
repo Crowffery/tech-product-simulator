@@ -1,8 +1,10 @@
+import { bigMoney, getLang } from '../i18n/index.js';
 /**
  * 金额显示：游戏内 1 点现金 = ¥100 万
  *   29 → ¥2,900 万 · 250 → ¥2.5 亿 · -40 → -¥4,000 万
  */
 export function money(v, { sign = false } = {}) {
+  if (getLang() === 'en') return bigMoney(v, { sign });
   const n = Math.round(Number(v) || 0);
   const s = n < 0 ? '-' : sign && n > 0 ? '+' : '';
   const a = Math.abs(n);
@@ -15,6 +17,7 @@ export function money(v, { sign = false } = {}) {
 
 /** HUD 用的短格式：¥2.5亿 / ¥2900万 */
 export function moneyShort(v) {
+  if (getLang() === 'en') return bigMoney(v);
   const n = Math.round(Number(v) || 0);
   const a = Math.abs(n);
   const s = n < 0 ? '-' : '';

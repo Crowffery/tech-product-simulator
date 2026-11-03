@@ -14,6 +14,7 @@ import { SceneView } from './scenes.js';
 import { term, installGlossary } from './glossary.js';
 import { buildComments } from './launch/crowd.js';
 import { money, moneyShort } from './game/money.js';
+import { tr, getLang, setLang, LANGS } from './i18n/index.js';
 import { icon, conceptIcon } from './icons.js';
 import { physical, tier, CONCEPTS, hasAppeared, danmaku, paletteName, novelty, buzzOf, chipSpec, chipName, chipBench, rivalBench, CHIP_SERIES_SEEDS } from './studio/parts.js';
 import { priceFit, nextWindow, rivalLaunches, clashAt, windowAt, monthOfYear, endingTitles, RUN_MONTHS, runMonths, IDEAL, rivalPhones, marketChipGen, rivalPriceList, roundPrice } from './game/market.js';
@@ -151,13 +152,13 @@ function rpGainBlock() {
 
 /** 顶部资源：像素图标 + 数值 + 名称，点了有解释 */
 const STATS = {
-  cash: { icon: 'coin', name: '资金' },
-  faith: { icon: 'heart', name: '信仰' },
-  rep: { icon: 'star', name: '口碑' },
-  rp: { icon: 'flask', name: '研发点' },
+  cash: { icon: 'coin', get name() { return tr('资金', 'Cash'); } },
+  faith: { icon: 'heart', get name() { return tr('信仰', 'Fans'); } },
+  rep: { icon: 'star', get name() { return tr('口碑', 'Rep'); } },
+  rp: { icon: 'flask', get name() { return tr('研发点', 'R&D'); } },
 };
 function statVal(id) {
-  return id === 'cash' ? `¥${moneyShort(state.cash)}` : id === 'faith' ? state.faith : id === 'rep' ? state.reputation : state.rp;
+  return id === 'cash' ? (getLang() === 'en' ? moneyShort(state.cash) : `¥${moneyShort(state.cash)}`) : id === 'faith' ? state.faith : id === 'rep' ? state.reputation : state.rp;
 }
 function hud() {
   if (!state) return `<div class="hud-title">电子产品发展国</div><button type="button" class="hud-btn" data-act="settings">⚙</button>`;
@@ -242,11 +243,14 @@ function showSettings() {
   const pop = document.createElement('div');
   pop.className = 'stat-pop';
   const paint = () => {
-    pop.innerHTML = `<div class="sp-card kbox"><div class="sp-h"><b>⚙ 设置</b><button type="button" data-pop="x">✕</button></div>
-      <label class="sp-set"><span>${icon('note', 18)} 背景音乐</span><button type="button" data-pop="music">${sfx?.musicOn === false ? '已关闭' : '已开启'}</button></label>
-      <label class="sp-set"><span>${icon(sfx?.muted ? 'mute' : 'speaker', 18)} 全部声音</span><button type="button" data-pop="mute">${sfx?.muted ? '已关闭' : '已开启'}</button></label>
-      <label class="sp-set"><span>✨ 减少动效</span><button type="button" data-pop="motion">${document.body.classList.contains('reduce-motion') ? '已开启' : '关闭'}</button></label>
-      ${state ? `<label class="sp-set danger"><span>${icon('restart', 18)} 放弃这家公司，重新开始</span><button type="button" data-pop="restart">${draft.restartArmed ? '再点一次确认' : '重开'}</button></label>` : ''}
+    const on = tr('已开启', 'On');
+    const off = tr('已关闭', 'Off');
+    pop.innerHTML = `<div class="sp-card kbox"><div class="sp-h"><b>⚙ ${tr('设置', 'Settings')}</b><button type="button" data-pop="x">✕</button></div>
+      ${langRow()}
+      <label class="sp-set"><span>${icon('note', 18)} ${tr('背景音乐', 'Music')}</span><button type="button" data-pop="music">${sfx?.musicOn === false ? off : on}</button></label>
+      <label class="sp-set"><span>${icon(sfx?.muted ? 'mute' : 'speaker', 18)} ${tr('全部声音', 'All sound')}</span><button type="button" data-pop="mute">${sfx?.muted ? off : on}</button></label>
+      <label class="sp-set"><span>✨ ${tr('减少动效', 'Reduce motion')}</span><button type="button" data-pop="motion">${document.body.classList.contains('reduce-motion') ? on : off}</button></label>
+      ${state ? `<label class="sp-set danger"><span>${icon('restart', 18)} ${tr('放弃这家公司，重新开始', 'Abandon this company and start over')}</span><button type="button" data-pop="restart">${draft.restartArmed ? tr('再点一次确认', 'Tap again to confirm') : tr('重开', 'Restart')}</button></label>` : ''}
     </div>`;
   };
   paint();
@@ -254,6 +258,10 @@ function showSettings() {
   pop.addEventListener('click', (e) => {
     const k = e.target.closest('[data-pop]')?.dataset.pop;
     if (e.target === pop || k === 'x') return pop.remove();
+    if (k === 'lang') {
+      setLang(e.target.closest('[data-lang]')?.dataset.lang);
+      render();
+    }
     if (k === 'music') sfx?.setMusic(!sfx.musicOn);
     if (k === 'mute') sfx?.setMuted(!sfx.muted);
     if (k === 'motion') {
@@ -278,11 +286,18 @@ function showSettings() {
   });
 }
 
+const RAIL_EN = { plan: 'Plan', design: 'Design', supply: 'Supply', dev: 'R&D', factory: 'Build', launch: 'Launch', sales: 'Sales' };
+/** 语言切换（中文 / English） */
+function langRow(attr = 'data-pop') {
+  return `<label class="sp-set"><span>🌐 ${tr('语言', 'Language')}</span><span class="lang-pick">${LANGS.map((l) => `<button type="button" ${attr}="lang" data-lang="${l.id}" class="${getLang() === l.id ? 'on' : ''}">${l.name}</button>`).join('')}</span></label>
+    ${getLang() === 'en' ? '<small class="muted" style="display:block;margin:-2px 0 6px">English translation is in progress — some screens are still in Chinese.</small>' : ''}`;
+}
+
 function rail() {
   if (!state) return '';
   const cur = L.stepIndex(state.phase);
   return L.PHASE_STEPS.map(
-    (s, i) => `<span class="rail-step ${i < cur ? 'done' : i === cur ? 'on' : ''}"><i class="rail-ico">${icon(s.icon, 16)}</i><small>${s.label}</small></span>`,
+    (s, i) => `<span class="rail-step ${i < cur ? 'done' : i === cur ? 'on' : ''}"><i class="rail-ico">${icon(s.icon, 16)}</i><small>${tr(s.label, RAIL_EN[s.id] || s.label)}</small></span>`,
   ).join('<b class="rail-line"></b>');
 }
 
@@ -303,18 +318,19 @@ P.title = () => {
   return {
     scene: ['title', {}],
     caption: '',
-    overlay: `<div class="logo"><small>TECH TYCOON</small><h1>电子产品发展国</h1><p>从车库出发，造一部让世界尖叫的手机</p></div>`,
+    overlay: `<div class="logo"><small>${tr('TECH TYCOON', 'PHONE TYCOON')}</small><h1>${tr('电子产品发展国', 'Phone Tycoon')}</h1><p>${tr('从车库出发，造一部让世界尖叫的手机', "Start in a garage. Build the phone the world can't stop talking about.")}</p></div>`,
     sheet: `<div class="menu">
-        ${sum ? `<button type="button" class="menu-btn primary" data-act="continue"><b>▶ 继续经营</b><small>${sum}</small></button>` : ''}
-        <button type="button" class="menu-btn ${sum ? '' : 'primary'}" data-act="new"><b>${sum ? '🏁 创立新公司' : '▶ 开始游戏'}</b><small>${sum ? '会覆盖当前存档' : '编年 60 月或快速 36 月，从车库做到科技园'}</small></button>
-        ${import.meta.env.VITE_STUDIO_HREF === 'none' ? '' : `<a class="menu-btn" href="${import.meta.env.VITE_STUDIO_HREF || './studio.html'}"><b>🎨 自由设计工坊</b><small>所有部件和黑科技全开，随便造</small></a>`}
-        <details class="menu-set"><summary>⚙ 设置</summary>
-          <label><span>全部声音</span><button type="button" data-act="mute">${sfx?.muted ? '🔇 已关闭' : '🔊 已开启'}</button></label>
-          <label><span>背景音乐</span><button type="button" data-act="music">${sfx?.musicOn === false ? '🎵 已关闭' : '🎵 已开启'}</button></label>
-          <label><span>减少动效</span><button type="button" data-act="motion">${reduce ? '✓ 已开启' : '关闭'}</button></label>
+        ${sum ? `<button type="button" class="menu-btn primary" data-act="continue"><b>▶ ${tr('继续经营', 'Continue')}</b><small>${sum}</small></button>` : ''}
+        <button type="button" class="menu-btn ${sum ? '' : 'primary'}" data-act="new"><b>${sum ? tr('🏁 创立新公司', '🏁 New company') : tr('▶ 开始游戏', '▶ New game')}</b><small>${sum ? tr('会覆盖当前存档', 'Overwrites your current save') : tr('编年 60 月或快速 36 月，从车库做到科技园', 'A 60-month chronicle or a quick 36-month run — from garage to campus')}</small></button>
+        ${import.meta.env.VITE_STUDIO_HREF === 'none' ? '' : `<a class="menu-btn" href="${import.meta.env.VITE_STUDIO_HREF || './studio.html'}"><b>🎨 ${tr('自由设计工坊', 'Free design studio')}</b><small>${tr('所有部件和黑科技全开，随便造', 'Every part and gadget unlocked — build anything')}</small></a>`}
+        <details class="menu-set"><summary>⚙ ${tr('设置', 'Settings')}</summary>
+          ${langRow('data-act')}
+          <label><span>${tr('全部声音', 'All sound')}</span><button type="button" data-act="mute">${sfx?.muted ? tr('🔇 已关闭', '🔇 Off') : tr('🔊 已开启', '🔊 On')}</button></label>
+          <label><span>${tr('背景音乐', 'Music')}</span><button type="button" data-act="music">${sfx?.musicOn === false ? tr('🎵 已关闭', '🎵 Off') : tr('🎵 已开启', '🎵 On')}</button></label>
+          <label><span>${tr('减少动效', 'Reduce motion')}</span><button type="button" data-act="motion">${reduce ? tr('✓ 已开启', '✓ On') : tr('关闭', 'Off')}</button></label>
         </details>
       </div>
-      <p class="ver">${VERSION} · 进度自动保存在本机浏览器</p>`,
+      <p class="ver">${VERSION} · ${tr('进度自动保存在本机浏览器', 'Progress is saved in this browser')}</p>`,
     cta: '',
   };
 };
@@ -2218,6 +2234,11 @@ function onClick(e) {
   const spendRect = btn.dataset.cost ? btn.getBoundingClientRect() : null;
   const cashBefore = state?.cash;
 
+  if (act === 'lang') {
+    setLang(btn.dataset.lang);
+    render();
+    return;
+  }
   if (act === 'mute') {
     sfx?.setMuted(!sfx.muted);
     $('#g-hud').innerHTML = hud();
