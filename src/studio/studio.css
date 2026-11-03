@@ -441,3 +441,12 @@ body.phase-design .g-rail { display: none; }
 .ff-card small { font-size: .62rem; color: #666; line-height: 1.3; }
 .ff-blurb { margin: 6px 0; font-size: .78rem; }
 .ff-hint { font-size: .68rem; margin: 6px 0 0; color: #666; }
+
+/* 舞台上的按钮和铭牌都靠边，不挡机身 */
+.view-btns button { min-height: 0; padding: 4px 10px; font-size: .78rem; line-height: 1.2; }
+.plaque { left: 8px; right: auto; bottom: 8px; transform: none; min-width: 0; padding: 3px 10px; text-align: left; }
+.plaque b { font-size: .88rem; }
+.plaque span { font-size: .58rem; }
+@media (max-width: 600px) {
+  .plaque { bottom: 6px; left: 6px; transform: none; }
+}

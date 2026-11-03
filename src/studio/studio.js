@@ -814,12 +814,8 @@ export function createStudio(root, opts = {}) {
         <div id="danmaku" class="danmaku"></div>
         <div id="reveal" class="reveal"></div>
         <div class="view-btns">
-          <button type="button" data-view="front">正面</button>
-          <button type="button" data-view="back">背面</button>
-          <button type="button" data-view="side">侧面</button>
-          <button type="button" data-view="hero">斜侧</button>
           <button type="button" id="btn-explode" data-act="explode">🔩 拆解</button>
-          <button type="button" id="btn-open" data-act="toggle-open" hidden>📖 开合</button>
+          <button type="button" id="btn-open" data-act="toggle-open" ${['flip', 'slider', 'swivel'].includes(design.formFactor) ? '' : 'hidden'}>📖 开合</button>
         </div>
         <div id="plaque" class="plaque"></div>
       </section>
