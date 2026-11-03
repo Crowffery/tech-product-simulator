@@ -53,6 +53,7 @@ import {
   combosFor,
 } from './parts.js';
 import { productEraOf, packOf, networkWorldLevel, KEYPAD_RECOMMENDED } from '../game/eras/index.js';
+import { KP_SHAPES, archetypeOf, kpShapeOf } from './kpShapes.js';
 import { sfx } from './sfx.js';
 import { icon, conceptIcon } from '../icons.js';
 import { term, installGlossary } from '../glossary.js';
@@ -220,8 +221,13 @@ export function createStudio(root, opts = {}) {
       PALETTE.map(
         (c) => `<button type="button" class="swatch ${cur.toLowerCase() === c.hex ? 'on' : ''}" style="--c:${c.hex}" data-${attr}="${c.hex}" title="${c.name}"></button>`,
       ).join('');
+    const shapeField = kp()
+      ? `<div class="field"><span class="flabel">机身轮廓</span><div class="chips">${(KP_SHAPES[archetypeOf(design)] || KP_SHAPES.bar)
+          .map((o) => `<button type="button" class="chip ${kpShapeOf(design) === o.id ? 'on' : ''}" data-kpshape="${o.id}" ${lockAttr()}>${o.label}</button>`)
+          .join('')}</div></div>`
+      : `<div class="field"><span class="flabel">圆角</span><div class="chips">${opt(CORNERS, design.corner, 'corner', true)}</div></div>`;
     return `
-      <div class="field"><span class="flabel">圆角</span><div class="chips">${opt(CORNERS, design.corner, 'corner', true)}</div></div>
+      ${shapeField}
 
       <div class="field"><span class="flabel">主色 · ${esc(paletteName(design.color))}</span>
         <div class="swatches">${swatches(design.color, 'color')}<label class="swatch custom" title="自定义主色"><input type="color" value="${design.color}" data-custom="color" />＋</label></div></div>
@@ -952,6 +958,10 @@ export function createStudio(root, opts = {}) {
         design.matSub = d.matsub;
         update({ panel: true });
         if (!exploded) stage?.view('side');
+      } else if (d.kpshape) {
+        sfx.part(1);
+        design.kpShape = d.kpshape;
+        update({ panel: true });
       } else if (d.corner) {
         sfx.part(Number(d.corner));
         design.corner = Number(d.corner);

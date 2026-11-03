@@ -1,12 +1,43 @@
 /**
  * 按键机 3D 机身（功能机 / 老年机 / 翻盖 / 滑盖 / 旋转屏）
- * 由 buildPhone 在 isKeypadForm(formFactor) 时分派。
- * 返回结构与 buildPhone 一致；flip/slider/swivel 带 ctl.open 开合。
+ * 由 buildPhone 在 isKeypadForm(formFactor) 时分派；返回结构与 buildPhone 一致。
+ *
+ * 外形参考那个年代精心设计过的造型语言（见 docs/KEYPAD_DESIGN.md）：
+ *   鹅卵石 pebble  —— 宽肩、微收腰、圆下巴，整机像一颗被握暖的石头
+ *   沙漏 waist     —— 屏幕与键盘之间明显收腰，表面处处是细微弧度
+ *   糖果 candy     —— 大圆角、厚实饱满（老年机 / 滑盖）
+ *   超薄 slim      —— 平直金属薄片 + 圆润两端，蚀刻平板键盘（翻盖）
+ *   蛤壳 clam      —— 翻盖：圆顶上盖 + 圆底下盖 + 铰链筒
+ * 轮廓用样条曲线生成，挤出时用大倒角做出圆润鼓包的侧面，而不是方块。
  */
 import * as THREE from 'three';
-import { physical, tier } from './parts.js';
+import { physical } from './parts.js';
+import { archetypeOf, kpShapeOf, KP_SHAPES } from './kpShapes.js';
 
 const FX = 1;
+
+// ═════════════════════════ 轮廓 ═════════════════════════
+
+/** 半边轮廓：[y 占高度比例（+0.5 顶 → -0.5 底）, 半宽占比]，镜像后用闭合样条连成整机轮廓 */
+const PROFILES = {
+  pebble: [[0.5, 0], [0.497, 0.5], [0.48, 0.86], [0.43, 1.0], [0.2, 0.99], [0.04, 0.9], [-0.12, 0.93], [-0.36, 0.96], [-0.46, 0.8], [-0.495, 0.42], [-0.5, 0]],
+  waist: [[0.5, 0], [0.496, 0.66], [0.47, 0.97], [0.38, 1.0], [0.16, 0.95], [0.02, 0.84], [-0.14, 0.9], [-0.4, 0.99], [-0.475, 0.86], [-0.497, 0.5], [-0.5, 0]],
+  candy: [[0.5, 0], [0.494, 0.72], [0.46, 0.97], [0.36, 1.0], [-0.36, 1.0], [-0.46, 0.97], [-0.494, 0.72], [-0.5, 0]],
+  slim: [[0.5, 0], [0.498, 0.8], [0.485, 0.98], [0.45, 1.0], [-0.45, 1.0], [-0.485, 0.98], [-0.498, 0.8], [-0.5, 0]],
+  clamLower: [[0.5, 0], [0.5, 0.86], [0.47, 1.0], [-0.22, 0.99], [-0.42, 0.9], [-0.49, 0.58], [-0.5, 0]],
+  clamLid: [[0.5, 0], [0.49, 0.62], [0.42, 0.93], [0.25, 1.0], [-0.47, 1.0], [-0.5, 0.88], [-0.5, 0]],
+};
+
+function silhouette(w, h, profile) {
+  const right = profile.map(([fy, fx]) => new THREE.Vector3(fx * (w / 2), fy * h, 0));
+  const left = right
+    .slice(1, -1)
+    .reverse()
+    .map((v) => new THREE.Vector3(-v.x, v.y, 0));
+  const curve = new THREE.CatmullRomCurve3([...right, ...left], true, 'centripetal');
+  const pts = curve.getPoints(140).map((p) => new THREE.Vector2(p.x, p.y));
+  return { shape: new THREE.Shape(pts), curve };
+}
 
 function roundedRectShape(w, h, r, cx = 0, cy = 0) {
   const s = new THREE.Shape();
@@ -22,6 +53,23 @@ function roundedRectShape(w, h, r, cx = 0, cy = 0) {
   s.quadraticCurveTo(x, y + h, x, y + h - r);
   s.lineTo(x, y + r);
   s.quadraticCurveTo(x, y, x + r, y);
+  return s;
+}
+
+/** 屏幕窗：上沿微微拱起的「镜片」形 */
+function lensShape(w, h, arch = 0.18, r = 2.2) {
+  const s = new THREE.Shape();
+  const x0 = -w / 2;
+  const y0 = -h / 2;
+  s.moveTo(x0 + r, y0);
+  s.lineTo(x0 + w - r, y0);
+  s.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + r);
+  s.lineTo(x0 + w, y0 + h - r);
+  s.quadraticCurveTo(x0 + w, y0 + h, x0 + w - r, y0 + h + h * arch * 0.15);
+  s.quadraticCurveTo(0, y0 + h + h * arch, x0 + r, y0 + h + h * arch * 0.15);
+  s.quadraticCurveTo(x0, y0 + h, x0, y0 + h - r);
+  s.lineTo(x0, y0 + r);
+  s.quadraticCurveTo(x0, y0, x0 + r, y0);
   return s;
 }
 
@@ -52,21 +100,17 @@ function bodyMaterial(matId, hex) {
   const color = new THREE.Color(hex);
   switch (matId) {
     case 1:
-      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.18, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.12, envMapIntensity: 0.9 });
+      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.16, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.08, envMapIntensity: 1.0 });
     case 2:
-      return new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.05, 0.08), roughness: 0.35, metalness: 0.75, envMapIntensity: 1.1 });
+      return new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.08, 0.08), roughness: 0.32, metalness: 0.8, envMapIntensity: 1.15 });
     default:
-      // 塑料砖头感：更高粗糙度
-      return new THREE.MeshStandardMaterial({ color, roughness: 0.62, envMapIntensity: 0.55 });
+      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.5, clearcoat: 0.25, clearcoatRoughness: 0.5, envMapIntensity: 0.6 });
   }
 }
+const chromeMat = () => new THREE.MeshStandardMaterial({ color: 0xd8dde4, metalness: 0.95, roughness: 0.18, envMapIntensity: 1.3 });
+const darkMat = () => new THREE.MeshBasicMaterial({ color: 0x07070a });
 
-function frameMaterial(matId, hex) {
-  if (matId === 0) return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.55, envMapIntensity: 0.7 });
-  return new THREE.MeshStandardMaterial({ color: new THREE.Color(hex).offsetHSL(0, -0.1, 0.08), roughness: 0.3, metalness: 0.85, envMapIntensity: 1.2 });
-}
-
-/** 待机小彩屏：大时钟 + 运营商，像素感 */
+/** 待机小屏：大时钟 + 运营商，像素感 */
 function standbyTexture(design, { elder = false } = {}) {
   const W = elder ? 96 : 128;
   const H = elder ? 80 : 120;
@@ -77,14 +121,12 @@ function standbyTexture(design, { elder = false } = {}) {
     (g, w, h) => {
       g.fillStyle = '#0a1420';
       g.fillRect(0, 0, w, h);
-      // 状态栏
       g.fillStyle = '#9bbc0f';
       g.font = `bold ${elder ? 8 : 7}px monospace`;
       g.textAlign = 'left';
       g.fillText('星联通信', 4, 10);
       g.textAlign = 'right';
       g.fillText('||||  █', w - 4, 10);
-      // 大时间
       g.fillStyle = elder ? '#f5f5f5' : accent;
       g.font = `bold ${elder ? 28 : 22}px monospace`;
       g.textAlign = 'center';
@@ -106,8 +148,7 @@ function standbyTexture(design, { elder = false } = {}) {
   );
 }
 
-function keyLabelTex(labels) {
-  // 一张竖条图集：每行一个键面文字
+function keyLabelTex(labels, color = '#e8eaef') {
   const n = labels.length;
   const cw = 32;
   const ch = 24;
@@ -117,39 +158,241 @@ function keyLabelTex(labels) {
     (g) => {
       for (let i = 0; i < n; i++) {
         const y = i * ch;
-        g.fillStyle = 'rgba(0,0,0,0)';
         g.clearRect(0, y, cw, ch);
-        g.fillStyle = '#e8eaef';
-        g.font = 'bold 11px monospace';
+        g.fillStyle = color;
         g.textAlign = 'center';
         g.textBaseline = 'middle';
-        const line = labels[i];
-        const parts = String(line).split('\n');
+        const parts = String(labels[i]).split('\n');
         if (parts.length === 1) {
+          g.font = 'bold 12px sans-serif';
           g.fillText(parts[0], cw / 2, y + ch / 2);
         } else {
-          g.font = 'bold 10px monospace';
+          g.font = 'bold 11px sans-serif';
           g.fillText(parts[0], cw / 2, y + ch / 2 - 4);
-          g.fillStyle = '#9aa0ab';
-          g.font = '7px monospace';
+          g.globalAlpha = 0.7;
+          g.font = '7px sans-serif';
           g.fillText(parts[1], cw / 2, y + ch / 2 + 6);
+          g.globalAlpha = 1;
         }
       }
     },
-    { nearest: true },
+    {},
   );
 }
 
-/**
- * @param {object} design
- * @param {{ hdScreen?: boolean, liveScreen?: object|null }} opts
- */
-export function archetypeOf(design) {
-  const ff = design?.formFactor || 'feature';
-  if (ff === 'elder') return 'elder';
-  if (ff === 'flip' || ff === 'slider' || ff === 'swivel') return ff;
-  return 'bar';
+/** 用轮廓挤出一块圆润的机身：大倒角做出鼓包侧面 */
+function pillowBody(w, h, t, profile, material, { bevel = 0.34 } = {}) {
+  const bt = Math.min(t * bevel, 5);
+  const bs = Math.min(bt * 0.9, w * 0.08);
+  const { shape } = silhouette(w - 2 * bs, h - 2 * bs, profile);
+  const depth = Math.max(0.3, t - 2 * bt);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: bt, bevelSize: bs, bevelSegments: 7, curveSegments: 48 });
+  geo.translate(0, 0, -depth / 2);
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, material);
 }
+
+/** 前脸面板（可撞色）+ 可选镀铬描边 */
+function faceplate(group, w, h, profile, z, hex, { matId = 0, chrome = false, scale = 0.86 } = {}) {
+  // 面板要缩在机身正面的平面之内，否则侧面会翘出一条边
+  scale = Math.min(scale, 0.8);
+  const { shape, curve } = silhouette(w * scale, h * (scale + 0.08), profile);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.25, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.6, bevelSegments: 4, curveSegments: 48 });
+  geo.translate(0, 0, z - 0.45);
+  const plate = new THREE.Mesh(geo, bodyMaterial(matId === 2 ? 1 : matId, hex));
+  group.add(plate);
+  if (chrome) {
+    const pts = curve.getPoints(160).map((p) => new THREE.Vector3(p.x * 1.03, p.y * 1.015, z + 0.15));
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 200, 0.32, 6, true), chromeMat());
+    group.add(tube);
+  }
+  return plate;
+}
+
+/** 屏幕窗：黑色镜片 + 显示面 */
+function screenWindow(group, { cy, dw, dh, z, map, arch = 0.16, screenMaps, anchors }) {
+  const lens = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(lensShape(dw + 5, dh + 6, arch, 3), { depth: 0.2, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.3, bevelSegments: 2, curveSegments: 24 }),
+    new THREE.MeshPhysicalMaterial({ color: 0x0b0c10, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.2 }),
+  );
+  lens.position.set(0, cy - 0.6, z);
+  group.add(lens);
+  const sm = new THREE.MeshBasicMaterial({ map, toneMapped: false });
+  screenMaps.push(sm);
+  const disp = new THREE.Mesh(new THREE.PlaneGeometry(dw, dh), sm);
+  disp.position.set(0, cy, z + 0.45);
+  group.add(disp);
+  const a = new THREE.Object3D();
+  a.position.set(0, cy, z + 0.5);
+  group.add(a);
+  anchors.screen = a;
+  return disp;
+}
+
+/** 听筒：胶囊形开槽 + 细栅 */
+function earpiece(group, { cy, z, w = 12 }) {
+  const slot = new THREE.Mesh(new THREE.ShapeGeometry(roundedRectShape(w, 2.2, 1.1), 10), new THREE.MeshBasicMaterial({ color: 0x15161a }));
+  slot.position.set(0, cy, z);
+  group.add(slot);
+  const dark = darkMat();
+  const n = Math.round(w / 1.7);
+  for (let i = 0; i < n; i++) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.15), dark);
+    bar.position.set(-w / 2 + 1.2 + i * ((w - 2.4) / Math.max(1, n - 1)), cy, z + 0.08);
+    group.add(bar);
+  }
+}
+
+/**
+ * 导航区 + 数字键盘：键帽是胶囊形，按「微笑弧线」排布（越靠两侧越高）；
+ * etched = 超薄机型的金属蚀刻平板键盘。
+ */
+function keypadFace(group, { padW, top, bottom, z, elder = false, etched = false, smile = 1, backHex, navStyle = 'oval' }) {
+  const keyMat = etched
+    ? new THREE.MeshStandardMaterial({ color: shade(backHex, -0.05), metalness: 0.85, roughness: 0.28, envMapIntensity: 1.2 })
+    : new THREE.MeshPhysicalMaterial({ color: elder ? 0x3a3f48 : 0x2a2d34, roughness: 0.42, clearcoat: 0.4, clearcoatRoughness: 0.3 });
+  const keyTopMat = etched ? keyMat : new THREE.MeshPhysicalMaterial({ color: elder ? 0x4b515c : 0x3a3d46, roughness: 0.32, clearcoat: 0.6, clearcoatRoughness: 0.2 });
+  // —— 导航区：中间圆 / 椭圆方向键，两侧弧形软键，下方接听 / 挂断 ——
+  const navH = elder ? 16 : 13;
+  const navY = top - navH / 2;
+  const navRx = elder ? 7 : 5.8;
+  const navRy = navStyle === 'joystick' ? navRx : navRx * 0.78;
+  const navMat = new THREE.MeshPhysicalMaterial({ color: etched ? shade(backHex, 0.1) : 0x2e323a, metalness: etched ? 0.8 : 0.1, roughness: 0.3, clearcoat: 0.6 });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(navRx, 0.9, 10, 40), navMat);
+  ring.scale.set(1, navRy / navRx, 0.6);
+  ring.position.set(0, navY, z + 0.6);
+  group.add(ring);
+  const center = new THREE.Mesh(new THREE.SphereGeometry(navStyle === 'joystick' ? 2.2 : navRx * 0.45, 20, 12), new THREE.MeshPhysicalMaterial({ color: navStyle === 'joystick' ? 0x9aa3ad : 0x50565f, metalness: 0.5, roughness: 0.25, clearcoat: 0.8 }));
+  center.scale.set(1, navStyle === 'joystick' ? 1 : navRy / navRx, 0.45);
+  center.position.set(0, navY, z + 0.8);
+  group.add(center);
+  const wing = (side, color, dy) => {
+    const s = new THREE.Shape();
+    const x0 = side * (navRx + 2.2);
+    const x1 = side * (padW / 2 - 1);
+    s.moveTo(x0, dy + 2.4);
+    s.quadraticCurveTo((x0 + x1) / 2, dy + 3.8, x1, dy + 2.2);
+    s.quadraticCurveTo(x1 + side * 0.8, dy, x1, dy - 2.2);
+    s.quadraticCurveTo((x0 + x1) / 2, dy - 1.2, x0, dy - 2.0);
+    s.quadraticCurveTo(x0 - side * 0.8, dy, x0, dy + 2.4);
+    const m = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(s, { depth: 0.5, bevelEnabled: true, bevelThickness: 0.3, bevelSize: 0.3, bevelSegments: 3, curveSegments: 16 }),
+      color,
+    );
+    m.position.set(0, navY, z + 0.15);
+    group.add(m);
+  };
+  const soft = new THREE.MeshPhysicalMaterial({ color: etched ? shade(backHex, 0.06) : 0x2b2e36, metalness: etched ? 0.8 : 0, roughness: 0.35, clearcoat: 0.5 });
+  const green = new THREE.MeshPhysicalMaterial({ color: 0x27ae60, roughness: 0.35, clearcoat: 0.5, emissive: 0x145a32, emissiveIntensity: 0.25 });
+  const red = new THREE.MeshPhysicalMaterial({ color: 0xc0392b, roughness: 0.35, clearcoat: 0.5, emissive: 0x5a1510, emissiveIntensity: 0.2 });
+  wing(-1, soft, navRy * 0.55);
+  wing(1, soft, navRy * 0.55);
+  wing(-1, green, -navRy * 0.65);
+  wing(1, red, -navRy * 0.65);
+
+  // —— 数字键 ——
+  const labels = ['1', '2\nabc', '3\ndef', '4\nghi', '5\njkl', '6\nmno', '7\npqrs', '8\ntuv', '9\nwxyz', '*', '0\n+', '#'];
+  const atlas = keyLabelTex(labels, etched ? '#1a1d22' : '#e8eaef');
+  const keyScale = elder ? 1.55 : 1.0;
+  const cols = 3;
+  const rows = 4;
+  const gapX = elder ? 2.4 : 1.4;
+  const gapY = elder ? 2.2 : 1.3;
+  const gridTop = top - navH - (elder ? 3 : 2.4);
+  const gridBottom = bottom;
+  const gridH = gridTop - gridBottom;
+  const kw = (padW - gapX * (cols - 1)) / cols;
+  const kh = Math.min((gridH - gapY * (rows - 1)) / rows, kw * (elder ? 0.72 : 0.6));
+  const keyDepth = etched ? 0.18 : elder ? 1.35 : 0.95;
+  const keypadGroup = new THREE.Group();
+  group.add(keypadGroup);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      const kx = -padW / 2 + kw / 2 + c * (kw + gapX);
+      // 微笑弧线：两侧列略高
+      const ky = gridTop - kh / 2 - r * (kh + gapY) + (c === 1 ? 0 : smile * (elder ? 1.2 : 1.6));
+      const shape = etched ? roundedRectShape(kw - 0.3, kh - 0.3, 0.6) : roundedRectShape(kw - 0.6, kh - 0.6, (kh - 0.6) / 2);
+      const geo = new THREE.ExtrudeGeometry(shape, {
+        depth: keyDepth,
+        bevelEnabled: true,
+        bevelThickness: etched ? 0.05 : elder ? 0.4 : 0.3,
+        bevelSize: etched ? 0.05 : elder ? 0.35 : 0.28,
+        bevelSegments: etched ? 1 : 3,
+        curveSegments: 12,
+      });
+      const mesh = new THREE.Mesh(geo, [keyMat, keyMat, keyMat, keyMat, keyTopMat, keyMat]);
+      mesh.position.set(kx, ky, z + 0.05);
+      keypadGroup.add(mesh);
+      const label = new THREE.Mesh(
+        new THREE.PlaneGeometry(Math.min(kw * 0.62, kh * 1.3), kh * 0.62),
+        new THREE.MeshBasicMaterial({ map: atlas, transparent: true, depthWrite: false, toneMapped: false }),
+      );
+      const uvs = label.geometry.attributes.uv;
+      const v0 = 1 - (idx + 1) / labels.length;
+      const v1 = 1 - idx / labels.length;
+      for (let i = 0; i < uvs.count; i++) uvs.setXY(i, uvs.getX(i), v0 + uvs.getY(i) * (v1 - v0));
+      label.position.set(kx, ky, z + 0.05 + keyDepth + (etched ? 0.08 : 0.35));
+      keypadGroup.add(label);
+    }
+  }
+  return { keypadGroup, gridTop, gridBottom, keyScale };
+}
+
+export { archetypeOf, kpShapeOf, KP_SHAPES };
+
+function shell() {
+  const root = new THREE.Group();
+  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
+  Object.values(layers).forEach((g) => root.add(g));
+  return { root, layers, anchors: {}, anim: [], screenMaps: [] };
+}
+
+function backDetails(group, { w, h, design, camY, z, elder = false }) {
+  const backHex = design.color || '#3a3d46';
+  // 电池盖接缝
+  const seam = roundedRectShape(w * 0.72, h * 0.5, 6, 0, -h * 0.12).getPoints(40);
+  seam.push(seam[0]);
+  const sl = new THREE.Line(new THREE.BufferGeometry().setFromPoints(seam), new THREE.LineBasicMaterial({ color: shade(backHex, -0.3) }));
+  sl.position.z = z + 0.02;
+  sl.layers.set(FX);
+  group.add(sl);
+  if ((design.parts?.camera ?? 0) > 0) {
+    const r = elder ? 2.4 : 2.8;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.6, 0.55, 10, 28), chromeMat());
+    ring.position.set(0, camY, z + 0.4);
+    const glass = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: 0x101830, roughness: 0.05, clearcoat: 1, iridescence: 0.6 }));
+    glass.rotation.x = Math.PI / 2;
+    glass.scale.set(1, 0.3, 1);
+    glass.position.set(0, camY, z + 0.1);
+    group.add(ring, glass);
+  }
+  // 外放喇叭孔阵列
+  const dark = darkMat();
+  for (let i = 0; i < 9; i++) {
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.45, 8), dark);
+    dot.position.set(-3 + (i % 3) * 3, camY - 9 - Math.floor(i / 3) * 2.6, z + 0.03);
+    group.add(dot);
+  }
+  const logo = new THREE.Mesh(
+    new THREE.PlaneGeometry(w * 0.5, 7),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      depthWrite: false,
+      map: canvasTex(128, 24, (g) => {
+        g.fillStyle = shade(backHex, 0.4).getStyle();
+        g.font = 'bold 14px sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText((design.company || design.modelName || '').slice(0, 8), 64, 12);
+      }),
+    }),
+  );
+  logo.position.set(0, -h * 0.18, z + 0.05);
+  group.add(logo);
+}
+
+// ═════════════════════════ 直板 / 老年机 ═════════════════════════
 
 export function buildKeypadPhone(design, { hdScreen = false, liveScreen = null } = {}) {
   const arch = archetypeOf(design);
@@ -159,313 +402,102 @@ export function buildKeypadPhone(design, { hdScreen = false, liveScreen = null }
   const phys = physical(design);
   const ff = design.formFactor || phys.formFactor || 'feature';
   const elder = ff === 'elder';
-  // 按键砖头尺寸：明显异于现代直板（72×152）
-  const w = elder ? 56 : 48;
-  const h = elder ? 118 : 108;
-  const t = Math.max(phys.thickness, elder ? 17 : 14.5);
+  const shapeId = kpShapeOf(design);
+  const w = elder ? 56 : shapeId === 'waist' ? 47 : 49;
+  const h = elder ? 120 : 112;
+  const t = Math.max(phys.thickness, elder ? 17 : 15);
   const matId = design.parts?.material ?? 0;
-  const camTier = design.parts?.camera ?? 0;
   const backHex = design.color || '#3a3d46';
-  const frameHex = design.twoTone === 'frame' ? design.color2 || backHex : backHex;
-  const cornerR = elder ? 5.5 : 4.2;
-
-  const root = new THREE.Group();
-  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
+  const faceHex = design.twoTone !== 'none' && design.color2 ? design.color2 : backHex;
+  const profile = PROFILES[shapeId] || PROFILES.pebble;
+  const { root, layers, anchors, anim, screenMaps } = shell();
   const ctl = { id: null, t0: 0, until: 0 };
-  Object.values(layers).forEach((g) => root.add(g));
-  const anchors = {};
-  const anim = [];
-  const screenMaps = [];
+  const zf = t / 2;
 
-  const capW = w - 1.2;
-  const capH = h - 1.2;
-  const capR = cornerR;
-
-  // —— 厚塑料中框 ——
-  const inset = 2.2;
-  const holeW = w - 2 * inset;
-  const holeH = h - 2 * inset;
-  const outer = roundedRectShape(capW, capH, capR);
-  const hole = roundedRectShape(holeW, holeH, Math.max(1, cornerR - inset));
-  outer.holes.push(new THREE.Path(hole.getPoints(12).reverse()));
-  const depth = t - 2.4;
-  const frameGeo = new THREE.ExtrudeGeometry(outer, {
-    depth,
-    bevelEnabled: true,
-    bevelThickness: 1.1,
-    bevelSize: 1.0,
-    bevelSegments: 3,
-    curveSegments: 16,
-  });
-  frameGeo.translate(0, 0, -depth / 2);
-  layers.frame.add(new THREE.Mesh(frameGeo, frameMaterial(matId, frameHex)));
-  const mid = new THREE.Mesh(
-    new THREE.ShapeGeometry(roundedRectShape(holeW - 0.4, holeH - 0.4, Math.max(0.8, cornerR - inset)), 12),
-    new THREE.MeshStandardMaterial({ color: 0x6a6e78, roughness: 0.55, metalness: 0.4, side: THREE.DoubleSide }),
-  );
-  mid.position.z = t / 2 - 1.2;
-  layers.frame.add(mid);
-
-  // 侧键（音量）
-  const keySide = frameMaterial(matId, shade(frameHex, -0.08).getStyle());
-  const vol = new THREE.Mesh(new THREE.BoxGeometry(1.4, elder ? 18 : 14, Math.min(3.2, t * 0.35)), keySide);
-  vol.position.set(w / 2 + 0.4, h * 0.18, 0);
+  // —— 机身：圆润鼓包 ——
+  layers.frame.add(pillowBody(w, h, t, profile, bodyMaterial(matId, backHex)));
+  // 侧键（音量）：贴着侧面的弧形小条
+  const vol = new THREE.Mesh(new THREE.CapsuleGeometry(0.9, elder ? 14 : 10, 4, 10), bodyMaterial(matId, shade(backHex, -0.1).getStyle()));
+  vol.position.set(w / 2 - 0.4, h * 0.16, 0);
   layers.frame.add(vol);
 
-  // 充电口 + 喇叭孔
-  const dark = new THREE.MeshBasicMaterial({ color: 0x07070a });
-  const port = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 1.2, 12), dark);
-  port.rotation.x = Math.PI / 2;
-  port.position.set(0, -h / 2 + 0.3, 0);
-  layers.frame.add(port);
-  for (let i = 0; i < 4; i++) {
-    const g = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 0.9), dark);
-    g.position.set(-10 + i * 2.6, -h / 2 + 0.25, 0);
-    layers.frame.add(g);
-  }
-
-  // 天线短桩（功能机必有；老年机可选小 stub）
+  // 天线短桩（功能机必有；老年机为小凸起）
   {
-    const antMat = new THREE.MeshStandardMaterial({ color: 0x2a2d34, metalness: 0.55, roughness: 0.4 });
-    const stubLen = elder ? 10 : 16;
-    const stub = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.35, stubLen, 10), antMat);
-    stub.position.set(w / 2 - 5, h / 2 + stubLen * 0.35, -t * 0.08);
-    stub.rotation.z = elder ? 0.15 : 0.28;
-    const tip = new THREE.Mesh(
-      new THREE.SphereGeometry(1.5, 10, 8),
-      new THREE.MeshStandardMaterial({ color: elder ? 0xc0392b : 0xe67e22, roughness: 0.4 }),
-    );
-    tip.position.copy(stub.position);
-    tip.position.y += stubLen * 0.48;
-    tip.position.x += elder ? 0.6 : 1.4;
-    layers.frame.add(stub, tip);
+    const antMat = new THREE.MeshPhysicalMaterial({ color: 0x23262c, roughness: 0.35, clearcoat: 0.5 });
+    const stubLen = elder ? 7 : 12;
+    const stub = new THREE.Mesh(new THREE.CapsuleGeometry(1.5, stubLen, 4, 12), antMat);
+    stub.position.set(w / 2 - 7, h / 2 + stubLen * 0.35, -t * 0.12);
+    layers.frame.add(stub);
     anchors.antenna = stub;
   }
 
-  // 老年机：顶部手电筒 LED
+  // 老年机：顶部手电筒 LED + 挂绳孔
   if (elder) {
     const ledMat = new THREE.MeshStandardMaterial({ color: 0xfff6d0, emissive: 0xfff1b8, emissiveIntensity: 0.85, roughness: 0.35 });
-    const led = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 1.4, 16), ledMat);
+    const led = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 1.4, 20), ledMat);
     led.rotation.x = Math.PI / 2;
-    led.position.set(-w / 2 + 8, h / 2 + 0.2, 0);
+    led.position.set(-w / 2 + 12, h / 2 - 1.2, 0);
     layers.frame.add(led);
     anchors.flashlight = led;
     anim.push((now) => {
       ledMat.emissiveIntensity = 0.55 + 0.35 * Math.sin(now * 0.004);
     });
-    // 挂绳孔
-    const holeRing = new THREE.Mesh(
-      new THREE.TorusGeometry(1.6, 0.45, 8, 16),
-      new THREE.MeshStandardMaterial({ color: 0x4a4e57, metalness: 0.6, roughness: 0.4 }),
-    );
+    const holeRing = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.45, 8, 16), chromeMat());
     holeRing.rotation.y = Math.PI / 2;
-    holeRing.position.set(w / 2 - 3, -h / 2 + 4, 0);
+    holeRing.position.set(w / 2 - 5, -h / 2 + 7, 0);
     layers.frame.add(holeRing);
     anchors.lanyard = holeRing;
   }
 
-  // —— 前脸：小屏 + 键盘 ——
-  const front = layers.front;
+  // —— 前脸 ——
   const fa = new THREE.Group();
-  front.add(fa);
-
-  const faceGeo = new THREE.ExtrudeGeometry(roundedRectShape(capW + 0.05, capH + 0.05, capR + 0.05), {
-    depth: 0.45,
-    bevelEnabled: true,
-    bevelThickness: 0.18,
-    bevelSize: 0.18,
-    bevelSegments: 2,
-    curveSegments: 16,
-  });
-  faceGeo.translate(0, 0, -0.5);
-  fa.add(new THREE.Mesh(faceGeo, new THREE.MeshPhysicalMaterial({ color: 0x0c0d12, roughness: 0.12, clearcoat: 0.8, envMapIntensity: 0.9 })));
-
-  // 屏幕：上部约 38% 高度
-  const screenFrac = elder ? 0.32 : 0.36;
-  const dispW = capW * 0.78;
-  const dispH = capH * screenFrac;
-  const screenY = capH / 2 - dispH / 2 - (elder ? 10 : 9);
-  const bezMat = new THREE.MeshBasicMaterial({ color: 0x050507 });
-  const bezel = new THREE.Mesh(
-    new THREE.ShapeGeometry(roundedRectShape(dispW + 3.2, dispH + 3.2, 2.2), 12),
-    bezMat,
-  );
-  bezel.position.set(0, screenY, 0.12);
-  fa.add(bezel);
-
-  const primaryMap = liveScreen?.texture || standbyTexture(design, { elder });
-  const screenMat = new THREE.MeshBasicMaterial({ map: primaryMap, toneMapped: false });
-  screenMaps.push(screenMat);
-  const display = new THREE.Mesh(new THREE.PlaneGeometry(dispW, dispH), screenMat);
-  display.position.set(0, screenY, 0.18);
-  fa.add(display);
+  layers.front.add(fa);
+  faceplate(fa, w, h, profile, zf, faceHex, { matId, chrome: shapeId === 'waist' || matId === 2 });
+  const fz = zf + 0.5;
+  const dispW = w * (elder ? 0.66 : 0.6);
+  const dispH = h * (elder ? 0.24 : 0.25);
+  const screenY = h / 2 - dispH / 2 - (elder ? 15 : 14);
+  const map = liveScreen?.texture || standbyTexture(design, { elder });
+  screenWindow(fa, { cy: screenY, dw: dispW, dh: dispH, z: fz, map, arch: shapeId === 'pebble' ? 0.22 : 0.12, screenMaps, anchors });
   if (liveScreen) anim.push((now) => liveScreen.paint(now));
+  const grilleY = h / 2 - 7;
+  earpiece(fa, { cy: grilleY, z: fz + 0.1, w: elder ? 14 : 12 });
 
-  anchors.screen = new THREE.Object3D();
-  anchors.screen.position.set(0, screenY, 0.2);
-  fa.add(anchors.screen);
+  const padW = w * (elder ? 0.7 : 0.7);
+  const { keypadGroup, gridTop, gridBottom, keyScale } = keypadFace(fa, {
+    padW,
+    top: screenY - dispH / 2 - 5.5,
+    bottom: -h / 2 + (elder ? 11 : 12),
+    z: fz,
+    elder,
+    smile: shapeId === 'candy' ? 0.3 : 1,
+    backHex,
+    navStyle: shapeId === 'waist' ? 'joystick' : 'oval',
+  });
 
-  // 听筒格栅（屏幕上方）
-  {
-    const grilleY = screenY + dispH / 2 + 3.2;
-    const slot = new THREE.Mesh(
-      new THREE.ShapeGeometry(roundedRectShape(elder ? 16 : 14, 2.2, 1.0), 8),
-      new THREE.MeshBasicMaterial({ color: 0x1a1b20 }),
-    );
-    slot.position.set(0, grilleY, 0.2);
-    fa.add(slot);
-    for (let i = 0; i < 7; i++) {
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.5, 0.2), dark);
-      bar.position.set(-5 + i * 1.65, grilleY, 0.28);
-      fa.add(bar);
-    }
-  }
-
-  // —— 数字键盘 ——
-  // feature: 标准 T9 3×4（1-9 *0#）+ 上方功能行
-  // elder: 更大键帽、更少视觉密度，红色 SOS
-  const padTop = screenY - dispH / 2 - (elder ? 5 : 4);
-  const padBottom = -capH / 2 + (elder ? 7 : 6);
-  const padH = padTop - padBottom;
-  const padW = capW * (elder ? 0.88 : 0.86);
-
-  const softY = padTop - (elder ? 5.5 : 4.5);
-  // 软键 / 导航
-  {
-    const softMat = new THREE.MeshStandardMaterial({ color: 0x2b2e36, roughness: 0.45 });
-    const green = new THREE.MeshStandardMaterial({ color: 0x27ae60, roughness: 0.4, emissive: 0x145a32, emissiveIntensity: 0.25 });
-    const red = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.4, emissive: 0x5a1510, emissiveIntensity: 0.2 });
-    const navR = elder ? 5.2 : 3.6;
-    const softW = elder ? 11 : 8;
-    const softH = elder ? 5.5 : 4.2;
-    const leftSoft = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(roundedRectShape(softW, softH, 1.2), { depth: 0.7, bevelEnabled: true, bevelThickness: 0.15, bevelSize: 0.15, bevelSegments: 1 }),
-      softMat,
-    );
-    leftSoft.position.set(-padW * 0.32, softY, 0.15);
-    const rightSoft = leftSoft.clone();
-    rightSoft.position.x = padW * 0.32;
-    const call = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(roundedRectShape(softW * 0.9, softH, 1.1), { depth: 0.7, bevelEnabled: true, bevelThickness: 0.15, bevelSize: 0.15, bevelSegments: 1 }),
-      green,
-    );
-    call.position.set(-padW * 0.32, softY - softH - 2.2, 0.15);
-    const end = call.clone();
-    end.material = red;
-    end.position.x = padW * 0.32;
-    const nav = new THREE.Mesh(new THREE.CylinderGeometry(navR, navR * 1.05, 1.1, 24), softMat);
-    nav.rotation.x = Math.PI / 2;
-    nav.position.set(0, softY - softH * 0.35, 0.55);
-    const navDot = new THREE.Mesh(new THREE.CylinderGeometry(navR * 0.42, navR * 0.42, 0.5, 16), new THREE.MeshStandardMaterial({ color: 0x4a5560, roughness: 0.4 }));
-    navDot.rotation.x = Math.PI / 2;
-    navDot.position.set(0, softY - softH * 0.35, 1.05);
-    fa.add(leftSoft, rightSoft, call, end, nav, navDot);
-  }
-
-  const labels = ['1', '2\nabc', '3\ndef', '4\nghi', '5\njkl', '6\nmno', '7\npqrs', '8\ntuv', '9\nwxyz', '*', '0\n+', '#'];
-  const atlas = keyLabelTex(labels);
-
-  const keyMat = new THREE.MeshStandardMaterial({ color: elder ? 0x343840 : 0x2a2c33, roughness: 0.48, emissive: shade(backHex, -0.35), emissiveIntensity: 0.08 });
-  const keyTopMat = new THREE.MeshStandardMaterial({ color: elder ? 0x454a55 : 0x3a3c45, roughness: 0.4 });
-
-  let cols = 3;
-  let rows = 4;
-  const keyScale = elder ? 1.55 : 1.0;
-  const gapX = elder ? 2.8 : 1.6;
-  const gapY = elder ? 2.6 : 1.5;
-  const gridTop = softY - (elder ? 16 : 13);
-  const gridBottom = padBottom + (elder ? 2 : 1.5);
-  const gridH = gridTop - gridBottom;
-  const gridW = padW;
-
-  const kw = ((gridW - gapX * (cols - 1)) / cols) * (elder ? 0.98 : 1);
-  const kh = ((gridH - gapY * (rows - 1)) / rows) * (elder ? 0.98 : 1);
-  const keyDepth = elder ? 1.35 : 0.95;
-
-  const keypadGroup = new THREE.Group();
-  fa.add(keypadGroup);
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const idx = r * cols + c;
-      const kx = -gridW / 2 + kw / 2 + c * (kw + gapX);
-      const ky = gridTop - kh / 2 - r * (kh + gapY);
-      const shape = roundedRectShape(kw - 0.6, kh - 0.6, elder ? 2.4 : 1.4);
-      const geo = new THREE.ExtrudeGeometry(shape, {
-        depth: keyDepth,
-        bevelEnabled: true,
-        bevelThickness: elder ? 0.35 : 0.22,
-        bevelSize: elder ? 0.35 : 0.2,
-        bevelSegments: 2,
-        curveSegments: 8,
-      });
-      const mesh = new THREE.Mesh(geo, [keyMat, keyMat, keyMat, keyMat, keyTopMat, keyMat]);
-      mesh.position.set(kx, ky, 0.2);
-      keypadGroup.add(mesh);
-
-      // 键面文字
-      const label = new THREE.Mesh(
-        new THREE.PlaneGeometry(kw * 0.7, kh * 0.55),
-        new THREE.MeshBasicMaterial({
-          map: atlas,
-          transparent: true,
-          depthWrite: false,
-          toneMapped: false,
-        }),
-      );
-      // UV 切片：每键取图集一行
-      const uvs = label.geometry.attributes.uv;
-      const v0 = 1 - (idx + 1) / labels.length;
-      const v1 = 1 - idx / labels.length;
-      for (let i = 0; i < uvs.count; i++) {
-        const u = uvs.getX(i);
-        const v = uvs.getY(i);
-        uvs.setXY(i, u, v0 + v * (v1 - v0));
-      }
-      label.position.set(kx, ky, 0.2 + keyDepth + 0.05);
-      keypadGroup.add(label);
-    }
-  }
-
-  // 老年机：左侧红色超大 SOS 键（明显异于功能机）
+  // 老年机：左侧红色大 SOS 键
   if (elder) {
-    const sosMat = new THREE.MeshStandardMaterial({
-      color: 0xe74c3c,
-      roughness: 0.35,
-      emissive: 0xc0392b,
-      emissiveIntensity: 0.35,
-      metalness: 0.15,
-    });
-    const sosW = 7.5;
-    const sosH = gridH * 0.72;
-    const sos = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(roundedRectShape(sosW, sosH, 2.2), {
-        depth: 1.5,
-        bevelEnabled: true,
-        bevelThickness: 0.35,
-        bevelSize: 0.3,
-        bevelSegments: 2,
-      }),
-      sosMat,
-    );
-    sos.position.set(-padW / 2 - sosW * 0.55 - 0.5, (gridTop + gridBottom) / 2, 0.25);
-    keypadGroup.add(sos);
+    const sosMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c, roughness: 0.35, emissive: 0xc0392b, emissiveIntensity: 0.35, metalness: 0.15 });
+    const sos = new THREE.Mesh(new THREE.CapsuleGeometry(2.6, 14, 6, 14), sosMat);
+    sos.position.set(-w / 2 + 0.6, h * 0.02, 0);
+    layers.frame.add(sos);
     const sosLabel = new THREE.Mesh(
-      new THREE.PlaneGeometry(sosW * 0.7, 6),
+      new THREE.PlaneGeometry(4.4, 9),
       new THREE.MeshBasicMaterial({
         transparent: true,
         depthWrite: false,
-        map: canvasTex(48, 24, (g) => {
+        map: canvasTex(24, 48, (g) => {
           g.fillStyle = '#fff';
-          g.font = 'bold 14px monospace';
+          g.font = 'bold 11px sans-serif';
           g.textAlign = 'center';
           g.textBaseline = 'middle';
-          g.fillText('SOS', 24, 12);
-        }, { nearest: true }),
+          ['S', 'O', 'S'].forEach((ch, i) => g.fillText(ch, 12, 10 + i * 14));
+        }),
       }),
     );
-    sosLabel.position.set(sos.position.x, sos.position.y, 0.25 + 1.55);
-    keypadGroup.add(sosLabel);
+    sosLabel.rotation.y = -Math.PI / 2;
+    sosLabel.position.set(-w / 2 - 2.1, h * 0.02, 0);
+    layers.frame.add(sosLabel);
     anchors.sos = sos;
     anim.push((now) => {
       sosMat.emissiveIntensity = 0.25 + 0.3 * (0.5 + 0.5 * Math.sin(now * 0.005));
@@ -473,126 +505,41 @@ export function buildKeypadPhone(design, { hdScreen = false, liveScreen = null }
   }
 
   anchors.keypad = new THREE.Object3D();
-  anchors.keypad.position.set(0, (gridTop + gridBottom) / 2, 0.8);
+  anchors.keypad.position.set(0, (gridTop + gridBottom) / 2, fz + 1);
   fa.add(anchors.keypad);
-  // spotlight 用 c-keypad / c-keyboard
   anchors['c-keypad'] = anchors.keypad;
   anchors['c-keyboard'] = anchors.keypad;
 
-  // —— 后盖 ——
+  // —— 后盖细节 ——
   const back = layers.back;
   back.rotation.y = Math.PI;
-  const plateGeo = new THREE.ExtrudeGeometry(roundedRectShape(capW, capH, capR), {
-    depth: 0.55,
-    bevelEnabled: true,
-    bevelThickness: 0.15,
-    bevelSize: 0.15,
-    bevelSegments: 1,
-    curveSegments: 16,
-  });
-  plateGeo.translate(0, 0, -0.6);
-  back.add(new THREE.Mesh(plateGeo, bodyMaterial(matId, backHex)));
-
-  // 电池盖接缝
-  {
-    const seam = roundedRectShape(capW - 6, capH * 0.72, 3, 0, -capH * 0.04).getPoints(20);
-    seam.push(seam[0]);
-    const sl = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(seam),
-      new THREE.LineBasicMaterial({ color: shade(backHex, -0.3) }),
-    );
-    sl.position.z = 0.12;
-    sl.layers.set(FX);
-    back.add(sl);
-  }
-
-  // 单颗小摄像头（非多摄模组）；camera tier 0 可省略
-  if (camTier > 0) {
-    const cx = 0;
-    const cy = h * 0.32;
-    const r = elder ? 2.4 : 2.8;
-    const ring = new THREE.Mesh(
-      new THREE.CylinderGeometry(r + 0.6, r + 0.7, 1.0, 20),
-      new THREE.MeshStandardMaterial({ color: 0x8a8e96, metalness: 0.85, roughness: 0.25 }),
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(cx, cy, 0.55);
-    const barrel = new THREE.Mesh(new THREE.CircleGeometry(r, 20), new THREE.MeshBasicMaterial({ color: 0x0a0b10 }));
-    barrel.position.set(cx, cy, 1.05);
-    const glass = new THREE.Mesh(
-      new THREE.SphereGeometry(r * 0.7, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2),
-      new THREE.MeshPhysicalMaterial({ color: 0x101830, roughness: 0.05, clearcoat: 1, iridescence: 0.6 }),
-    );
-    glass.rotation.x = Math.PI / 2;
-    glass.scale.set(1, 0.35, 1);
-    glass.position.set(cx, cy, 1.08);
-    back.add(ring, barrel, glass);
-  }
-
-  // Logo 贴花
-  {
-    const logo = new THREE.Mesh(
-      new THREE.PlaneGeometry(w * 0.5, 8),
-      new THREE.MeshBasicMaterial({
-        transparent: true,
-        depthWrite: false,
-        map: canvasTex(96, 24, (g) => {
-          g.fillStyle = shade(backHex, 0.35).getStyle();
-          g.font = 'bold 12px sans-serif';
-          g.textAlign = 'center';
-          g.textBaseline = 'middle';
-          const name = (design.company || design.modelName || '华兴').slice(0, 6);
-          g.fillText(name, 48, 12);
-        }),
-      }),
-    );
-    logo.position.set(0, -h * 0.12, 0.14);
-    back.add(logo);
-  }
-
+  backDetails(back, { w, h, design, camY: h * 0.3, z: t / 2, elder });
   anchors.back = new THREE.Object3D();
-  anchors.back.position.set(0, 0, 0.2);
+  anchors.back.position.set(0, 0, t / 2);
   back.add(anchors.back);
 
   // —— 内层（拆解可见）——
-  const inner = layers.inner;
-  const bat = new THREE.Mesh(
-    new THREE.BoxGeometry(holeW * 0.82, holeH * 0.42, Math.max(3, t - 4)),
-    new THREE.MeshStandardMaterial({ color: 0x26282e, roughness: 0.5 }),
-  );
+  const bat = new THREE.Mesh(new THREE.BoxGeometry(w * 0.62, h * 0.32, Math.max(3, t - 6)), new THREE.MeshStandardMaterial({ color: 0x26282e, roughness: 0.5 }));
   bat.position.set(0, -h * 0.12, 0);
-  inner.add(bat);
+  layers.inner.add(bat);
   anchors.battery = bat;
-  const pcb = new THREE.Mesh(
-    new THREE.BoxGeometry(holeW * 0.78, holeH * 0.28, 0.8),
-    new THREE.MeshStandardMaterial({ color: 0x1e7a46, roughness: 0.55 }),
-  );
+  const pcb = new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, h * 0.22, 0.8), new THREE.MeshStandardMaterial({ color: 0x1e7a46, roughness: 0.55 }));
   pcb.position.set(0, h * 0.18, 0.2);
-  inner.add(pcb);
+  layers.inner.add(pcb);
   anchors.chip = pcb;
 
   root.traverse((o) => {
     if (o.isMesh) o.castShadow = true;
   });
-
-  // 标记：供测试与调试识别形态路径
   root.userData.formFactor = ff;
   root.userData.keypadChassis = true;
+  root.userData.keypadShape = shapeId;
   root.userData.keyScale = keyScale;
   root.userData.hasSos = elder;
   root.userData.hasAntenna = true;
   root.userData.hasFlashlight = elder;
-
-  return {
-    root,
-    layers,
-    anchors,
-    anim,
-    ctl,
-    dims: { w, h, t },
-    screen: liveScreen,
-    screenMaps,
-  };
+  void keypadGroup;
+  return { root, layers, anchors, anim, ctl, dims: { w, h, t }, screen: liveScreen, screenMaps };
 }
 
 /** 是否应由按键机身构建 */
@@ -600,230 +547,315 @@ export function isKeypadForm(formFactor) {
   return formFactor === 'feature' || formFactor === 'elder' || formFactor === 'flip' || formFactor === 'slider' || formFactor === 'swivel';
 }
 
-function keypadScreenMap(design, liveScreen, { elder = false } = {}) {
-  return liveScreen?.texture || standbyTexture(design, { elder });
+/** 开合动画：没被手动拨过时自动循环展示；拨过就停在那里 */
+function openDriver(ctl, period, apply) {
+  return (now) => {
+    if (!ctl.id) {
+      const ph = (now / 1000) % period;
+      const half = period / 2;
+      const k = ph < half ? ph / half : 1 - (ph - half) / half;
+      // 停留在两端各一会儿
+      ctl.open = Math.max(0, Math.min(1, (k - 0.15) / 0.7));
+    }
+    apply(ctl.open);
+  };
 }
 
-function baseKeypadMats(design) {
-  const matId = design.parts?.material ?? 0;
-  const backHex = design.color || '#3a3d46';
-  const frameHex = design.twoTone === 'frame' ? design.color2 || backHex : backHex;
-  return { matId, backHex, frameHex };
-}
+// ═════════════════════════ 翻盖 ═════════════════════════
 
-/** 翻盖：上盖主屏 + 外屏，下盖键盘，铰链开合 */
+/** 翻盖：圆底下盖（键盘）+ 圆顶上盖（主屏 / 外屏），绕铰链真正开合 */
 function buildFlipPhone(design, { liveScreen = null } = {}) {
   const phys = physical(design);
-  const w = 50;
-  const h = 98;
-  const t = Math.max(phys.thickness, 15);
-  const { matId, backHex, frameHex } = baseKeypadMats(design);
-  const root = new THREE.Group();
-  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
-  Object.values(layers).forEach((g) => root.add(g));
-  const anchors = {};
-  const anim = [];
-  const screenMaps = [];
-  const ctl = { open: 0.65, id: null, t0: 0, until: 0 };
+  const shapeId = kpShapeOf(design);
+  const slim = shapeId === 'slim';
+  const w = slim ? 53 : 48;
+  const L = slim ? 52 : 50; // 下盖长
+  const U = slim ? 52 : 50; // 上盖长
+  const tAll = slim ? 13.9 : Math.max(phys.thickness + 2, 19);
+  const tL = tAll * 0.52;
+  const tU = tAll - tL;
+  const matId = slim ? 2 : design.parts?.material ?? 0;
+  const backHex = design.color || '#3a3d46';
+  const faceHex = design.twoTone !== 'none' && design.color2 ? design.color2 : backHex;
+  const { root, layers, anchors, anim, screenMaps } = shell();
+  const ctl = { open: 0.9, id: null, t0: 0, until: 0 };
 
-  const hinge = new THREE.Group();
-  hinge.position.set(0, 0, 0);
-  layers.frame.add(hinge);
+  // 整机向下偏移，让开盖状态居中
+  const rig = new THREE.Group();
+  rig.position.y = -(U - L) / 2 - 2;
+  layers.frame.add(rig);
 
+  // —— 下盖 ——
   const lower = new THREE.Group();
-  lower.position.set(0, -h * 0.26, 0);
-  layers.frame.add(lower);
-  const upperPivot = new THREE.Group();
-  upperPivot.position.set(0, 0, 0);
-  hinge.add(upperPivot);
-  const upper = new THREE.Group();
-  upper.position.set(0, h * 0.26, 0);
-  upperPivot.add(upper);
+  rig.add(lower);
+  const lowProfile = slim ? PROFILES.slim : PROFILES.clamLower;
+  const lowBody = pillowBody(w, L, tL, lowProfile, bodyMaterial(matId, backHex), { bevel: slim ? 0.3 : 0.38 });
+  lowBody.position.y = -L / 2;
+  lower.add(lowBody);
+  const lz = tL / 2 + 0.05;
+  const lowFace = new THREE.Group();
+  lowFace.position.y = -L / 2;
+  lower.add(lowFace);
+  if (!slim) faceplate(lowFace, w, L, lowProfile, lz - 0.3, faceHex, { matId, scale: 0.84 });
+  const { gridTop, gridBottom } = keypadFace(lowFace, {
+    padW: w * (slim ? 0.78 : 0.66),
+    top: L / 2 - 6,
+    bottom: -L / 2 + (slim ? 6 : 9),
+    z: lz,
+    etched: slim,
+    smile: slim ? 0 : 0.8,
+    backHex,
+  });
+  anchors.keypad = new THREE.Object3D();
+  anchors.keypad.position.set(0, -L / 2 + (gridTop + gridBottom) / 2, lz + 1);
+  lower.add(anchors.keypad);
+  anchors['c-keypad'] = anchors.keypad;
+  // 下盖背面：电池盖接缝 + 喇叭
+  const lowBack = new THREE.Group();
+  lowBack.rotation.y = Math.PI;
+  lowBack.position.y = -L / 2;
+  lower.add(lowBack);
+  backDetails(lowBack, { w, h: L, design: { ...design, parts: { ...design.parts, camera: 0 } }, camY: L * 0.2, z: tL / 2 });
 
-  // lower body (keyboard half)
-  const lowGeo = new THREE.BoxGeometry(w - 2, h * 0.48, t - 2);
-  lower.add(new THREE.Mesh(lowGeo, frameMaterial(matId, frameHex)));
-  // keys 3x4 dots
-  for (let r = 0; r < 4; r++) {
-    for (let c = 0; c < 3; c++) {
-      const key = new THREE.Mesh(
-        new THREE.BoxGeometry(10, 6, 1.2),
-        new THREE.MeshStandardMaterial({ color: 0x2b2e36, roughness: 0.45 }),
-      );
-      key.position.set((c - 1) * 13, 12 - r * 9, t / 2 - 0.4);
-      lower.add(key);
+  // —— 铰链筒 ——
+  const hingeR = tL * 0.5;
+  const barrelMat = slim ? chromeMat() : bodyMaterial(matId, shade(backHex, -0.12).getStyle());
+  const barrel = new THREE.Mesh(new THREE.CapsuleGeometry(hingeR, w - hingeR * 2 - 4, 6, 16), barrelMat);
+  barrel.rotation.z = Math.PI / 2;
+  barrel.position.set(0, 0, tL / 2 - hingeR * 0.6);
+  rig.add(barrel);
+  if (!slim) {
+    for (const sx of [-1, 1]) {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(hingeR * 0.7, hingeR * 0.7, 0.6, 20), chromeMat());
+      cap.rotation.z = Math.PI / 2;
+      cap.position.set(sx * (w / 2 - 1.6), 0, tL / 2 - hingeR * 0.6);
+      rig.add(cap);
     }
   }
 
-  // upper body (screen)
-  const upGeo = new THREE.BoxGeometry(w - 2, h * 0.48, t - 3);
-  upper.add(new THREE.Mesh(upGeo, frameMaterial(matId, backHex)));
-  const map = keypadScreenMap(design, liveScreen);
-  const sm = new THREE.MeshBasicMaterial({ map, toneMapped: false });
-  screenMaps.push(sm);
-  const disp = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.72, h * 0.32), sm);
-  disp.position.set(0, 2, (t - 3) / 2 + 0.2);
-  upper.add(disp);
+  // —— 上盖（绕铰链轴旋转）——
+  // 转轴在下盖正面所在平面：上盖局部中心放在 z = -tU/2，
+  // 合上（绕 X 转 180°）时正好叠在键盘上方，打开时与下盖大致同一平面
+  const pivot = new THREE.Group();
+  pivot.position.set(0, 0, tL / 2);
+  rig.add(pivot);
+  const lid = new THREE.Group();
+  pivot.add(lid);
+  const lidInner = new THREE.Group();
+  lidInner.position.set(0, U / 2 + hingeR * 0.4, -tU / 2);
+  lid.add(lidInner);
+  const lidProfile = slim ? PROFILES.slim : PROFILES.clamLid;
+  lidInner.add(pillowBody(w, U, tU, lidProfile, bodyMaterial(matId, backHex), { bevel: slim ? 0.3 : 0.38 }));
+  const iz = tU / 2 + 0.05;
+  // 内侧：主屏 + 听筒
+  const inner = new THREE.Group();
+  lidInner.add(inner);
+  const dispW = w * 0.7;
+  const dispH = U * 0.5;
+  const map = liveScreen?.texture || standbyTexture(design);
+  screenWindow(inner, { cy: -U * 0.04, dw: dispW, dh: dispH, z: iz, map, arch: slim ? 0 : 0.1, screenMaps, anchors });
   if (liveScreen) anim.push((now) => liveScreen.paint(now));
-  anchors.screen = disp;
-
-  // outer screen (back of upper when closed)
-  const outerCvs = canvasTex(64, 48, (g, W, H) => {
-    g.fillStyle = '#0f380f';
-    g.fillRect(0, 0, W, H);
-    g.fillStyle = '#306230';
-    g.font = 'bold 14px monospace';
-    g.textAlign = 'center';
-    g.fillText('12:30', W / 2, H / 2 + 4);
-  }, { nearest: true });
-  const outer = new THREE.Mesh(
-    new THREE.PlaneGeometry(w * 0.4, h * 0.18),
-    new THREE.MeshBasicMaterial({ map: outerCvs, toneMapped: false }),
-  );
-  outer.position.set(0, 4, -(t - 3) / 2 - 0.15);
+  earpiece(inner, { cy: U / 2 - 6, z: iz + 0.1, w: 12 });
+  // 外侧：小外屏 + 摄像头 + 品牌
+  const outer = new THREE.Group();
   outer.rotation.y = Math.PI;
-  upper.add(outer);
-
-  // hinge cylinder
-  const pin = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.8, 1.8, w - 6, 12),
-    new THREE.MeshStandardMaterial({ color: 0x4a4e57, metalness: 0.6, roughness: 0.35 }),
+  lidInner.add(outer);
+  const oz = tU / 2 + 0.05;
+  if (!slim) faceplate(outer, w, U, lidProfile, oz - 0.3, faceHex, { matId, chrome: matId === 2, scale: 0.8 });
+  const outerTex = canvasTex(64, 48, (g, W, H) => {
+    g.fillStyle = '#0d1a2a';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#7ec8ff';
+    g.font = 'bold 15px monospace';
+    g.textAlign = 'center';
+    g.fillText('10:24', W / 2, H / 2 + 2);
+    g.font = '8px monospace';
+    g.fillStyle = '#9bbc0f';
+    g.fillText('▮▮▮▮  ▬', W / 2, H - 6);
+  }, { nearest: true });
+  const outerLens = new THREE.Mesh(
+    slim ? new THREE.ShapeGeometry(roundedRectShape(w * 0.36, U * 0.2, 2), 12) : new THREE.CircleGeometry(U * 0.15, 36),
+    new THREE.MeshPhysicalMaterial({ color: 0x07080b, roughness: 0.05, clearcoat: 1 }),
   );
-  pin.rotation.z = Math.PI / 2;
-  hinge.add(pin);
+  outerLens.position.set(0, -U * 0.04, oz + 0.35);
+  outer.add(outerLens);
+  const outerDisp = new THREE.Mesh(slim ? new THREE.PlaneGeometry(w * 0.3, U * 0.15) : new THREE.CircleGeometry(U * 0.12, 36), new THREE.MeshBasicMaterial({ map: outerTex, toneMapped: false }));
+  outerDisp.position.set(0, -U * 0.04, oz + 0.42);
+  outer.add(outerDisp);
+  if ((design.parts?.camera ?? 0) > 0) {
+    const cam = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.5, 10, 24), chromeMat());
+    cam.position.set(0, U * 0.3, oz + 0.3);
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(2.3, 20), new THREE.MeshPhysicalMaterial({ color: 0x101830, roughness: 0.05, clearcoat: 1 }));
+    glass.position.set(0, U * 0.3, oz + 0.25);
+    outer.add(cam, glass);
+  }
+  anchors.back = new THREE.Object3D();
+  anchors.back.position.set(0, 0, oz);
+  outer.add(anchors.back);
 
-  let lastOpen = ctl.open;
-  anim.push((now) => {
-    // auto cycle every 6s unless held
-    if (!ctl.id) {
-      const phase = (now / 1000) % 6;
-      ctl.open = phase < 3 ? 0.15 + (phase / 3) * 0.8 : 0.95 - ((phase - 3) / 3) * 0.8;
-    }
-    upperPivot.rotation.x = -Math.PI * 0.92 * (1 - ctl.open);
-    if ((lastOpen < 0.5 && ctl.open >= 0.5) || (lastOpen >= 0.5 && ctl.open < 0.5)) {
-      // open/close threshold for sfx hook
-      ctl._flipEdge = true;
-    }
-    lastOpen = ctl.open;
-  });
+  // 开合：open=1 时上盖略向后仰（约 160°），open=0 时合上压在键盘上，屏幕朝下、外屏朝外
+  anim.push(
+    openDriver(ctl, 6, (open) => {
+      pivot.rotation.x = Math.PI - (Math.PI + 0.22) * open;
+    }),
+  );
 
-  layers.front.add(new THREE.Group()); // keep layer non-empty
-  const bat = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, h * 0.3, 3), new THREE.MeshStandardMaterial({ color: 0x26282e }));
+  const bat = new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, L * 0.5, 3), new THREE.MeshStandardMaterial({ color: 0x26282e }));
+  bat.position.y = rig.position.y - L / 2;
   layers.inner.add(bat);
   anchors.battery = bat;
 
   root.userData.formFactor = 'flip';
   root.userData.keypadChassis = true;
   root.userData.keypadArchetype = 'flip';
-  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  return { root, layers, anchors, anim, ctl, dims: { w, h: h * 0.95, t }, screen: liveScreen, screenMaps };
+  root.userData.keypadShape = shapeId;
+  root.traverse((o) => {
+    if (o.isMesh) o.castShadow = true;
+  });
+  return { root, layers, anchors, anim, ctl, dims: { w, h: L + U, t: tAll }, screen: liveScreen, screenMaps };
 }
 
-/** 滑盖：上屏上滑露出键盘 */
+// ═════════════════════════ 滑盖 ═════════════════════════
+
+/** 滑盖：上片（屏幕 + 导航）向上滑出，露出下片的数字键 */
 function buildSliderPhone(design, { liveScreen = null } = {}) {
   const phys = physical(design);
+  const shapeId = kpShapeOf(design);
   const w = 48;
-  const h = 110;
-  const t = Math.max(phys.thickness, 16);
-  const { matId, backHex, frameHex } = baseKeypadMats(design);
-  const root = new THREE.Group();
-  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
-  Object.values(layers).forEach((g) => root.add(g));
-  const anchors = {};
-  const anim = [];
-  const screenMaps = [];
-  const ctl = { open: 0.6, id: null, t0: 0, until: 0 };
+  const h = 100;
+  const tAll = Math.max(phys.thickness + 1, 17);
+  const tL = tAll * 0.48;
+  const tU = tAll - tL;
+  const matId = design.parts?.material ?? 0;
+  const backHex = design.color || '#3a3d46';
+  const faceHex = design.twoTone !== 'none' && design.color2 ? design.color2 : shade(backHex, -0.25).getStyle();
+  const profile = PROFILES[shapeId] || PROFILES.candy;
+  const { root, layers, anchors, anim, screenMaps } = shell();
+  const ctl = { open: 0.8, id: null, t0: 0, until: 0 };
 
   const lower = new THREE.Group();
+  lower.position.z = -tU / 2;
   layers.frame.add(lower);
-  lower.add(new THREE.Mesh(new THREE.BoxGeometry(w, h * 0.55, t - 2), frameMaterial(matId, frameHex)));
-  for (let r = 0; r < 4; r++) {
-    for (let c = 0; c < 3; c++) {
-      const key = new THREE.Mesh(new THREE.BoxGeometry(9, 5.5, 1), new THREE.MeshStandardMaterial({ color: 0x2b2e36 }));
-      key.position.set((c - 1) * 12, -h * 0.05 - r * 8, t / 2 - 0.5);
-      lower.add(key);
-    }
-  }
+  lower.add(pillowBody(w, h, tL, profile, bodyMaterial(matId, backHex)));
+  // 下片正面：深色键区（只在上片滑开后露出）
+  const kz = tL / 2 + 0.05;
+  const keys = new THREE.Group();
+  lower.add(keys);
+  const pad = new THREE.Mesh(new THREE.ShapeGeometry(roundedRectShape(w * 0.8, h * 0.44, 4, 0, -h * 0.24), 12), new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.5 }));
+  pad.position.z = kz;
+  keys.add(pad);
+  const { gridTop, gridBottom } = keypadFace(keys, { padW: w * 0.66, top: -h * 0.02 + 13, bottom: -h / 2 + 8, z: kz, backHex });
+  anchors.keypad = new THREE.Object3D();
+  anchors.keypad.position.set(0, (gridTop + gridBottom) / 2, kz + 1);
+  lower.add(anchors.keypad);
+  anchors['c-keypad'] = anchors.keypad;
+  const back = new THREE.Group();
+  back.rotation.y = Math.PI;
+  lower.add(back);
+  backDetails(back, { w, h, design, camY: h * 0.3, z: tL / 2 });
 
   const upper = new THREE.Group();
+  upper.position.z = tL / 2;
   layers.front.add(upper);
-  upper.add(new THREE.Mesh(new THREE.BoxGeometry(w - 1, h * 0.55, t - 4), frameMaterial(matId, backHex)));
-  const map = keypadScreenMap(design, liveScreen);
-  const sm = new THREE.MeshBasicMaterial({ map, toneMapped: false });
-  screenMaps.push(sm);
-  const disp = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.75, h * 0.35), sm);
-  disp.position.set(0, 4, (t - 4) / 2 + 0.15);
-  upper.add(disp);
+  upper.add(pillowBody(w - 1, h * 0.98, tU, profile, bodyMaterial(matId, backHex)));
+  const uz = tU / 2 + 0.05;
+  faceplate(upper, w - 1, h * 0.98, profile, uz - 0.3, faceHex, { matId, chrome: true, scale: 0.88 });
+  const dispW = w * 0.66;
+  const dispH = h * 0.36;
+  const map = liveScreen?.texture || standbyTexture(design);
+  screenWindow(upper, { cy: h * 0.13, dw: dispW, dh: dispH, z: uz + 0.4, map, arch: 0.1, screenMaps, anchors });
   if (liveScreen) anim.push((now) => liveScreen.paint(now));
-  anchors.screen = disp;
+  earpiece(upper, { cy: h / 2 - 7, z: uz + 0.5, w: 12 });
+  // 上片下半：导航键（不含数字键）
+  const navTop = h * 0.13 - dispH / 2 - 4;
+  const navGroup = new THREE.Group();
+  upper.add(navGroup);
+  keypadFace(navGroup, { padW: w * 0.66, top: navTop, bottom: navTop - 14, z: uz + 0.4, backHex }).keypadGroup.visible = false;
 
-  anim.push((now) => {
-    if (!ctl.id) {
-      const phase = (now / 1000) % 5;
-      const raw = phase < 2.5 ? phase / 2.5 : 1 - (phase - 2.5) / 2.5;
-      // easeOutBack-ish
-      ctl.open = Math.min(1, raw * 1.08);
-    }
-    upper.position.y = ctl.open * h * 0.38;
-  });
+  anim.push(
+    openDriver(ctl, 5, (open) => {
+      const e = 1 - Math.pow(1 - open, 3);
+      upper.position.y = e * h * 0.42;
+    }),
+  );
 
-  layers.inner.add(new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, h * 0.35, 3), new THREE.MeshStandardMaterial({ color: 0x1e7a46 })));
+  layers.inner.add(new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, h * 0.3, 3), new THREE.MeshStandardMaterial({ color: 0x1e7a46 })));
   root.userData.formFactor = 'slider';
   root.userData.keypadChassis = true;
   root.userData.keypadArchetype = 'slider';
-  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  return { root, layers, anchors, anim, ctl, dims: { w, h, t }, screen: liveScreen, screenMaps };
+  root.userData.keypadShape = shapeId;
+  root.traverse((o) => {
+    if (o.isMesh) o.castShadow = true;
+  });
+  return { root, layers, anchors, anim, ctl, dims: { w, h: h * 1.25, t: tAll }, screen: liveScreen, screenMaps };
 }
 
-/** 旋转屏：屏幕绕 Z 旋转 */
+// ═════════════════════════ 旋转屏 ═════════════════════════
+
+/** 旋转屏：屏幕片绕底部一角的转轴旋开，露出下面的键盘 */
 function buildSwivelPhone(design, { liveScreen = null } = {}) {
   const phys = physical(design);
-  const w = 50;
-  const h = 105;
-  const t = Math.max(phys.thickness, 15);
-  const { matId, backHex, frameHex } = baseKeypadMats(design);
-  const root = new THREE.Group();
-  const layers = { front: new THREE.Group(), frame: new THREE.Group(), inner: new THREE.Group(), back: new THREE.Group() };
-  Object.values(layers).forEach((g) => root.add(g));
-  const anchors = {};
-  const anim = [];
-  const screenMaps = [];
-  const ctl = { open: 0.5, id: null, t0: 0, until: 0 };
+  const shapeId = kpShapeOf(design);
+  const w = 48;
+  const h = 96;
+  const tAll = Math.max(phys.thickness + 1, 17);
+  const tL = tAll * 0.5;
+  const tU = tAll - tL;
+  const matId = design.parts?.material ?? 0;
+  const backHex = design.color || '#3a3d46';
+  const faceHex = design.twoTone !== 'none' && design.color2 ? design.color2 : backHex;
+  const profile = PROFILES[shapeId] || PROFILES.candy;
+  const { root, layers, anchors, anim, screenMaps } = shell();
+  const ctl = { open: 0.7, id: null, t0: 0, until: 0 };
 
-  layers.frame.add(new THREE.Mesh(new THREE.BoxGeometry(w, h * 0.5, t - 2), frameMaterial(matId, frameHex)));
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
-      const key = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 1), new THREE.MeshStandardMaterial({ color: 0x2b2e36 }));
-      key.position.set((c - 1) * 13, -h * 0.12 - r * 9, t / 2 - 0.4);
-      layers.frame.add(key);
-    }
-  }
+  const lower = new THREE.Group();
+  lower.position.z = -tU / 2;
+  layers.frame.add(lower);
+  lower.add(pillowBody(w, h, tL, profile, bodyMaterial(matId, shade(backHex, -0.15).getStyle())));
+  const kz = tL / 2 + 0.05;
+  const { gridTop, gridBottom } = keypadFace(lower, { padW: w * 0.66, top: h / 2 - 8, bottom: -h / 2 + 10, z: kz, backHex });
+  anchors.keypad = new THREE.Object3D();
+  anchors.keypad.position.set(0, (gridTop + gridBottom) / 2, kz + 1);
+  lower.add(anchors.keypad);
+  anchors['c-keypad'] = anchors.keypad;
+  const back = new THREE.Group();
+  back.rotation.y = Math.PI;
+  lower.add(back);
+  backDetails(back, { w, h, design, camY: h * 0.3, z: tL / 2 });
 
+  // 转轴在左上角：屏幕片逆时针转 90° 甩向右上方，露出整片键盘
+  const px = -w / 2 + 7;
+  const py = h / 2 - 7;
+  const pivot = new THREE.Group();
+  pivot.position.set(px, py, tL / 2);
+  layers.front.add(pivot);
   const swivel = new THREE.Group();
-  layers.front.add(swivel);
-  swivel.add(new THREE.Mesh(new THREE.BoxGeometry(w - 2, h * 0.48, t - 4), frameMaterial(matId, backHex)));
-  const map = keypadScreenMap(design, liveScreen);
-  const sm = new THREE.MeshBasicMaterial({ map, toneMapped: false });
-  screenMaps.push(sm);
-  const disp = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.72, h * 0.32), sm);
-  disp.position.set(0, 2, (t - 4) / 2 + 0.2);
-  swivel.add(disp);
+  swivel.position.set(-px, -py, 0);
+  pivot.add(swivel);
+  swivel.add(pillowBody(w, h, tU, profile, bodyMaterial(matId, backHex)));
+  const sz = tU / 2 + 0.05;
+  faceplate(swivel, w, h, profile, sz - 0.3, faceHex, { matId, chrome: true, scale: 0.88 });
+  const map = liveScreen?.texture || standbyTexture(design);
+  screenWindow(swivel, { cy: h * 0.06, dw: w * 0.7, dh: h * 0.46, z: sz + 0.4, map, arch: 0.1, screenMaps, anchors });
   if (liveScreen) anim.push((now) => liveScreen.paint(now));
-  anchors.screen = disp;
-  swivel.position.y = h * 0.22;
+  earpiece(swivel, { cy: h / 2 - 7, z: sz + 0.5, w: 12 });
+  const knob = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 0.8, 28), chromeMat());
+  knob.rotation.x = Math.PI / 2;
+  knob.position.set(px, py, tL / 2 + tU + 0.2);
+  layers.front.add(knob);
 
-  anim.push((now) => {
-    if (!ctl.id) {
-      const phase = (now / 1000) % 8;
-      ctl.open = phase < 4 ? phase / 4 : 1 - (phase - 4) / 4;
-    }
-    swivel.rotation.z = ctl.open * Math.PI;
-  });
+  anim.push(
+    openDriver(ctl, 8, (open) => {
+      pivot.rotation.z = open * Math.PI * 0.5;
+    }),
+  );
 
   root.userData.formFactor = 'swivel';
   root.userData.keypadChassis = true;
   root.userData.keypadArchetype = 'swivel';
-  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  return { root, layers, anchors, anim, ctl, dims: { w, h, t }, screen: liveScreen, screenMaps };
+  root.userData.keypadShape = shapeId;
+  root.traverse((o) => {
+    if (o.isMesh) o.castShadow = true;
+  });
+  return { root, layers, anchors, anim, ctl, dims: { w, h, t: tAll }, screen: liveScreen, screenMaps };
 }
-
