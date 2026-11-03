@@ -469,11 +469,14 @@ body.reduce-motion .title-screen h1 { animation: none !important; }
 }
 
 /* 术语点击解释 */
-.term {
-  display: inline; font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; box-shadow: none;
-  padding: 0; margin: 0; cursor: help; border-bottom: 2px dotted currentColor; transform: none !important;
+/* 全局 button 有 48px 最小高度，术语按钮必须清掉，否则虚线会掉到下一行那么低 */
+button.term {
+  display: inline; min-height: 0; height: auto; width: auto; line-height: inherit; vertical-align: baseline;
+  font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; box-shadow: none;
+  padding: 0; margin: 0; cursor: help; transform: none !important;
+  text-decoration: underline dotted currentColor; text-decoration-thickness: 1.5px; text-underline-offset: 3px;
 }
-.term:hover { color: var(--orange); }
+button.term:hover { color: var(--orange); }
 .term-pop {
   position: fixed; z-index: 120; background: var(--ink); color: var(--cream2); border: 3px solid var(--cream2);
   box-shadow: 4px 4px 0 #000; padding: 8px 10px; font-size: .85rem; line-height: 1.5; animation: fadeIn .12s ease;
