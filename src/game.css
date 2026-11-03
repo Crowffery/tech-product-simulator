@@ -892,3 +892,28 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 .lang-pick { display: inline-flex; gap: 4px; }
 .lang-pick button { padding: 2px 8px; font-size: .78rem; }
 .lang-pick button.on { background: var(--orange, #e67e22); color: #fff; }
+
+/* ═════ 手机竖屏顶栏：两行，不再挤成一行 ═════
+ * 第一行：公司名 + 时代徽章 ｜ 融资 ｜ 设置
+ * 第二行：资金 / 信仰 / 口碑 / 研发点 四格平分
+ * （全局 button 有 48px 最小高度和大内边距，这里全部清掉） */
+@media (max-width: 480px) {
+  .g-hud {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: auto;
+    gap: 4px; align-items: stretch; padding: 6px 8px;
+  }
+  .g-hud .hud-brand { grid-row: 1; grid-column: 1 / 4; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .g-hud .hud-brand b { font-size: .95rem; flex: 0 1 auto; min-width: 0; }
+  .g-hud .hud-brand button.era-mini { margin: 0; flex: 0 0 auto; }
+  .g-hud .hud-btn { grid-row: 1; min-height: 0; height: 30px; width: 34px; padding: 0; justify-self: end; font-size: .95rem; line-height: 1; }
+  .g-hud .hud-btn.finance { grid-column: 4; justify-self: start; }
+  .g-hud .hud-btn:last-child { grid-column: 4; justify-self: end; }
+  .g-hud .hud-stat {
+    grid-row: 2; min-height: 0; height: auto; min-width: 0; padding: 4px 4px; gap: 4px;
+    justify-content: center; flex-direction: row;
+  }
+  .g-hud .hud-stat span { align-items: flex-start; min-width: 0; }
+  .g-hud .hud-stat b { font-size: .82rem; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .g-hud .hud-stat small { display: block; font-size: .58rem; white-space: nowrap; }
+  .g-hud .hud-stat .pxi { width: 16px; height: 16px; flex: 0 0 auto; }
+}
