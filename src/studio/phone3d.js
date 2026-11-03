@@ -154,17 +154,21 @@ function leatherTexture() {
   return leatherTex;
 }
 
+/** 表面工艺：亮面 / 磨砂 / AG 雾面 */
+let FINISH = 'gloss';
 function bodyMaterial(matId, hex) {
   const color = new THREE.Color(hex);
+  const matte = FINISH === 'matte';
+  const frost = FINISH === 'frost';
   switch (matId) {
     case 1: // 玻璃
-      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.1, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.25 });
+      return new THREE.MeshPhysicalMaterial({ color, roughness: matte ? 0.55 : frost ? 0.32 : 0.1, metalness: 0, clearcoat: matte ? 0 : 1, clearcoatRoughness: frost ? 0.45 : 0.04, envMapIntensity: matte ? 0.7 : 1.25 });
     case 2: // 金属
-      return new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.05, 0.08), roughness: 0.3, metalness: 0.85, envMapIntensity: 1.4 });
+      return new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.05, 0.08), roughness: matte ? 0.5 : frost ? 0.38 : 0.22, metalness: 0.85, envMapIntensity: 1.4 });
     case 3: // 素皮
       return new THREE.MeshStandardMaterial({ color, roughness: 0.92, map: leatherTexture(), envMapIntensity: 0.35 });
     default: // 塑料
-      return new THREE.MeshStandardMaterial({ color, roughness: 0.48, envMapIntensity: 0.7 });
+      return new THREE.MeshStandardMaterial({ color, roughness: matte ? 0.75 : frost ? 0.55 : 0.32, envMapIntensity: matte ? 0.5 : 0.85 });
   }
 }
 
@@ -177,23 +181,59 @@ function frameMaterial(matId, hex, sub) {
 
 // ═════════════════════════ 贴图 ═════════════════════════
 
+let WALL = 'wave';
 function wallpaperTexture(accent) {
+  const style = WALL;
   return canvasTex(
     96,
     200,
     (g, w, h) => {
       const grd = g.createLinearGradient(0, 0, w, h);
-      grd.addColorStop(0, shade(accent, 0.22).getStyle());
-      grd.addColorStop(0.55, shade(accent, -0.05).getStyle());
-      grd.addColorStop(1, shade(accent, -0.35).getStyle());
+      if (style === 'dark') {
+        grd.addColorStop(0, '#15161c');
+        grd.addColorStop(1, '#050507');
+      } else if (style === 'sunset') {
+        grd.addColorStop(0, '#f5b041');
+        grd.addColorStop(0.5, '#e74c3c');
+        grd.addColorStop(1, '#5b2c6f');
+      } else if (style === 'aurora') {
+        grd.addColorStop(0, '#0b1030');
+        grd.addColorStop(1, '#1b4f72');
+      } else {
+        grd.addColorStop(0, shade(accent, 0.22).getStyle());
+        grd.addColorStop(0.55, shade(accent, -0.05).getStyle());
+        grd.addColorStop(1, shade(accent, -0.35).getStyle());
+      }
       g.fillStyle = grd;
       g.fillRect(0, 0, w, h);
-      g.globalAlpha = 0.22;
-      g.fillStyle = '#fff';
-      for (let i = 0; i < 3; i++) {
-        g.beginPath();
-        g.ellipse(w * (0.2 + i * 0.35), h * (0.62 + i * 0.08), 60, 22, -0.5, 0, Math.PI * 2);
-        g.fill();
+      if (style === 'aurora') {
+        g.globalAlpha = 0.5;
+        ['#48c9b0', '#a569bd', '#5dade2'].forEach((c, i) => {
+          g.fillStyle = c;
+          g.beginPath();
+          g.ellipse(w * (0.3 + i * 0.2), h * (0.25 + i * 0.07), 70, 12, -0.4 + i * 0.3, 0, Math.PI * 2);
+          g.fill();
+        });
+        g.fillStyle = '#fff';
+        for (let i = 0; i < 40; i++) g.fillRect((i * 37) % w, (i * 53) % (h * 0.6), 1, 1);
+      } else if (style === 'city') {
+        g.fillStyle = '#0b1030';
+        g.fillRect(0, 0, w, h);
+        for (let i = 0; i < 9; i++) {
+          const bh = 40 + ((i * 47) % 60);
+          g.fillStyle = shade(accent, -0.55).getStyle();
+          g.fillRect(i * 11, h - bh, 10, bh);
+          g.fillStyle = '#f7dc6f';
+          for (let y = h - bh + 4; y < h - 4; y += 6) for (let x = i * 11 + 2; x < i * 11 + 9; x += 3) if ((x * y) % 5 < 2) g.fillRect(x, y, 1, 2);
+        }
+      } else if (style !== 'dark') {
+        g.globalAlpha = 0.22;
+        g.fillStyle = '#fff';
+        for (let i = 0; i < 3; i++) {
+          g.beginPath();
+          g.ellipse(w * (0.2 + i * 0.35), h * (0.62 + i * 0.08), 60, 22, -0.5, 0, Math.PI * 2);
+          g.fill();
+        }
       }
       g.globalAlpha = 1;
       g.fillStyle = '#fff';
@@ -237,7 +277,15 @@ function backDecalTexture(design, w, h, bgHex) {
     const light = luminance(bgHex) < 0.42;
     const ink = light ? 'rgba(255,255,255,.9)' : 'rgba(25,20,16,.85)';
     const cx = cw / 2;
-    const cy = ch * 0.5;
+    const cy = ch * (design.logoPos === 'low' ? 0.66 : 0.5);
+    if (design.logoPos === 'none') {
+      g.textAlign = 'center';
+      g.fillStyle = ink;
+      g.globalAlpha = 0.7;
+      g.font = `700 ${Math.round(2.6 * k)}px "Noto Sans SC",sans-serif`;
+      g.fillText(`DESIGNED BY ${design.company || ''}`, cx, ch * 0.9);
+      return;
+    }
     g.strokeStyle = ink;
     g.lineWidth = 1.2 * k;
     g.beginPath();
@@ -347,6 +395,61 @@ function batteryTexture(t) {
 // ═════════════════════════ 镜头模组布局 ═════════════════════════
 
 /** 背面观看者坐标：X 右、Y 下，原点在背面左上角 */
+/** 镜头模组：按玩家选择缩放并挪到左上 / 居中 / 右上 / 背部正中 */
+function placeLayout(lay, w, h, pos, k) {
+  const pts = [];
+  const md = lay.module;
+  const add = (x, y, r = 0) => pts.push([x - r, y - r], [x + r, y + r]);
+  if (md) {
+    if (md.type === 'rrect') add(md.x, md.y, 0), pts.push([md.x - md.w / 2, md.y - md.h / 2], [md.x + md.w / 2, md.y + md.h / 2]);
+    else if (md.type === 'circle') add(md.x, md.y, md.r);
+    else if (md.type === 'twin') add(md.a.x, md.a.y, md.a.r), add(md.b.x, md.b.y, md.b.r);
+    else if (md.type === 'diamond') add(md.x, md.y, md.s * 0.72);
+  }
+  lay.lenses.forEach((L) => add(L.x, L.y, L.r));
+  if (!pts.length) return lay;
+  const x0 = Math.min(...pts.map((p) => p[0]));
+  const y0 = Math.min(...pts.map((p) => p[1]));
+  const x1 = Math.max(...pts.map((p) => p[0]));
+  const y1 = Math.max(...pts.map((p) => p[1]));
+  const bw = (x1 - x0) * k;
+  const bh = (y1 - y0) * k;
+  const m = 7.5;
+  const tx = pos === 'tr' ? w - m - bw : pos === 'tc' || pos === 'mid' ? (w - bw) / 2 : x0;
+  const ty = pos === 'mid' ? h * 0.3 - bh / 2 : y0;
+  const P = (x, y) => [tx + (x - x0) * k, ty + (y - y0) * k];
+  const mv = (o) => {
+    if (!o) return;
+    const [x, y] = P(o.x, o.y);
+    o.x = x;
+    o.y = y;
+  };
+  if (md) {
+    if (md.type === 'twin') {
+      mv(md.a);
+      mv(md.b);
+      md.a.r *= k;
+      md.b.r *= k;
+    } else {
+      mv(md);
+      if (md.w) md.w *= k;
+      if (md.h) md.h *= k;
+      if (md.r) md.r *= k;
+      if (md.s) md.s *= k;
+    }
+  }
+  lay.lenses.forEach((L) => {
+    mv(L);
+    L.r *= k;
+  });
+  if (lay.flash) {
+    if (lay.flash.free && pos === 'tr') lay.flash.x = x0 - 4;
+    mv(lay.flash);
+    if (lay.flash.x > w - 3) lay.flash.x = w - 6;
+  }
+  return lay;
+}
+
 function cameraLayout(layoutId, w, h, lensCount, tierId) {
   const R = [3.6, 4.2, 5.3][tierId];
   const r2 = R * 0.78;
@@ -464,6 +567,8 @@ export const SPOT = {
 };
 
 export function buildPhone(design) {
+  FINISH = design.finish || 'gloss';
+  WALL = design.wallpaper || 'wave';
   const phys = physical(design);
   const { w, h, thickness: t } = phys;
   const corner = CORNERS[design.corner] || CORNERS[1];
@@ -523,7 +628,10 @@ export function buildPhone(design) {
   anchors.frame.position.set(w / 2, h * 0.3, 0);
   layers.frame.add(anchors.frame);
 
-  const keyMat = frameMaterial(matId, shade(frameHex, -0.06).getStyle());
+  const KEY = { orange: '#e67e22', red: '#c0392b', gold: '#d4ac0d', blue: '#2e86c1' };
+  const keyMat = KEY[design.keyColor]
+    ? new THREE.MeshStandardMaterial({ color: KEY[design.keyColor], roughness: 0.3, metalness: 0.5 })
+    : frameMaterial(matId, shade(frameHex, -0.06).getStyle());
   const addKey = (y, len) => {
     const k = new THREE.Mesh(new THREE.BoxGeometry(1.3, len, Math.min(3, t * 0.36)), keyMat);
     k.position.set(w / 2 + 0.35, y, 0);
@@ -715,7 +823,7 @@ export function buildPhone(design) {
   decal.position.z = 0.14;
   back.add(decal);
 
-  const lay = cameraLayout(design.layout, w, h, camT.lenses, design.parts.camera);
+  const lay = placeLayout(cameraLayout(design.layout, w, h, camT.lenses, design.parts.camera), w, h, design.camPos || 'tl', { s: 0.85, m: 1, l: 1.2 }[design.camSize] || 1);
   if (C.has('oneinch') && lay.lenses[0]) lay.lenses[0].r *= 1.4;
   const bump = camT.bump;
   const modHex = design.twoTone === 'band' || design.twoTone === 'module' ? design.color2 : design.color;
@@ -747,7 +855,8 @@ export function buildPhone(design) {
     for (const g of geos) back.add(new THREE.Mesh(g, modMat));
     surf = bump + 0.4;
   }
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0xa4a8b0, metalness: 0.95, roughness: 0.18, envMapIntensity: 1.6 });
+  const RING = { silver: 0xa4a8b0, gold: 0xd4ac0d, black: 0x1b1c21, red: 0xc0392b, body: new THREE.Color(design.color).getHex() };
+  const ringMat = new THREE.MeshStandardMaterial({ color: RING[design.ringColor] ?? RING.silver, metalness: 0.95, roughness: 0.18, envMapIntensity: 1.6 });
   const barrelMat = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.4 });
   const lensMat = new THREE.MeshPhysicalMaterial({
     color: 0x0c1030,

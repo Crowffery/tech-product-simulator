@@ -559,6 +559,7 @@ export function buildKeynote(ctx) {
   const matName = C.has('titanium') ? '钛金属中框' : C.has('ceramic') ? '陶瓷机身' : MAT_NAME[kind];
   out.push({
     key: 'look',
+    film: { name: 'material', data: { color: d.color, kind: C.has('titanium') ? 'metal' : kind === 'plastic' ? 'glass' : kind, name: matName, sub: kind === 'metal' ? `${C.has('titanium') || d.matSub === 'ti' ? '比不锈钢轻 45%' : '航空级铝材'} · CNC 一体精雕` : kind === 'glass' ? '康宁级玻璃 · 一抹流光' : kind === 'leather' ? '亲肤素皮 · 越用越有味道' : '多彩机身 · 耐摔耐磨' } },
     chap: '外观',
     main: main.has('thin'),
     wall: SLIDES[kind](d.color, matName, ['#23242c', '#eeeae0', '#8fd3b6', '#f2b8c6', '#5aa9d6', '#f2d45c', d.color].slice(-6)),
@@ -570,10 +571,26 @@ export function buildKeynote(ctx) {
     shine: kind === 'metal' || kind === 'glass',
     ms: 3600,
   });
+  // 配色整排亮相
+  if (!quick) {
+    const pal = ['#23242c', '#eeeae0', '#c9ccd1', '#2b4a7a', '#f2b8c6', '#8fd3b6', '#f08a4b'].filter((x) => x.toLowerCase() !== String(d.color).toLowerCase());
+    const cols = [d.color, ...pal.slice(0, 3)];
+    out.push({
+      key: 'colors',
+      chap: null,
+      film: { name: 'colors', data: { colors: cols, names: cols.map((x) => paletteName(x)) } },
+      sub: `${paletteName(d.color)}，以及另外三种配色`,
+      react: ['选哪个好', '都想要', '🎨'],
+      mood: 'good',
+      pose: ['back', 'wide', { spin: 0.6 }],
+      ms: 2800,
+    });
+  }
   if (main.has('thin') || phys.thickness <= 7.8) {
     const bad = broke.has('thin');
     out.push({
       key: 'thin',
+      film: { name: 'thin', data: { mm: phys.thickness, color: d.color } },
       chap: null,
       main: main.has('thin'),
       wall: SLIDES.thin(phys.thickness, d.color),
@@ -591,6 +608,7 @@ export function buildKeynote(ctx) {
     const beat = cs.bench > Math.max(...rivals.map((r) => r.v));
     out.push({
       key: 'chip',
+      film: { name: 'chip', data: { chip: cs.label, bench: cs.bench } },
       chap: '性能',
       main: main.has('fast'),
       wall: SLIDES.bench(cs.bench, rivals, (d.modelName || '本机').slice(0, 6)),
@@ -631,6 +649,7 @@ export function buildKeynote(ctx) {
   if (!quick && scr >= 1) {
     out.push({
       key: 'screen',
+      film: { name: 'display', data: { hz: scr >= 1 ? 120 : 90, nits: scr === 2 ? 3000 : 0 } },
       chap: '屏幕',
       wall: scr === 2 ? SLIDES.bright(3000) : SLIDES.refresh(120),
       kpi: scr === 2 ? { label: '峰值亮度', from: 400, to: 3000, dec: 0, unit: 'nit' } : { label: '自适应刷新率', from: 60, to: 120, dec: 0, unit: 'Hz' },
@@ -648,6 +667,7 @@ export function buildKeynote(ctx) {
     const mp = C.has('oneinch') ? '1 英寸' : d.parts.camera === 2 ? '2 亿' : '5000 万';
     out.push({
       key: 'camera',
+      film: { name: 'camera', data: { zoom: C.has('periscope') ? 10 : d.parts.camera === 2 ? 5 : 3, cap: camCap, title: C.has('oneinch') ? '一英寸大底' : d.parts.camera === 2 ? '2 亿像素三摄' : '5000 万主摄' } },
       chap: '影像',
       main: main.has('photo'),
       wall: SLIDES.night(camCap),
@@ -667,6 +687,7 @@ export function buildKeynote(ctx) {
     const days = batCap >= 95 ? 2.5 : batCap >= 80 ? 2 : 1.5;
     out.push({
       key: 'battery',
+      film: { name: 'battery', data: { days } },
       chap: '续航',
       main: main.has('battery'),
       wall: SLIDES.days(days),
@@ -681,6 +702,7 @@ export function buildKeynote(ctx) {
   if (C.has('fastcharge') && !firsts.includes('百瓦快充')) {
     out.push({
       key: 'charge',
+      film: { name: 'charge', data: {} },
       chap: '快充',
       wall: SLIDES.charge(),
       kpi: { label: '有线快充', from: 0, to: 100, dec: 0, unit: 'W' },
@@ -714,6 +736,7 @@ export function buildKeynote(ctx) {
       const base = SLIDES.concept(c, false);
       out.push({
         key: `c-${c.id}`,
+        film: { name: 'concept', data: { id: c.id, icon: c.icon, name: c.name, desc: c.desc } },
         chap: c.name.length <= 4 ? c.name : '亮点',
         wall: fx ? (g, W, H, t) => { base(g, W, H, t); g.fillStyle = '#14101f'; g.fillRect(0, 0, 78, H); fx(g, W, H, t); } : base,
         sub: `<b>${c.name}</b> —— ${c.desc}`,
@@ -733,6 +756,7 @@ export function buildKeynote(ctx) {
       const base = SLIDES.concept(c, true);
       out.push({
         key: `f-${c.id}`,
+        film: { name: 'concept', data: { id: c.id, icon: c.icon, name: c.name, desc: c.desc, first: true } },
         chap: null,
         first: true,
         wall: fx ? (g, W, H, t) => { base(g, W, H, t); g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, 0, 78, H); fx(g, W, H, t); } : base,

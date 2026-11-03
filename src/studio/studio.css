@@ -415,3 +415,9 @@ body.phase-design .g-rail { display: none; }
   .confirm-bar .launch-btn { padding: 10px; font-size: .98rem; }
 }
 @media (max-width: 900px) { .part-row { align-items: start; } .part-name { padding-top: 6px; } }
+.lookgrp { border: 2px solid var(--border); background: #fffaf0; padding: 5px 8px; margin: 8px 0; }
+.lg-t { font-weight: 900; font-size: .8rem; margin-bottom: 2px; }
+.look-row { display: grid; grid-template-columns: 4.6em 1fr; gap: 6px; align-items: center; padding: 3px 0; }
+.look-row > span { font-size: .74rem; font-weight: 800; color: var(--muted); }
+.look-row .chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.look-row .chip { padding: 3px 7px; font-size: .74rem; }

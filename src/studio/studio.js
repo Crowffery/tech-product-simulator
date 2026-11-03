@@ -159,6 +159,16 @@ export function createStudio(root, opts = {}) {
       .join('')}</details>`;
   }
 
+  /** 外观细节：一组 chip 行 */
+  function lookGroup(title, rows) {
+    return `<div class="lookgrp"><div class="lg-t">${title}</div>${rows
+      .map(([key, name, opts2, def]) => {
+        const cur = design[key] || def;
+        return `<div class="look-row"><span>${name}</span><div class="chips">${opts2.map(([v, l]) => `<button type="button" class="chip ${cur === v ? 'on' : ''}" data-look="${key}:${v}">${l}</button>`).join('')}</div></div>`;
+      })
+      .join('')}</div>`;
+  }
+
   function appearanceTab() {
     const opt = (list, cur, attr, lock = false) =>
       list.map((o) => `<button type="button" class="chip ${cur === o.id ? 'on' : ''}" data-${attr}="${o.id}" ${lock ? lockAttr() : ''}>${o.label}</button>`).join('');
@@ -177,6 +187,19 @@ export function createStudio(root, opts = {}) {
           ? `<div class="field"><span class="flabel">副色 · ${esc(paletteName(design.color2))}</span><div class="swatches">${swatches(design.color2, 'color2')}<label class="swatch custom" title="自定义副色"><input type="color" value="${design.color2}" data-custom="color2" />＋</label></div></div>`
           : ''
       }
+      ${lookGroup('📷 镜头', [
+        ['camPos', '位置', [['tl', '左上'], ['tc', '居中'], ['tr', '右上'], ['mid', '背部正中']], 'tl'],
+        ['camSize', '大小', [['s', '小巧'], ['m', '标准'], ['l', '霸气']], 'm'],
+        ['ringColor', '镜圈', [['silver', '银'], ['gold', '金'], ['black', '黑'], ['red', '红'], ['body', '同机身']], 'silver'],
+      ])}
+      ${lookGroup('✨ 质感', [
+        ['finish', '表面', [['gloss', '亮面'], ['matte', '磨砂'], ['frost', 'AG 雾面']], 'gloss'],
+        ['keyColor', '侧键', [['frame', '同中框'], ['orange', '橙'], ['red', '红'], ['gold', '金'], ['blue', '蓝']], 'frame'],
+      ])}
+      ${lookGroup('🖼 细节', [
+        ['logoPos', '背部 Logo', [['center', '居中'], ['low', '靠下'], ['none', '不要']], 'center'],
+        ['wallpaper', '锁屏壁纸', [['wave', '配色波纹'], ['aurora', '极光'], ['city', '城市夜景'], ['sunset', '落日'], ['dark', '暗夜']], 'wave'],
+      ])}
       <div class="field two">
         <label><span class="flabel">机型名（≤8 字）</span><input data-text="modelName" maxlength="8" value="${esc(design.modelName)}" /></label>
         <label><span class="flabel">公司名</span><input data-text="company" maxlength="10" value="${esc(design.company)}" /></label>
@@ -825,6 +848,12 @@ export function createStudio(root, opts = {}) {
           if (d.part === 'battery' || d.part === 'chip') stage?.view('side');
           if (d.part === 'screen') stage?.view('front');
         }
+      } else if (d.look) {
+        const [k, v] = d.look.split(':');
+        design[k] = v;
+        sfx.part(1);
+        update({ panel: true });
+        if (!exploded) stage?.view(k === 'wallpaper' ? 'front' : k === 'keyColor' ? 'right' : 'back');
       } else if (d.matsub) {
         sfx.part(1);
         design.matSub = d.matsub;

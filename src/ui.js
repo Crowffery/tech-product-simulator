@@ -1206,7 +1206,7 @@ async function playReveal() {
   busy = true;
   const ov = document.createElement('div');
   ov.className = 'launch-overlay';
-  ov.innerHTML = `<div class="lo-stage"></div><div class="lo-dim"></div><div class="lo-dm"></div><div class="lo-react"></div><div class="lo-fx"></div>
+  ov.innerHTML = `<div class="lo-stage"></div><div class="lo-film"></div><div class="lo-dim"></div><div class="lo-dm"></div><div class="lo-react"></div><div class="lo-fx"></div>
     <div class="lo-meter" hidden><span>现场热度</span><i><b></b></i><em></em></div>
     <div class="lo-chapter" hidden></div><div class="lo-kpi" hidden></div><div class="lo-sub" hidden></div>
     <div class="lo-prog" hidden></div>
@@ -1217,6 +1217,7 @@ async function playReveal() {
   let done = false;
   let heat = 30;
   let tapNext = null;
+  let film = null;
   const timers = [];
   const at = (ms, fn) => timers.push(setTimeout(() => !done && fn(), ms));
   const sleep = (ms) => new Promise((r) => timers.push(setTimeout(r, ms)));
@@ -1233,6 +1234,7 @@ async function playReveal() {
       state.lastThumb = '';
     }
     state.launchHeat = heat;
+    film?.dispose();
     stage?.dispose();
     ov.remove();
     busy = false;
@@ -1332,10 +1334,13 @@ async function playReveal() {
     const { PhoneStage } = await import('./studio/phone3d.js');
     const { buildKeynote, txt } = await import('./launch/keynote.js');
     const { danmakuLines } = await import('./launch/crowd.js');
+    const { createFilmLayer } = await import('./launch/films.js');
+    film = createFilmLayer(ov.querySelector('.lo-film'));
     stage = new PhoneStage(ov.querySelector('.lo-stage'));
     stage.setDesign(state.design);
     const W = state.wowResult || {};
-    const quick = state.models.length > 0 && !W.firsts?.length && !['S', 'A'].includes(W.grade);
+    // 只有几乎照抄上一代的机器才走短版发布会；每台真正的新机都有完整的产品短片
+    const quick = (state.review?.stale || 0) >= 0.8 && !W.firsts?.length;
     const d = state.design;
     const caps = L.capsMap(state);
     const seg = buildKeynote({
@@ -1433,6 +1438,23 @@ async function playReveal() {
           prog.querySelectorAll('i').forEach((el) => el.classList.toggle('on', el.dataset.k === sl.key));
           prog.querySelector(`[data-k="${sl.key}"]`)?.classList.add('done');
         }
+        // 1) 产品短片：全屏高清动画讲清楚这个卖点（可轻点跳过）
+        if (sl.film && film?.has(sl.film.name) && !document.body.classList.contains('reduce-motion')) {
+          kpi(null);
+          if (sl.sub !== null && sl.sub !== undefined) sub(typeof sl.sub === 'function' ? sl.sub() : sl.sub);
+          film.play(sl.film.name, sl.film.data);
+          ov.classList.add('filming');
+          if (sl.film.name === 'camera') timers.push(setTimeout(() => !done && play('shutter'), 3000));
+          if (sl.film.name === 'chip' || sl.film.name === 'charge') play('whoosh');
+          const fms = sl.film.ms || 3600;
+          await sleep(700);
+          await Promise.race([sleep(fms - 700), new Promise((r) => (tapNext = r))]);
+          tapNext = null;
+          if (done) return;
+          film.stop();
+          ov.classList.remove('filming');
+        }
+        // 2) 切回舞台：运镜 + 大数字 + 台下反应
         if (exploded && !sl.explode) {
           stage.setExploded(false);
           exploded = false;
@@ -1457,9 +1479,10 @@ async function playReveal() {
         sl.act?.();
         if (sl.mood === 'good' && sl.react?.length) play('applause', 1);
         // 自动翻页；也可以轻点屏幕提前翻
-        const minMs = sl.notap ? sl.ms : Math.min(sl.ms, 900);
+        const stageMs = sl.film ? Math.max(2000, sl.ms - 800) : sl.ms;
+        const minMs = sl.notap ? stageMs : Math.min(stageMs, 900);
         await sleep(minMs);
-        if (sl.ms > minMs) await Promise.race([sleep(sl.ms - minMs), new Promise((r) => (tapNext = r))]);
+        if (stageMs > minMs) await Promise.race([sleep(stageMs - minMs), new Promise((r) => (tapNext = r))]);
         tapNext = null;
       }
       kpi(null);

@@ -682,8 +682,17 @@ export function similarity(a, b) {
   const uni = new Set([...ca, ...cb]);
   const concepts = uni.size ? [...ca].filter((x) => cb.has(x)).length / uni.size : 1;
   const look =
-    [a.color?.toLowerCase() === b.color?.toLowerCase(), a.layout === b.layout, a.corner === b.corner, a.screenForm === b.screenForm, a.twoTone === b.twoTone, (a.matSub || '') === (b.matSub || '')].filter(Boolean)
-      .length / 6;
+    [
+      a.color?.toLowerCase() === b.color?.toLowerCase(),
+      a.layout === b.layout,
+      a.corner === b.corner,
+      a.screenForm === b.screenForm,
+      a.twoTone === b.twoTone,
+      (a.matSub || '') === (b.matSub || ''),
+      (a.camPos || 'tl') === (b.camPos || 'tl'),
+      (a.finish || 'gloss') === (b.finish || 'gloss'),
+      (a.ringColor || 'silver') === (b.ringColor || 'silver'),
+    ].filter(Boolean).length / 9;
   const chip = (a.chipGen || 1) === (b.chipGen || 1) ? 1 : 0;
   return Math.round((parts * 0.3 + concepts * 0.3 + look * 0.25 + chip * 0.15) * 100) / 100;
 }
