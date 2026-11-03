@@ -4,6 +4,9 @@
  * 设计阶段换成 3D 工作台；发布会换成全屏 3D 演出。
  */
 import { SLOTS, POSITIONING, SELL_POINTS, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, EXPANSIONS, randomCompanyName } from './game/data.js';
+import { packOf, productEraOf } from './game/eras/index.js';
+import { formCardsHtml } from './ui/formCards.js';
+import { defaultFormId } from './game/forms.js';
 import { createNewGame, saveGame, loadGame, clearSave, hasSave } from './game/state.js';
 import * as L from './game/logic.js';
 import { lsGet, lsSet } from './game/storage.js';
@@ -23,7 +26,7 @@ let sfx = null;
 let busy = false; // 演出中禁止操作
 const draft = {
   companyName: randomCompanyName(),
-  plan: L.recommendedPlan(),
+  plan: L.recommendedPlan(defaultFormId(1)),
   supplierId: 'balanced',
   stockId: 'normal',
   focus: [],
@@ -335,24 +338,27 @@ P.create = () => ({
 
 P.plan = () => {
   const p = draft.plan;
-  const tri = L.trianglePreview(p.positioningId, p.priceId);
+  if (!p.formFactor) p.formFactor = defaultFormId(state.month);
+  const pack = packOf(p.formFactor);
+  const tri = L.trianglePreview(p.positioningId, p.priceId, p.formFactor);
   const chips = (list, cur, act, multi = false) =>
     list
       .map((x) => `<button type="button" class="chip ${multi ? (cur.includes(x.id) ? 'on' : '') : cur === x.id ? 'on' : ''}" data-act="${act}" data-id="${x.id}">${x.name}</button>`)
       .join('');
   return {
-    scene: ['plan', { office: state.office, month: state.month, positioning: p.positioningId, points: p.pointIds.length, price: p.priceId, color: state.designDraft?.color, concepts: state.designDraft?.concepts || [] }],
+    scene: ['plan', { office: state.office, month: state.month, positioning: p.positioningId, points: p.pointIds.length, price: p.priceId, color: state.designDraft?.color, concepts: state.designDraft?.concepts || [], formFactor: p.formFactor }],
     caption: `企划会：第 ${state.generation} 代要赌什么？`,
     sheet: `<h2 class="sheet-h">${icon('clipboard', 22)} 企划</h2>
       ${marketEventCard()}
       ${newsCard()}
       ${marketNotice()}
-      <div class="field-l">${term('定位')}<div class="chips">${chips(POSITIONING, p.positioningId, 'plan-pos')}</div>${posCard(p.positioningId, !draft.planPosSeen)}</div>
-      <div class="field-l">${term('卖点')} <small>选 1～3 个，发布会上的承诺</small><div class="chips">${chips(SELL_POINTS, p.pointIds, 'toggle-point', true)}</div>${pointsCard(p)}</div>
-      <div class="field-l">${term('售价带')} <small>决定备货规模；具体售价发布会前再定</small><div class="chips">${chips(PRICE_BANDS, p.priceId, 'plan-price')}</div></div>
-      ${state.generation > 1 ? `<label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco ? 'checked' : ''}/> 绑定上代生态</label>` : ''}
+      <div class="field-l">${term('形态')} <small>第一步 · ${pack.name}</small>${formCardsHtml(state.month, p.formFactor, 'plan-form')}</div>
+      <div class="field-l">${term('定位')}<div class="chips">${chips(pack.positioning, p.positioningId, 'plan-pos')}</div>${posCard(p.positioningId, !draft.planPosSeen, p.formFactor)}</div>
+      <div class="field-l">${term('卖点')} <small>选 1～3 个，发布会上的承诺</small><div class="chips">${chips(pack.sellPoints, p.pointIds, 'toggle-point', true)}</div>${pointsCard(p)}</div>
+      <div class="field-l">${term('售价带')} <small>决定备货规模；具体售价发布会前再定</small><div class="chips">${chips(pack.priceBands, p.priceId, 'plan-price')}</div></div>
+      ${state.generation > 1 && productEraOf(p.formFactor) !== 'keypad' ? `<label class="eco"><input type="checkbox" data-act="bind-eco" ${p.bindEco ? 'checked' : ''}/> 绑定上代生态</label>` : ''}
       ${(() => {
-        const pf = priceFit(p.positioningId, p.priceId);
+        const pf = priceFit(p.positioningId, p.priceId, p.formFactor);
         return pf.note ? `<p class="warn-line ${pf.user < 0 ? 'bad' : 'good'}">💬 ${pf.note}</p>` : '';
       })()}
       <p class="pill-row"><span class="pill">⏳ 研发工期约 ${tri.months} 个月</span></p>
@@ -448,21 +454,27 @@ function newsCard() {
 }
 
 /** 定位说明：默认收起；首次进入企划可展开一次 */
-function posCard(id, openOnce = false) {
-  const pos = POSITIONING.find((x) => x.id === id);
-  const ideal = IDEAL[id];
-  const bars = SLOTS.map((sl) => `<span><em>${sl.name.slice(0, 2)}</em><i><u style="width:${ideal[sl.id] * 2.5}%"></u></i></span>`).join('');
+function posCard(id, openOnce = false, formFactor) {
+  const pack = packOf(formFactor || draft.plan?.formFactor || 'thick');
+  const pos = pack.positioning.find((x) => x.id === id) || pack.positioning[0];
+  if (!pos) return '';
+  const ideal = (pack.ideal || IDEAL)[id] || {};
+  const slots = pack.slots || SLOTS;
+  const bars = slots.map((sl) => `<span><em>${sl.name.slice(0, 2)}</em><i><u style="width:${(ideal[sl.id] || 20) * 2.5}%"></u></i></span>`).join('');
   return `<details class="pos-card" ${openOnce ? 'open' : ''}><summary>查看定位说明 · ${esc(pos.who)}</summary><p>${esc(pos.desc)}</p><div class="pos-bars"><small>研发力气大致该这样分：</small>${bars}</div></details>`;
 }
 
 /** 卖点：轻提示一行；完整说明默认收起 */
 function pointsCard(p) {
-  const selected = p.pointIds.map((id) => SELL_POINTS.find((x) => x.id === id)).filter(Boolean);
+  const pack = packOf(p.formFactor || 'thick');
+  const selected = p.pointIds.map((id) => pack.sellPoints.find((x) => x.id === id)).filter(Boolean);
   const tips = [];
-  const heavy = ['flagship', 'pro'].includes(p.positioningId);
+  const heavy = ['flagship', 'pro', 'fashion', 'biz'].includes(p.positioningId);
   if (p.pointIds.includes('thin') && (heavy || p.pointIds.includes('battery') || p.pointIds.includes('photo')))
     tips.push(`物理提醒：${heavy ? '旗舰/专业机要堆料' : '大电池和大底镜头都占厚度'}，极致轻薄只能在电池或影像上让步。`);
   if (p.pointIds.includes('eco') && state.generation === 1) tips.push('第一代还没有上一代可互联，生态闭环这代兑现不了。');
+  if (p.pointIds.includes('standby') && (p.formFactor === 'feature' || p.formFactor === 'elder'))
+    tips.push('物理提醒：大彩屏会吃待机，想超长待机就别上最高档彩屏。');
   const tipLine = tips.length ? `<p class="pt-tip">${tips.map(esc).join(' ')}</p>` : '';
   if (!selected.length) return tipLine;
   const lines = selected.map((sp) => `<li><b>${esc(sp.name)}</b>：${esc(sp.desc)}</li>`).join('');
@@ -1834,7 +1846,7 @@ async function shareCard(ending) {
 function startGame(s) {
   state = s;
   screen = 'game';
-  draft.plan = L.recommendedPlan();
+  draft.plan = L.recommendedPlan(defaultFormId(state.month));
   draft.factoryDone = state.phase !== 'factory';
   render();
 }
@@ -2107,6 +2119,12 @@ function onClick(e) {
   if (screen !== 'game' || !state) return;
 
   switch (act) {
+    case 'plan-form': {
+      const next = L.recommendedPlan(id);
+      draft.plan = { ...next, formFactor: id, bindEco: !!draft.plan.bindEco && productEraOf(id) !== 'keypad' };
+      draft.planPosSeen = false;
+      break;
+    }
     case 'plan-pos':
       draft.plan.positioningId = id;
       draft.planPosSeen = true;
@@ -2349,7 +2367,7 @@ function onClick(e) {
       draft.showHQ = false;
       draft.nextTab = 'review';
       L.goNextGen(state);
-      draft.plan = { ...L.recommendedPlan(), positioningId: state.designDraft?.position || 'mainstream' };
+      draft.plan = { ...L.recommendedPlan(state.designDraft?.formFactor || defaultFormId(state.month)), positioningId: state.designDraft?.position || L.recommendedPlan(state.designDraft?.formFactor || defaultFormId(state.month)).positioningId };
       draft.planPosSeen = false;
       flash(`第 ${state.generation} 代`);
       break;

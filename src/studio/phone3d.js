@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import { CORNERS, SCREEN_FORMS, physical, tier } from './parts.js';
-import { createLiveScreen } from './screenOS.js';
+import { createLiveScreen, createScreenFor } from './screenOS.js';
 import { buildKeypadPhone, isKeypadForm } from './phone3d-keypad.js';
 
 const FX = 1; // 不参与法线描边的图层（粒子、光柱、线条）
@@ -2168,20 +2168,21 @@ export class PhoneStage {
       this._liveScreen.dispose();
       this._liveScreen = null;
     }
-    // GAP-V111-LIVE：按键机（feature/elder）发布会禁止挂现代 App 网格 liveScreen；
-    // 走 standbyTexture / 后续 FeatureOS，避免小屏机身贴现代 OS。
+    // GAP-V111-LIVE / G2：按键机走 FeatureOS；智能机走现代 createLiveScreen。
     if (this._present) {
       const ff = design?.formFactor || physical(design)?.formFactor || 'thick';
-      if (!isKeypadForm(ff)) {
-        const opts = this._launchOpts || {};
+      const opts = this._launchOpts || {};
+      if (isKeypadForm(ff)) {
+        this._liveScreen = createScreenFor(design, { width: 240, height: 320 });
+      } else {
         this._liveScreen = createLiveScreen(design, {
           width: 540,
           height: 1125,
           theme: opts.screenTheme || 'series',
           wallIntensity: opts.wallpaper === 'intense' ? 1.35 : opts.wallpaper === 'calm' ? 0.65 : 1,
         });
-        if (this._screenMode) this._liveScreen.setScreenMode(this._screenMode, this._screenModeOpts || {});
       }
+      if (this._screenMode) this._liveScreen.setScreenMode(this._screenMode, this._screenModeOpts || {});
     }
     this.phone = buildPhone(design, { hdScreen: !!this._present, liveScreen: this._liveScreen });
     this.dims = this.phone.dims;

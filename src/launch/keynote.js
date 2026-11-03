@@ -1,3 +1,5 @@
+import { productEraOf } from '../game/eras/index.js';
+import { buildKeypadKeynote } from './keynote-keypad.js';
 /**
  * 发布会节目单（keynote）
  * 每个卖点 / 亮点一页：LED 大屏动画 + 运镜 + 大号数字（KPI）+ 台下反应。
@@ -552,7 +554,7 @@ function camPose(view, shot, opts, cam) {
  * 生成发布会节目单
  * ctx: { d, phys, cs, prevChip, rivals, camCap, batCap, perfCap, price, pf, points, promises, firsts, quick, eco, launchOpts }
  */
-export function buildKeynote(ctx) {
+export function buildSmartKeynote(ctx) {
   const { d, phys, cs, prevChip, rivals, camCap, batCap, price, pf, points, promises, firsts, quick } = ctx;
   const opts = ctx.launchOpts || {};
   const style = opts.style || 'safe';
@@ -977,4 +979,12 @@ export function buildKeynote(ctx) {
     ms: 2600,
   });
   return out;
+}
+
+
+/** 按时代分派节目单 */
+export function buildKeynote(ctx) {
+  const d = ctx.d || ctx.design || ctx;
+  if (productEraOf(d) === 'keypad') return buildKeypadKeynote(ctx);
+  return buildSmartKeynote(ctx);
 }

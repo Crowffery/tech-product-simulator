@@ -1,3 +1,4 @@
+import { productEraOf, packOf, KEYPAD_PARTS, KEYPAD_PART_ORDER } from '../game/eras/index.js';
 /** 外观台 Demo：部件档位、外观预设与计分（纯数据 + 纯函数，日后可并入正式游戏） */
 
 export const POSITIONS = [
@@ -192,9 +193,22 @@ export function defaultDesign() {
   };
 }
 
+/** 当前设计所属时代的部件表 */
+export function partsTableOf(design) {
+  return productEraOf(design) === 'keypad' ? KEYPAD_PARTS : PARTS;
+}
+
+export function partOrderOf(design) {
+  return productEraOf(design) === 'keypad' ? KEYPAD_PART_ORDER : PART_ORDER;
+}
+
 export function tier(design, key) {
-  if (key === 'chip') return chipSpec(design);
-  return PARTS[key].tiers[design.parts[key]] || PARTS[key].tiers[0];
+  const table = partsTableOf(design);
+  if (key === 'chip' && productEraOf(design) !== 'keypad') return chipSpec(design);
+  const part = table[key];
+  if (!part) return { id: 0, label: key, cost: 0, note: '', cap: 60 };
+  const idx = design.parts?.[key] ?? 0;
+  return part.tiers[idx] || part.tiers[0];
 }
 
 // ═════════════════════════ 自研芯片 ═════════════════════════
@@ -231,32 +245,43 @@ export function chipSpec(design) {
   };
 }
 
-/** 形体与读数 */
+/** 形体与读数（按键包走 EraPack.bom，不再用现代价假装「越老」） */
 export function physical(design) {
-  const sub = matSub(design);
+  const era = productEraOf(design);
+  const pack = packOf(design);
+  const sub = era === 'keypad' ? null : matSub(design);
   const size = tier(design, 'size');
   const bat = tier(design, 'battery');
   const mat = tier(design, 'material');
   const cam = tier(design, 'camera');
   const chip = tier(design, 'chip');
   const scr = tier(design, 'screen');
-  const form = SCREEN_FORMS.find((f) => f.id === design.screenForm) || SCREEN_FORMS[0];
-  const cs = (design.concepts || []).map((id) => CONCEPTS.find((c) => c.id === id)).filter(Boolean);
-  const cThick = cs.reduce((a, c) => a + c.thick, 0);
-  const cWeight = cs.reduce((a, c) => a + c.weight, 0);
-  const cCost = cs.reduce((a, c) => a + c.cost, 0);
-  // v0.11 形态时间轴：厚直板 / 功能机等加厚加价系数
+  const kb = era === 'keypad' ? tier(design, 'keyboard') : null;
+  const ring = era === 'keypad' ? tier(design, 'ringtone') : null;
+  const net = era === 'keypad' ? tier(design, 'network') : null;
+  const form = era === 'keypad' ? { cost: 0 } : (SCREEN_FORMS.find((f) => f.id === design.screenForm) || SCREEN_FORMS[0]);
+  const conceptList = era === 'keypad' && pack.concepts ? pack.concepts : CONCEPTS;
+  const cs = (design.concepts || []).map((id) => conceptList.find((c) => c.id === id)).filter(Boolean);
+  const cThick = cs.reduce((a, c) => a + (c.thick || 0), 0);
+  const cWeight = cs.reduce((a, c) => a + (c.weight || 0), 0);
+  const cCost = cs.reduce((a, c) => a + (c.cost || 0), 0);
   const ff = FORM_FACTOR_MODS[design.formFactor] || FORM_FACTOR_MODS.thick;
-  const thickness = +(6.6 + bat.thick + mat.thick + chip.heat * 0.15 + cThick + (ff.thickAdd || 0)).toFixed(1);
-  const volume = (size.w * size.h * (thickness - cThick)) / 1000; // cm³
-  const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight + (sub?.weight || 0) + (ff.weightAdd || 0));
-  const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost + (sub?.cost || 0) + layoutOf(design).cost;
-  // 外购芯片：不用自己流片，但每台都要给芯片厂交钱
-  const extChip = design.chipSrc === 'ext' ? 6 + chip.id * 3 : 0;
-  // 真实 BOM 量级：部件 + 组装测试包装授权约 ¥250
-  const unitCost = Math.round(((costPts + extChip) * 70 + 250) * (ff.costMul || 1));
-  const band = unitCost < 1700 ? '亲民带 ¥1999' : unitCost < 2900 ? '主流带 ¥3999' : '旗舰带 ¥6999';
-  return { w: size.w, h: size.h, thickness, weight, bench: chip.bench, unitCost, band, bump: cam.bump, formFactor: design.formFactor || 'thick' };
+  const heat = chip.heat || 0;
+  const baseThick = era === 'keypad' ? 12.5 : 6.6;
+  const thickness = +(baseThick + (bat.thick || 0) + (mat.thick || 0) + heat * 0.15 + cThick + (kb?.thick || 0) + (ff.thickAdd || 0)).toFixed(1);
+  const volume = (size.w * size.h * Math.max(1, thickness - cThick)) / 1000;
+  const weight = Math.round(volume * 1.75 * (mat.density || 1) + (bat.weight || 0) + (cam.weight || 0) + cWeight + (sub?.weight || 0) + (ff.weightAdd || 0));
+  let costPts = (chip.cost || 0) + (scr.cost || 0) + (cam.cost || 0) + (bat.cost || 0) + (mat.cost || 0) + (size.cost || 0) + (form.cost || 0) + cCost + (sub?.cost || 0);
+  if (era !== 'keypad') costPts += layoutOf(design).cost;
+  else costPts += (kb?.cost || 0) + (ring?.cost || 0) + (net?.cost || 0);
+  const extChip = era !== 'keypad' && design.chipSrc === 'ext' ? 6 + (chip.id || 0) * 3 : 0;
+  const raw = pack.bom(costPts + extChip, design);
+  const unitCost = era === 'keypad' ? raw : Math.round(raw * (ff.costMul || 1));
+  let band;
+  if (era === 'keypad') band = unitCost < 250 ? '入门 ¥299' : unitCost < 450 ? '主流 ¥899' : '高端 ¥1999';
+  else band = unitCost < 1700 ? '亲民带 ¥1999' : unitCost < 2900 ? '主流带 ¥3999' : '旗舰带 ¥6999';
+  const standbyDays = (bat.standbyDays || 0) + (scr.standbyDays || 0);
+  return { w: size.w, h: size.h, thickness, weight, bench: chip.bench || 0, unitCost, band, bump: cam.bump || 0, formFactor: design.formFactor || 'thick', era, standbyDays };
 }
 
 /** 形态对物理量的轻量修正（完整表在 game/forms.js；此处避免 studio 反向依赖游戏循环） */
@@ -281,26 +306,40 @@ export const FORM_FACTOR_CAPS = {
 
 /** 各研发槽上限（配置台定上限） */
 export function slotCaps(design) {
+  const era = productEraOf(design);
+  const pack = packOf(design);
   const chip = tier(design, 'chip');
   const scr = tier(design, 'screen');
   const cam = tier(design, 'camera');
   const bat = tier(design, 'battery');
   const mat = tier(design, 'material');
-  const sz = design.parts.size;
+  const sz = design.parts?.size ?? 1;
   const c = (v) => Math.max(20, Math.min(100, Math.round(v)));
-  const cs = (design.concepts || []).map((id) => CONCEPTS.find((x) => x.id === id)).filter(Boolean);
-  const add = (k) => cs.reduce((a, x) => a + (x.caps[k] || 0), 0);
+  const conceptList = era === 'keypad' && pack.concepts ? pack.concepts : CONCEPTS;
+  const cs = (design.concepts || []).map((id) => conceptList.find((x) => x.id === id)).filter(Boolean);
+  const add = (k) => cs.reduce((a, x) => a + (x.caps?.[k] || 0), 0);
   const ffCaps = FORM_FACTOR_CAPS[design.formFactor] || {};
   const addF = (k) => ffCaps[k] || 0;
   const fan = cs.some((x) => x.id === 'fan');
-  const sub = matSub(design);
+  const sub = era === 'keypad' ? null : matSub(design);
+  const names = era === 'keypad'
+    ? { perf: '流畅度', design: '外观与屏幕', camera: '拍照', battery: '待机与耐用', os: '铃声与功能' }
+    : { perf: '性能', design: '屏幕与外观', camera: '影像', battery: '续航与稳定', os: '系统与生态' };
+  const ringBonus = era === 'keypad' ? (tier(design, 'ringtone').cap || 0) * 0.15 : 0;
+  let camCap = cam.cap + (sz === 2 ? 5 : 0) + add('camera') + addF('camera');
+  if (era !== 'keypad') {
+    camCap += layoutOf(design).cam - moduleFit(design).reduce((a, id) => a + Math.round((CONCEPTS.find((x) => x.id === id)?.caps.camera || 0) / 2), 0);
+  } else if ((design.parts?.camera ?? 0) === 0) {
+    camCap = 0; // 无摄像头：拍照槽锁死
+  }
+  const heat = chip.heat || 0;
+  let osCap = (scr.os || 70) + add('os') + addF('os') + ringBonus;
   return [
-    { id: 'perf', name: '性能', cap: c(chip.cap) },
-    { id: 'design', name: '屏幕与外观', cap: c(mat.cap + scr.design - 10 + add('design') + addF('design') + (sub?.design || 0)) },
-    // 模组塞不下的部件，影像加成只剩一半
-    { id: 'camera', name: '影像', cap: c(cam.cap + (sz === 2 ? 5 : 0) + add('camera') + addF('camera') + layoutOf(design).cam - moduleFit(design).reduce((a, id) => a + Math.round((CONCEPTS.find((x) => x.id === id)?.caps.camera || 0) / 2), 0)) },
-    { id: 'battery', name: '续航与稳定', cap: c(bat.cap - (fan ? 0 : chip.heat * 5) + (sz === 2 ? 5 : sz === 0 ? -5 : 0) + add('battery') + addF('battery') + (sub?.heat || 0)) },
-    { id: 'os', name: '系统与生态', cap: c(scr.os + add('os') + addF('os')) },
+    { id: 'perf', name: names.perf, cap: c(chip.cap) },
+    { id: 'design', name: names.design, cap: c((mat.cap || 60) + (scr.design || 0) - 10 + add('design') + addF('design') + (sub?.design || 0)) },
+    { id: 'camera', name: names.camera, cap: era === 'keypad' && (design.parts?.camera ?? 0) === 0 ? 0 : c(camCap) },
+    { id: 'battery', name: names.battery, cap: c(bat.cap - (fan ? 0 : heat * 5) + (sz === 2 ? 5 : sz === 0 ? -5 : 0) + add('battery') + addF('battery') + (sub?.heat || 0)) },
+    { id: 'os', name: names.os, cap: c(osCap) },
   ];
 }
 

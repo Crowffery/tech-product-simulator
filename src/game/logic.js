@@ -6,6 +6,7 @@
 import { SLOTS, POSITIONING, PRICE_BANDS, SUPPLIERS, STOCK_OPTS, EVENTS, DEPTS, MARKET_EVENTS, AFTERMATH_EVENTS, EXPANSIONS, RIVAL_SHARE } from './data.js';
 import { emptySlots } from './state.js';
 import { IDEAL, matchOf, promiseCheck, priceFit, windowAt, clashAt, expectationBar, RUN_MONTHS, POS_BASE_PRICE, roundPrice, marketSize, marketChipGen, rivalPriceList, bandOf, rivalLaunches } from './market.js';
+import { packOf, productEraOf } from './eras/index.js';
 import {
   defaultDesign,
   slotCaps,
@@ -225,25 +226,35 @@ export function renameChip(state, name) {
 
 // ═════════════════════════ 企划 ═════════════════════════
 
-export function recommendedPlan() {
-  return { positioningId: 'mainstream', pointIds: ['fast', 'thin'], priceId: 'mid', bindEco: false };
+export function recommendedPlan(formFactor) {
+  const pack = packOf(formFactor || 'thick');
+  const base = pack.recommendedByForm?.[formFactor] || pack.recommendedPlan;
+  return { formFactor: formFactor || null, ...base, pointIds: [...(base.pointIds || [])] };
 }
 
-export function trianglePreview(positioningId, priceId) {
-  const pos = POSITIONING.find((p) => p.id === positioningId) || POSITIONING[1];
-  const price = PRICE_BANDS.find((p) => p.id === priceId) || PRICE_BANDS[1];
+export function trianglePreview(positioningId, priceId, formFactor) {
+  const pack = packOf(formFactor || 'thick');
+  const pos = pack.positioning.find((p) => p.id === positioningId) || pack.positioning[1];
+  const price = pack.priceBands.find((p) => p.id === priceId) || pack.priceBands[1];
+  const ref = pack.priceRange?.ref || 3999;
   return {
     experience: Math.round(50 * pos.exp),
-    costPressure: Math.round(40 * pos.cost * (price.price / 3999)),
+    costPressure: Math.round(40 * pos.cost * (price.price / ref)),
     months: pos.months,
   };
 }
 
-export function finishPlan(state, { positioningId, pointIds, priceId, bindEco }) {
+export function finishPlan(state, { positioningId, pointIds, priceId, bindEco, formFactor }) {
   if (state.pendingMarket) return { ok: false, msg: '先处理行业大事' };
-  const pos = POSITIONING.find((p) => p.id === positioningId);
-  const price = PRICE_BANDS.find((p) => p.id === priceId);
-  if (!pos || !price || pointIds.length < 1 || pointIds.length > 3) return { ok: false, msg: '请选择定位、1～3 个卖点、售价带' };
+  const ff = formFactor || defaultFormId(state.month);
+  if (!formUnlockedSafe(ff, state.month)) return { ok: false, msg: '该形态尚未解锁' };
+  const pack = packOf(ff);
+  const pos = pack.positioning.find((p) => p.id === positioningId);
+  const price = pack.priceBands.find((p) => p.id === priceId);
+  if (!pos || !price || pointIds.length < 1 || pointIds.length > 3) return { ok: false, msg: '请选择形态、定位、1～3 个卖点、售价带' };
+  // 卖点必须属于当前包
+  const allowed = new Set(pack.sellPoints.map((s) => s.id));
+  if (pointIds.some((id) => !allowed.has(id))) return { ok: false, msg: '卖点与当前形态时代不符，请重选' };
   state.product = {
     name: `${state.companyName} Phone ${state.generation}`,
     positioningId,
@@ -254,25 +265,32 @@ export function finishPlan(state, { positioningId, pointIds, priceId, bindEco })
     bindEco: !!bindEco && state.generation > 1,
     expMul: pos.exp,
     baseMonths: pos.months,
+    formFactor: ff,
+    era: productEraOf(ff),
   };
   state.monthsLeft = pos.months;
   state.slots = emptySlots();
   if (!state.designDraft) {
     const d = defaultDesign();
-    d.parts = { ...RECOMMENDED[positioningId] };
+    // 按键包没有 RECOMMENDED[parents] 等；用中档默认
+    d.parts = { ...(RECOMMENDED[positioningId] || RECOMMENDED.mainstream || { chip: 1, screen: 1, camera: 0, battery: 1, material: 0, size: 1 }) };
+    if (productEraOf(ff) === 'keypad') {
+      d.parts = { chip: 1, screen: 0, camera: 0, battery: 1, material: 0, size: ff === 'elder' ? 2 : 1, keyboard: ff === 'elder' ? 1 : 0, ringtone: 1, network: 0 };
+    }
     d.modelName = `${state.companyName.slice(0, 4)} ${state.generation}`.slice(0, 8);
-    d.formFactor = defaultFormId(state.month);
+    d.formFactor = ff;
     applyFormToDesign(d, d.formFactor);
     syncFoldConcepts(d);
     state.designDraft = d;
-  } else if (!state.designDraft.formFactor) {
-    state.designDraft.formFactor = defaultFormId(state.month);
-    applyFormToDesign(state.designDraft, state.designDraft.formFactor);
-  } else if (!formUnlockedSafe(state.designDraft.formFactor, state.month)) {
-    // 读档卡在未解锁形态时回退
-    state.designDraft.formFactor = defaultFormId(state.month);
-    applyFormToDesign(state.designDraft, state.designDraft.formFactor);
+  } else {
+    state.designDraft.formFactor = ff;
+    applyFormToDesign(state.designDraft, ff);
     syncFoldConcepts(state.designDraft);
+    if (productEraOf(ff) === 'keypad') {
+      const p = state.designDraft.parts || (state.designDraft.parts = {});
+      for (const k of ['keyboard', 'ringtone', 'network']) if (p[k] == null) p[k] = 0;
+      if (ff === 'elder' && p.keyboard === 0) p.keyboard = 1;
+    }
   }
   state.designDraft.position = positioningId;
   state.designDraft.chipGen = state.chip.gen;
@@ -770,7 +788,7 @@ export function experienceScore(state) {
   const sup = SUPPLIERS.find((s) => s.id === state.supplierId) || SUPPLIERS[1];
   const m = matchOf(state.slots, state.product.positioningId);
   // 用户按定位的期待来打分：旗舰要求高，入门机要求低
-  const posExp = POSITIONING.find((p) => p.id === state.product.positioningId)?.exp || 1;
+  const posExp = packOf(state.design || state.product?.formFactor).positioning.find((p) => p.id === state.product.positioningId)?.exp || 1;
   let score = (avgSlotProgress(state) / posExp) * sup.quality * m.mult;
   if (state.product.bindEco) score += 4;
   return Math.max(0, Math.min(100, Math.round(score)));
@@ -882,8 +900,11 @@ export function fairPrice(state) {
   const lag = chipLag(state);
   const chipK = lag > 0 ? 1 - 0.12 * lag : lag < 0 ? 1.06 : 1;
   const w = state.design ? wowNow(state).score : 0;
-  const v = POS_BASE_PRICE[pos] * (0.72 + (exp / 100) * 0.5) * (1 + Math.min(60, n) / 300 + w / 300) * chipK * (state.brand || 1) * (priceWarOn(state) ? 0.94 : 1);
-  return roundPrice(v);
+  const pack = packOf(state.design || state.product?.formFactor || state.designDraft);
+  const baseMap = pack.posBasePrice || POS_BASE_PRICE;
+  const base = baseMap[pos] ?? POS_BASE_PRICE[pos] ?? 899;
+  const v = base * (0.72 + (exp / 100) * 0.5) * (1 + Math.min(60, n) / 300 + w / 300) * chipK * (state.brand || 1) * (priceWarOn(state) ? 0.94 : 1);
+  return (pack.roundPrice || roundPrice)(v);
 }
 
 /** 售价的连锁反应：需求、口碑、上一代价格锚 */
@@ -925,7 +946,8 @@ export function stockedUnits(state) {
 /** 单台毛利（游戏内现金单位 / 万台） */
 export function unitMargin(state, price) {
   const unitCost = Math.round((state.design ? physical(state.design).unitCost : 2400) * (deptLevel(state, 'supply') === 3 ? 0.95 : 1) * marketMod(state, 'cost') * (1 - scaleDiscount(state)) * assetMul(state, 'costMul'));
-  const channel = Math.round(price * 0.15); // 渠道 + 营销
+  const pack = packOf(state.design || state.product?.formFactor);
+  const channel = Math.round(price * (pack.channelRate ?? 0.15)); // 渠道 + 营销
   // 每卖 1 万台进账（单位 ¥100 万）
   return { unitCost, channel, perUnit: price - unitCost - channel, margin: (price - unitCost - channel) / 100 };
 }
@@ -941,13 +963,19 @@ function demandUnits(state, { price, media, user, W, tradeBoost = 1 }) {
   const chipD = lag > 0 ? Math.max(0.6, 1 - 0.12 * lag) : lag < 0 ? 1.06 : 1;
   // 品质对销量很敏感：好评如潮的机器能卖到平庸机的好几倍
   // 旗舰用户看评测下单；入门机用户更看重「值不值」
-  const qe = { flagship: 1.8, pro: 1.8, mainstream: 1.5, minimal: 1.1 }[state.product.positioningId] || 1.5;
+  const pack = packOf(state.design || state.product?.formFactor);
+  const qe = (pack.qualityExp && pack.qualityExp[state.product.positioningId]) || 1.5;
   const quality = Math.pow(media / 65, qe) * Math.pow(user / 65, qe) * (1 + (W?.score || 20) / 100) * (1 + (W?.buzz || 0) / 60);
   // 和上一代几乎一样：老用户没理由换，新用户也没新鲜感
   const st = staleness(state);
   const fatigue = st > 0.5 ? 1 - Math.min(0.3, (st - 0.5) * 0.6) : 1;
-  const demand = assetMul(state, 'demand') * fatigue * chipD * (win?.mul || 1) * clashF * pe.demandMul * quality * (state.reputation / 55) * tradeBoost * (state.generation === 1 ? 1.15 : 1) * marketMod(state, 'demand');
-  return { units: Math.round(17 * demand), win, clash, clashF, pe, fatigue };
+  // 按键形态：早期走量基数更高（单台利润低）
+  let formMul = 1;
+  const ff = state.design?.formFactor || state.product?.formFactor;
+  if (ff === 'feature') formMul = 1.15;
+  if (ff === 'elder') formMul = 1.25;
+  const demand = assetMul(state, 'demand') * fatigue * chipD * (win?.mul || 1) * clashF * pe.demandMul * quality * (state.reputation / 55) * tradeBoost * (state.generation === 1 ? 1.15 : 1) * marketMod(state, 'demand') * formMul;
+  return { units: Math.round((pack.demandBase || 17) * demand), win, clash, clashF, pe, fatigue };
 }
 
 /** 定价面板的实时预测：用当前研发结果估算评分，不含发布会运气 */

@@ -1,3 +1,4 @@
+import { productEraOf } from '../game/eras/index.js';
 /**
  * 观众的嘴：发布会弹幕 + 评论区
  * 按「意图」组织：同一个意思有多种说法，同一场里同一句话绝不出现两次。
@@ -68,8 +69,34 @@ const DM_CONCEPT = {
   titanium: ['钛金属，轻了不少', '钛灰好看'],
 };
 
+const DM_KEYPAD = {
+  price: ['多少钱？', '营业厅有货吗', '求别太贵', '这个价能接受', '先问问价'],
+  wait: ['等营业厅开卖', '先问问爸妈意见', '等同学买了再看'],
+  buy: ['买了！', '给爸妈来一台', '冲营业厅', '这台我要了'],
+  look: ['键好大', '实体键真香', '外观朴实', '有年代感'],
+  standby: ['待机能撑多久', '一周一充？', '待机之王'],
+  chord: ['铃声好听吗', '64 和弦！', '换个彩铃'],
+  tough: ['耐不耐摔', '砸核桃级？', '工程塑料稳'],
+  signal: ['信号怎么样', '天线靠谱吗', '电梯里有信号吗'],
+};
+
 /** 生成本场弹幕，按意图去重，保证句句不同 */
 export function danmakuLines(design, ctx = {}, n = 10) {
+  if (productEraOf(design) === 'keypad') {
+    const intents = ['price', 'wait', 'buy', 'look', 'standby', 'chord', 'tough', 'signal'];
+    const used = new Set();
+    const out = [];
+    for (const intent of shuffle(intents)) {
+      const pool = (DM_KEYPAD[intent] || []).filter((s) => !used.has(s));
+      if (!pool.length) continue;
+      const line = pick(pool);
+      used.add(line);
+      out.push(line);
+      if (out.length >= n) break;
+    }
+    while (out.length < n) out.push(pick(DM_KEYPAD.look));
+    return out;
+  }
   const p = physical(design);
   const cs = chipSpec(design);
   const C = new Set(design.concepts || []);

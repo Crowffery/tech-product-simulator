@@ -4,6 +4,8 @@ import {
   POSITIONS,
   PARTS,
   PART_ORDER,
+  partOrderOf,
+  partsTableOf,
   CORNERS,
   SCREEN_FORMS,
   LAYOUTS,
@@ -121,8 +123,8 @@ export function createStudio(root, opts = {}) {
     const pos = POSITIONS.map(
       (p) => `<button type="button" class="chip ${design.position === p.id ? 'on' : ''}" data-pos="${p.id}">${p.name}</button>`,
     ).join('');
-    const parts = PART_ORDER.map((key) => {
-      const P = PARTS[key];
+    const parts = partOrderOf(design).map((key) => {
+      const P = partsTableOf(design)[key];
       const btns = P.tiers
         .map(
           (t) =>
@@ -517,7 +519,7 @@ export function createStudio(root, opts = {}) {
       { key: 'back', title: `${tier(design, 'material').label}后盖`, sub: paletteName(design.color) },
       { key: 'sensor', title: tier(design, 'camera').label, sub: tier(design, 'camera').note },
       { key: 'battery', title: `${tier(design, 'battery').label.split('·')[1]?.trim()} mAh`, sub: tier(design, 'battery').note },
-      { key: 'chip', title: tier(design, 'chip').label, sub: `跑分 ${p.bench.toLocaleString('en-US')}` },
+      { key: 'chip', title: tier(design, 'chip').label, sub: `${p.era === 'keypad' ? `待机 ${p.standbyDays || 7} 天` : `跑分 ${p.bench.toLocaleString('en-US')}`}` },
       { key: 'frame', title: design.parts.material === 0 ? '塑料中框' : '金属中框', sub: `${p.thickness}mm · ${p.weight}g` },
       { key: 'screen', title: tier(design, 'screen').label, sub: SCREEN_FORMS.find((f) => f.id === design.screenForm)?.label || '' },
     ];
@@ -583,7 +585,7 @@ export function createStudio(root, opts = {}) {
 
   function randomize() {
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
-    for (const key of PART_ORDER) design.parts[key] = pick(PARTS[key].tiers).id;
+    for (const key of partOrderOf(design)) design.parts[key] = pick(partsTableOf(design)[key].tiers).id;
     design.corner = pick(CORNERS).id;
     design.screenForm = pick(SCREEN_FORMS).id;
     design.layout = pick(LAYOUTS).id;
@@ -695,7 +697,7 @@ export function createStudio(root, opts = {}) {
         <div class="rc-two"><span>新颖 <b>${W.novelty.score}</b></span><span>完成 <b>${W.completeness.score}%</b></span></div>
         <div class="rc-head">${esc(W.headline)}</div>
         ${W.firsts.length ? `<div class="rc-firsts">${W.firsts.map((f) => `<span>🏆 首发 ${esc(f)}</span>`).join('')}</div>` : ''}
-        <div class="rc-sub">${esc(tier(design, 'material').label)} · ${p.thickness}mm · ${p.weight}g · 跑分 ${p.bench.toLocaleString('en-US')}</div>
+        <div class="rc-sub">${esc(tier(design, 'material').label)} · ${p.thickness}mm · ${p.weight}g · ${p.era === 'keypad' ? `待机 ${p.standbyDays || 7} 天` : `跑分 ${p.bench.toLocaleString('en-US')}`}</div>
         <div class="row" style="justify-content:center;margin-top:8px">
           <button type="button" class="primary" data-act="keep">🏛 入馆，做下一代</button>
           <button type="button" data-act="close-reveal">再改改</button>

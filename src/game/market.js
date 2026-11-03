@@ -1,3 +1,5 @@
+import { packOf, productEraOf } from './eras/index.js';
+import { KEYPAD_POINT_RULES, KEYPAD_IDEAL, KEYPAD_POS_BASE } from './eras/keypad.js';
 /**
  * V4 市场规则（GAME_DESIGN §3.4）：纯函数，便于调平衡
  * - 理想配比与匹配度：研发怎么分配真正有影响
@@ -25,14 +27,14 @@ export function shares(slots) {
 
 /** 匹配度 0～1，与倍率 ×0.7～×1.15 */
 export function matchOf(slots, positioningId) {
-  const ideal = IDEAL[positioningId] || IDEAL.mainstream;
+  const ideal = IDEAL[positioningId] || KEYPAD_IDEAL[positioningId] || IDEAL.mainstream;
   const sh = shares(slots);
-  const dist = SLOTS.reduce((a, s) => a + Math.abs(sh[s.id] - ideal[s.id]), 0);
+  const dist = SLOTS.reduce((a, s) => a + Math.abs(sh[s.id] - (ideal[s.id] || 20)), 0);
   const match = Math.max(0, 1 - dist / 100);
   const mult = 0.7 + 0.45 * Math.max(0, Math.min(1, (match - 0.6) / 0.35));
   const verdict = SLOTS.map((s) => {
-    const d = sh[s.id] - ideal[s.id];
-    return { id: s.id, name: s.name, share: Math.round(sh[s.id]), ideal: ideal[s.id], v: d > 4 ? 'more' : d < -4 ? 'less' : 'ok' };
+    const d = sh[s.id] - (ideal[s.id] || 20);
+    return { id: s.id, name: s.name, share: Math.round(sh[s.id]), ideal: ideal[s.id] || 20, v: d > 4 ? 'more' : d < -4 ? 'less' : 'ok' };
   });
   return { match, mult, verdict };
 }
@@ -48,8 +50,10 @@ export const POINT_RULES = {
 };
 
 export function promiseCheck(state, phys) {
+  const era = productEraOf(state.design || state.product?.formFactor);
+  const rules = era === 'keypad' ? { ...POINT_RULES, ...KEYPAD_POINT_RULES } : POINT_RULES;
   return state.product.pointIds.map((id) => {
-    const r = POINT_RULES[id];
+    const r = rules[id];
     return { id, name: r?.name || id, ok: r ? r.test(state, phys) : true };
   });
 }
@@ -58,11 +62,18 @@ export function promiseCheck(state, phys) {
 const FIT = { flagship: ['high'], pro: ['high'], mainstream: ['mid'], minimal: ['low', 'mid'] };
 const BAND_IDX = { low: 0, mid: 1, high: 2 };
 
-export function priceFit(positioningId, priceId) {
-  const ok = FIT[positioningId] || ['mid'];
+const FIT_KEYPAD = { parents: ['entry'], student: ['entry', 'mid'], biz: ['mid', 'high'], fashion: ['mid', 'high'] };
+const BAND_IDX_K = { entry: 0, mid: 1, high: 2, low: 0 };
+
+export function priceFit(positioningId, priceId, formFactor) {
+  const keypad = formFactor && ['feature', 'elder', 'flip', 'slider', 'swivel'].includes(formFactor);
+  const okMap = keypad ? FIT_KEYPAD : FIT;
+  const idxMap = keypad ? BAND_IDX_K : BAND_IDX;
+  const ok = okMap[positioningId] || (keypad ? ['mid'] : ['mid']);
   if (ok.includes(priceId)) return { d: 0, user: 0, note: '' };
-  const best = ok.map((b) => BAND_IDX[b]);
-  const p = BAND_IDX[priceId];
+  const best = ok.map((b) => idxMap[b]);
+  const p = idxMap[priceId];
+  if (p == null || !best.length) return { d: 0, user: 0, note: '' };
   const nearest = best.reduce((a, b) => (Math.abs(b - p) < Math.abs(a - p) ? b : a));
   const d = p - nearest;
   if (d > 0) return { d, user: -6 * d, note: d > 1 ? '贵得离谱' : '有点贵' };

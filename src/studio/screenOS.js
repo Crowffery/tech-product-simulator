@@ -1,3 +1,5 @@
+import { productEraOf } from '../game/eras/index.js';
+import { createFeatureScreen } from './featureOS.js';
 /**
  * 发布会专用：可动、可切换的手机屏 OS（程序化 Canvas）
  * 设计台仍用静态低清 wallpaper；仅 presentation/keynote 走 LiveScreen。
@@ -1178,3 +1180,10 @@ export function createLiveScreen(design, { width = 540, height = 1125, theme: sc
 }
 
 export { APP_DEFS, OS_THEMES, easeOutCubic, easeOutBack, easeInOutCubic, easeOutQuint };
+
+
+/** 按形态选屏内系统：按键 → FeatureOS；智能 → 现代 liveScreen */
+export function createScreenFor(design, opts = {}) {
+  if (productEraOf(design) === 'keypad') return createFeatureScreen(design, opts);
+  return createLiveScreen(design, opts);
+}
