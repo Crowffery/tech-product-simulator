@@ -25,5 +25,15 @@ ok('isKeypadForm 仅 feature/elder', isKeypadForm('feature') && isKeypadForm('el
 ok('forms 仍设 formFactor', forms.includes('design.formFactor = f.id'));
 ok('不强制 mutating keyboard 概念', !forms.includes("concepts.push('keyboard')") && !keypad.includes("concepts.push('keyboard')"));
 
+// GAP-V111-LIVE：发布会路径不得对 keypad 注入现代 createLiveScreen
+ok(
+  'keypad 发布会跳过 createLiveScreen',
+  /isKeypadForm\(ff\)/.test(phone3d)
+    && /!isKeypadForm\(ff\)/.test(phone3d)
+    && /createLiveScreen\(design/.test(phone3d)
+    && phone3d.includes('GAP-V111-LIVE'),
+);
+
+
 console.log(fails ? `\nFAILED ${fails}` : '\nALL KEYPAD-3D CHECKS PASSED');
 process.exit(fails ? 1 : 0);

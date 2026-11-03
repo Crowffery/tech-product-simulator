@@ -2168,15 +2168,20 @@ export class PhoneStage {
       this._liveScreen.dispose();
       this._liveScreen = null;
     }
+    // GAP-V111-LIVE：按键机（feature/elder）发布会禁止挂现代 App 网格 liveScreen；
+    // 走 standbyTexture / 后续 FeatureOS，避免小屏机身贴现代 OS。
     if (this._present) {
-      const opts = this._launchOpts || {};
-      this._liveScreen = createLiveScreen(design, {
-        width: 540,
-        height: 1125,
-        theme: opts.screenTheme || 'series',
-        wallIntensity: opts.wallpaper === 'intense' ? 1.35 : opts.wallpaper === 'calm' ? 0.65 : 1,
-      });
-      if (this._screenMode) this._liveScreen.setScreenMode(this._screenMode, this._screenModeOpts || {});
+      const ff = design?.formFactor || physical(design)?.formFactor || 'thick';
+      if (!isKeypadForm(ff)) {
+        const opts = this._launchOpts || {};
+        this._liveScreen = createLiveScreen(design, {
+          width: 540,
+          height: 1125,
+          theme: opts.screenTheme || 'series',
+          wallIntensity: opts.wallpaper === 'intense' ? 1.35 : opts.wallpaper === 'calm' ? 0.65 : 1,
+        });
+        if (this._screenMode) this._liveScreen.setScreenMode(this._screenMode, this._screenModeOpts || {});
+      }
     }
     this.phone = buildPhone(design, { hdScreen: !!this._present, liveScreen: this._liveScreen });
     this.dims = this.phone.dims;
