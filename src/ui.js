@@ -157,11 +157,15 @@ function statVal(id) {
 }
 function hud() {
   if (!state) return `<div class="hud-title">电子产品发展国</div><button type="button" class="hud-btn" data-act="settings">⚙</button>`;
+  const press = L.cashPressure(state);
+  const debt = state.debt || 0;
+  const finHot = press === 'critical' || press === 'low';
   return `
-    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>第${state.generation}代 · ${Math.floor((state.month - 1) / 12) + 1}年${monthOfYear(state.month)}月</small></div>
+    <div class="hud-brand"><b>${esc(state.companyName)}</b><small>第${state.generation}代 · ${Math.floor((state.month - 1) / 12) + 1}年${monthOfYear(state.month)}月${debt ? ` · 债¥${debt}` : ''}</small></div>
     ${Object.entries(STATS)
-      .map(([id, s]) => `<button type="button" class="hud-stat s-${id} ${id === 'cash' && state.cash < 60 ? 'low' : ''}" data-act="stat" data-id="${id}" aria-label="${s.name}">${icon(s.icon, 16)}<span><b>${statVal(id)}</b><small>${s.name}</small></span></button>`)
+      .map(([id, s]) => `<button type="button" class="hud-stat s-${id} ${id === 'cash' && press !== 'ok' ? (press === 'critical' ? 'critical' : 'low') : ''}" data-act="stat" data-id="${id}" aria-label="${s.name}">${icon(s.icon, 16)}<span><b>${statVal(id)}</b><small>${s.name}</small></span></button>`)
       .join('')}
+    <button type="button" class="hud-btn finance ${finHot ? 'hot' : ''}" data-act="finance" aria-label="融资">${finHot ? '💸' : '🏦'}</button>
     <button type="button" class="hud-btn ${draft.restartArmed ? 'armed' : ''}" data-act="settings" aria-label="设置">${draft.restartArmed ? '确定?' : '⚙'}</button>`;
 }
 
@@ -171,7 +175,7 @@ const STAT_HELP = {
     what: '公司账上的钱。所有花销都从这里扣，低于 0 就会破产（第一次有天使投资兜底）。',
     up: ['每台手机卖出去的利润（首月只结首月；之后约 24 个月按月续销）', '货架月 / 研发月的在售续销', '旧款清仓（一次性收尾，放弃后续月）'],
     down: ['每月团队工资和海外 / 门店运营费', '升级部门、扩建、流片、战略投资', '突发事件、库存积压'],
-    note: '融资完整面板后置；账上已预留 debt 字段。',
+    note: '点「融资」可借银行贷款 / 过桥；按月还本息进账本。自有资金优先；天使兜底仍是最后一次急救。',
   },
   faith: {
     what: '铁粉忠诚度（0～100）。和「口碑」分叉：信仰只跟用户满意度 / 以旧换新走，不管媒体怎么写。',
@@ -199,7 +203,10 @@ function showStat(id) {
     id === 'cash'
       ? `<div class="sp-extra"><span>本月固定支出约 <b>${money(L.monthlyCost(state))}</b></span>
           ${(state.ledger || []).slice(-3).reverse().map((e) => `<span class="sp-led"><i>${esc(e.label)}</i><b class="${e.v < 0 ? 'neg' : 'pos'}">${money(e.v, { sign: true })}</b></span>`).join('')}
-          <button type="button" class="primary" data-pop="ledger">📒 查看完整账本</button></div>`
+          <div class="sp-fin-row">
+            <button type="button" class="primary" data-pop="ledger">📒 查看完整账本</button>
+            <button type="button" class="${L.cashPressure(state) !== 'ok' ? 'primary hot' : ''}" data-pop="finance">🏦 融资</button>
+          </div></div>`
       : '';
   pop.innerHTML = `<div class="sp-card kbox">
       <div class="sp-h">${icon(s.icon, 28)}<div><b>${s.name}</b><em>${id === 'cash' ? money(state.cash) : statVal(id)}</em></div><button type="button" data-pop="x">✕</button></div>
@@ -212,6 +219,11 @@ function showStat(id) {
   pop.addEventListener('click', (e) => {
     const k = e.target.closest('[data-pop]')?.dataset.pop;
     if (e.target === pop || k === 'x') pop.remove();
+    if (k === 'finance') {
+      document.querySelector('.stat-pop')?.remove();
+      showFinance();
+      return;
+    }
     if (k === 'ledger') {
       pop.remove();
       showLedger();
@@ -954,6 +966,34 @@ function chipLab() {
   </div>`;
 }
 
+
+P.angel = () => {
+  const card = L.angelById(state.pendingAngel);
+  if (!card) {
+    state.phase = 'dev';
+    return P.dev();
+  }
+  const tier = L.loanSummary(state).tierLabel;
+  return {
+    scene: ['plan', { office: state.office, month: state.month, color: state.design?.color || state.designDraft?.color, concepts: state.design?.concepts || state.designDraft?.concepts || [] }],
+    caption: `天使奇遇 · ${card.kind}`,
+    sheet: `<h2 class="sheet-h">🕊️ 天使奇遇 <small>${esc(card.kind)} · 融资档 ${esc(tier)}</small></h2>
+      <div class="angel-card">
+        <div class="angel-av">🧑‍🏫</div>
+        <div class="angel-body">
+          <b>${esc(card.title)}</b>
+          <small>老周 · 天使投资人</small>
+          <p>${esc(card.body)}</p>
+        </div>
+      </div>
+      <div class="ev-choices">${card.choices
+        .map((c, i) => `<button type="button" class="choice angel" data-act="angel-choice" data-i="${i}">${esc(c.label)}</button>`)
+        .join('')}</div>
+      <p class="muted angel-note">同梗奇遇会冷却，不会刷屏。天使兜底破产急救仍单独保留。</p>`,
+    cta: '',
+  };
+};
+
 P.rescue = () => {
   const R = state.rescue || { amount: 0, reason: '' };
   return {
@@ -1225,6 +1265,12 @@ export function render() {
   } else if (phase !== 'event') {
     draft._evtSfx = null;
   }
+  if (phase === 'angel' && draft._angelSfx !== (state?.pendingAngel || true)) {
+    draft._angelSfx = state?.pendingAngel || true;
+    play('event-popup');
+  } else if (phase !== 'angel') {
+    draft._angelSfx = null;
+  }
   if (phase === 'score' && draft._scoreSfx !== state?.generation) {
     draft._scoreSfx = state?.generation;
     play('media-score');
@@ -1233,6 +1279,10 @@ export function render() {
       toast(`🔬 研发点 +${rp}`);
       const sheet = document.getElementById('g-sheet');
       requestAnimationFrame(() => statFx('rp', sheet?.getBoundingClientRect(), rp));
+    }
+    if (state?.wagerResult?.msg) {
+      toast(state.wagerResult.msg, 6000);
+      state.wagerResult = null;
     }
   }
   if (phase === 'sales' && draft._salesSfx !== state?.generation) {
@@ -1856,6 +1906,76 @@ async function advance(all = false) {
   busy = false;
 }
 
+/** v0.11 融资面板：银行 / 过桥 / 紧急；账本飞字 */
+function showFinance() {
+  document.querySelector('.finance-ov')?.remove();
+  const sum = L.loanSummary(state);
+  const ov = document.createElement('div');
+  ov.className = `finance-ov pressure-${sum.pressure}`;
+  const loanCards = renderLoanCards(sum);
+  ov.innerHTML = `<div class="finance-panel kbox">
+    <div class="fn-h"><b>🏦 融资</b><span class="fn-tier">${esc(sum.tierLabel)}</span><button type="button" data-x>✕</button></div>
+    <div class="fn-meter">
+      <div class="fn-cash"><small>现金</small><b class="${sum.pressure}">${money(state.cash)}</b></div>
+      <div class="fn-debt"><small>负债</small><b class="${sum.debt ? 'neg' : ''}">${money(sum.debt)}</b></div>
+      <div class="fn-next"><small>下月应还</small><b>${sum.nextPay ? money(sum.nextPay) : '—'}</b></div>
+    </div>
+    <p class="fn-pref ${sum.preferOwn ? 'own' : ''}">${sum.preferOwn ? '💡 账上还宽裕：优先花自有资金，借款会生利息。' : sum.pressure === 'critical' ? '⚠ 现金告急：过桥或紧急融资更显眼，但也更贵。' : sum.pressure === 'low' ? '现金低于安全线。可以点贷款进账，按月还本息。' : '自有资金与贷款可并行；天使兜底仍是破产时的最后一次。'}</p>
+    ${sum.expandLock ? `<p class="fn-lock">🔒 扩张暂锁 ${sum.expandLock} 个月（贷款条款）</p>` : ''}
+    <div class="fn-loans">${loanCards}</div>
+    <div class="fn-active">${sum.loans.length ? sum.loans.map((l) => `<div class="fn-row"><span>${esc(l.name)} · 剩 ${l.left} 期</span><b class="neg">${money(l.principal)}</b></div>`).join('') : '<p class="muted">当前无进行中的贷款</p>'}</div>
+    <button type="button" class="link-btn" data-act="ledger">📒 打开账本看流水</button>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click', (e) => {
+    if (e.target === ov || e.target.closest('[data-x]')) ov.remove();
+    const btn = e.target.closest('[data-loan]');
+    if (!btn || busy) return;
+    const id = btn.dataset.loan;
+    const rect = btn.getBoundingClientRect();
+    const r = L.takeLoan(state, id);
+    if (!r.ok) return toast(r.msg);
+    play('keep');
+    moneyFx(rect, r.amount);
+    toast(r.msg);
+    persist();
+    ov.remove();
+    $('#g-hud').innerHTML = hud();
+    // 账本飞字条
+    ledgerFly(r.loan?.name || '贷款', r.amount);
+    showLedger();
+  });
+}
+
+function renderLoanCards(sum) {
+  const defs = L.LOAN_PRODUCTS || [];
+  const openIds = new Set((L.availableLoans(state) || []).map((p) => p.id));
+  return defs
+    .map((p) => {
+      const active = sum.loans.some((l) => l.productId === p.id);
+      const open = openIds.has(p.id);
+      const hot = (p.id === 'emergency' && sum.pressure === 'critical') || (p.id === 'bridge' && sum.pressure !== 'ok');
+      if (active) {
+        return `<div class="fn-card done"><span class="fn-ico">${p.icon}</span><div><b>${esc(p.name)}</b><small>还款中</small></div></div>`;
+      }
+      return `<button type="button" class="fn-card ${open ? '' : 'dim'} ${hot ? 'hot' : ''}" data-loan="${p.id}" ${open ? '' : 'disabled'} title="${open ? '' : '条件未满足或已借过'}">
+        <span class="fn-ico">${p.icon}</span>
+        <div><b>${esc(p.name)}</b><small>${esc(p.blurb)}</small>
+          <em>到账 ${money(p.amount)} · 月息 ${(p.rate * 100).toFixed(1)}% · ${p.term} 期</em></div>
+      </button>`;
+    })
+    .join('');
+}
+
+function ledgerFly(label, amount) {
+  if (document.body.classList.contains('reduce-motion')) return;
+  const el = document.createElement('div');
+  el.className = `ledger-fly ${amount < 0 ? 'neg' : 'pos'}`;
+  el.innerHTML = `<i>${esc(label)}</i><b>${money(amount, { sign: true })}</b>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1600);
+}
+
 /** 账本：最近的现金流水 + 本代分项（在售续销按机型分行） */
 function showLedger() {
   document.querySelector('.ledger-ov')?.remove();
@@ -1864,7 +1984,8 @@ function showLedger() {
   const recent = (state.ledger || []).slice(-18).reverse();
   const sums = L.ledgerOf(state);
   const tailIn = L.onSaleIncomeOf(state);
-  ov.innerHTML = `<div class="ledger kbox"><div class="lg-h"><b>📒 账本</b><span>现金 ${money(state.cash)}</span><button type="button" data-x>✕</button></div>
+  const debt = state.debt || 0;
+  ov.innerHTML = `<div class="ledger kbox"><div class="lg-h"><b>📒 账本</b><span>现金 ${money(state.cash)}${debt ? ` · 负债 ${money(debt)}` : ''}</span><button type="button" data-x>✕</button></div>
     <h4>第 ${state.generation} 代至今</h4>
     ${sums.length ? sums.map(([k, v]) => `<div class="lg-row"><span>${esc(k)}</span><b class="${v < 0 ? 'neg' : 'pos'}">${money(v, { sign: true })}</b></div>`).join('') : '<p class="muted">还没有流水</p>'}
     ${tailIn ? `<div class="lg-row highlight"><span>🛒 在售续销小计（含前代机）</span><b class="pos">${money(tailIn, { sign: true })}</b></div>` : ''}
@@ -1914,6 +2035,10 @@ function onClick(e) {
   }
   if (act === 'ledger' && state) {
     showLedger();
+    return;
+  }
+  if (act === 'finance' && state) {
+    showFinance();
     return;
   }
   if (act === 'motion') {
@@ -2044,6 +2169,22 @@ function onClick(e) {
       play('keep');
       flash('提前量产！');
       break;
+    case 'angel-choice': {
+      const r = L.applyAngelChoice(state, i);
+      if (!r.ok) {
+        toast(r.msg);
+        return;
+      }
+      play('keep');
+      if (r.epilogue) toast(r.epilogue, 5500);
+      const last = (state.ledger || [])[state.ledger.length - 1];
+      if (last && String(last.label).includes('天使')) {
+        const sheet = document.getElementById('g-sheet');
+        moneyFx(sheet?.getBoundingClientRect(), last.v);
+        ledgerFly(last.label, last.v);
+      }
+      break;
+    }
     case 'event-choice':
       L.resolveEvent(state, i);
       if (state.phase === 'factory') draft.factoryDone = false;
