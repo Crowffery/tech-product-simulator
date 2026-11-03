@@ -177,7 +177,7 @@ export function defaultDesign() {
     position: 'mainstream',
     parts: { ...RECOMMENDED.mainstream },
     corner: 1,
-    screenForm: 'punch',
+    screenForm: 'bezel',
     layout: 'vpill',
     color: '#5aa9d6',
     color2: '#eeeae0',
@@ -188,6 +188,7 @@ export function defaultDesign() {
     redesign: 'major',
     chipGen: 1,
     chipSeries: '蜂鸟',
+    formFactor: 'thick',
   };
 }
 
@@ -244,17 +245,39 @@ export function physical(design) {
   const cThick = cs.reduce((a, c) => a + c.thick, 0);
   const cWeight = cs.reduce((a, c) => a + c.weight, 0);
   const cCost = cs.reduce((a, c) => a + c.cost, 0);
-  const thickness = +(6.6 + bat.thick + mat.thick + chip.heat * 0.15 + cThick).toFixed(1);
+  // v0.11 形态时间轴：厚直板 / 功能机等加厚加价系数
+  const ff = FORM_FACTOR_MODS[design.formFactor] || FORM_FACTOR_MODS.thick;
+  const thickness = +(6.6 + bat.thick + mat.thick + chip.heat * 0.15 + cThick + (ff.thickAdd || 0)).toFixed(1);
   const volume = (size.w * size.h * (thickness - cThick)) / 1000; // cm³
-  const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight + (sub?.weight || 0));
+  const weight = Math.round(volume * 1.75 * mat.density + bat.weight + cam.weight + cWeight + (sub?.weight || 0) + (ff.weightAdd || 0));
   const costPts = chip.cost + scr.cost + cam.cost + bat.cost + mat.cost + size.cost + form.cost + cCost + (sub?.cost || 0) + layoutOf(design).cost;
   // 外购芯片：不用自己流片，但每台都要给芯片厂交钱
   const extChip = design.chipSrc === 'ext' ? 6 + chip.id * 3 : 0;
   // 真实 BOM 量级：部件 + 组装测试包装授权约 ¥250
-  const unitCost = Math.round((costPts + extChip) * 70 + 250);
+  const unitCost = Math.round(((costPts + extChip) * 70 + 250) * (ff.costMul || 1));
   const band = unitCost < 1700 ? '亲民带 ¥1999' : unitCost < 2900 ? '主流带 ¥3999' : '旗舰带 ¥6999';
-  return { w: size.w, h: size.h, thickness, weight, bench: chip.bench, unitCost, band, bump: cam.bump };
+  return { w: size.w, h: size.h, thickness, weight, bench: chip.bench, unitCost, band, bump: cam.bump, formFactor: design.formFactor || 'thick' };
 }
+
+/** 形态对物理量的轻量修正（完整表在 game/forms.js；此处避免 studio 反向依赖游戏循环） */
+export const FORM_FACTOR_MODS = {
+  feature: { thickAdd: 1.8, costMul: 0.72, weightAdd: 8 },
+  elder: { thickAdd: 2.2, costMul: 0.68, weightAdd: 14 },
+  thick: { thickAdd: 1.4, costMul: 0.9, weightAdd: 6 },
+  bar: { thickAdd: 0, costMul: 1, weightAdd: 0 },
+  wide: { thickAdd: 0.2, costMul: 1.05, weightAdd: 10 },
+  fold_s: { thickAdd: 0, costMul: 1.35, weightAdd: 20 },
+  fold_l: { thickAdd: 0.4, costMul: 1.55, weightAdd: 36 },
+};
+export const FORM_FACTOR_CAPS = {
+  feature: { camera: -18, design: -8, battery: 6, os: -12 },
+  elder: { camera: -22, design: -10, battery: 12, os: -16 },
+  thick: { camera: -4, design: -2, battery: 4 },
+  bar: {},
+  wide: { design: 4, battery: -2 },
+  fold_s: { design: 10, battery: -6 },
+  fold_l: { design: 16, battery: -10 },
+};
 
 /** 各研发槽上限（配置台定上限） */
 export function slotCaps(design) {
@@ -267,15 +290,17 @@ export function slotCaps(design) {
   const c = (v) => Math.max(20, Math.min(100, Math.round(v)));
   const cs = (design.concepts || []).map((id) => CONCEPTS.find((x) => x.id === id)).filter(Boolean);
   const add = (k) => cs.reduce((a, x) => a + (x.caps[k] || 0), 0);
+  const ffCaps = FORM_FACTOR_CAPS[design.formFactor] || {};
+  const addF = (k) => ffCaps[k] || 0;
   const fan = cs.some((x) => x.id === 'fan');
   const sub = matSub(design);
   return [
     { id: 'perf', name: '性能', cap: c(chip.cap) },
-    { id: 'design', name: '屏幕与外观', cap: c(mat.cap + scr.design - 10 + add('design') + (sub?.design || 0)) },
+    { id: 'design', name: '屏幕与外观', cap: c(mat.cap + scr.design - 10 + add('design') + addF('design') + (sub?.design || 0)) },
     // 模组塞不下的部件，影像加成只剩一半
-    { id: 'camera', name: '影像', cap: c(cam.cap + (sz === 2 ? 5 : 0) + add('camera') + layoutOf(design).cam - moduleFit(design).reduce((a, id) => a + Math.round((CONCEPTS.find((x) => x.id === id)?.caps.camera || 0) / 2), 0)) },
-    { id: 'battery', name: '续航与稳定', cap: c(bat.cap - (fan ? 0 : chip.heat * 5) + (sz === 2 ? 5 : sz === 0 ? -5 : 0) + add('battery') + (sub?.heat || 0)) },
-    { id: 'os', name: '系统与生态', cap: c(scr.os) },
+    { id: 'camera', name: '影像', cap: c(cam.cap + (sz === 2 ? 5 : 0) + add('camera') + addF('camera') + layoutOf(design).cam - moduleFit(design).reduce((a, id) => a + Math.round((CONCEPTS.find((x) => x.id === id)?.caps.camera || 0) / 2), 0)) },
+    { id: 'battery', name: '续航与稳定', cap: c(bat.cap - (fan ? 0 : chip.heat * 5) + (sz === 2 ? 5 : sz === 0 ? -5 : 0) + add('battery') + addF('battery') + (sub?.heat || 0)) },
+    { id: 'os', name: '系统与生态', cap: c(scr.os + add('os') + addF('os')) },
   ];
 }
 
@@ -401,9 +426,9 @@ export const CONCEPTS = [
   { id: 'battswap', cat: 'power', appear: {gen:3}, tier: 2, name: '可换电池', icon: '🔋', desc: '后盖一推，电池拔下来', cost: 3, thick: 0.6, weight: 10, caps: { battery: 6 }, buzz: 5, risk: 8, conflicts: ['crystal', 'wrap'] },
   { id: 'stylus', cat: 'fun', appear: {gen:3}, tier: 2, name: '内置手写笔', icon: '🖊️', desc: '底部抽出一支笔', cost: 4, thick: 0.2, weight: 6, caps: { os: 5 }, buzz: 4, risk: 8, conflicts: [] },
   // ── 3 形态实验 ──
-  { id: 'slider', cat: 'form', appear: {month:16}, tier: 3, name: '滑盖', icon: '↕️', desc: '屏幕整片上滑，露出第二层', group: 'form', cost: 10, thick: 2.5, weight: 30, caps: { design: 5 }, buzz: 8, risk: 14, conflicts: [] },
-  { id: 'swivel', cat: 'form', appear: {month:16}, tier: 3, name: '旋转屏', icon: '🔄', desc: '屏幕转 90° 变成 T 字', group: 'form', cost: 12, thick: 3, weight: 40, caps: { design: 8, battery: -5 }, buzz: 9, risk: 16, conflicts: [] },
-  { id: 'fold', cat: 'form', appear: {month:16}, tier: 3, name: '折叠屏', icon: '📖', desc: '一折变平板', group: 'form', cost: 18, thick: 3.5, weight: 60, caps: { design: 15, battery: -10 }, buzz: 10, risk: 16, conflicts: [] },
+  { id: 'slider', cat: 'form', appear: {month:18}, tier: 3, name: '滑盖', icon: '↕️', desc: '屏幕整片上滑，露出第二层', group: 'form', cost: 10, thick: 2.5, weight: 30, caps: { design: 5 }, buzz: 8, risk: 14, conflicts: [] },
+  { id: 'swivel', cat: 'form', appear: {month:18}, tier: 3, name: '旋转屏', icon: '🔄', desc: '屏幕转 90° 变成 T 字', group: 'form', cost: 12, thick: 3, weight: 40, caps: { design: 8, battery: -5 }, buzz: 9, risk: 16, conflicts: [] },
+  { id: 'fold', cat: 'form', appear: {month:22}, tier: 3, name: '折叠屏', icon: '📖', desc: '一折变平板', group: 'form', cost: 18, thick: 3.5, weight: 60, caps: { design: 15, battery: -10 }, buzz: 10, risk: 16, conflicts: [] },
   { id: 'modular', cat: 'body', appear: {month:18}, tier: 3, name: '模块化背板', icon: '🧩', desc: '磁吸模块随便换', group: 'back', cost: 8, thick: 1, weight: 20, caps: { battery: 5 }, buzz: 7, risk: 12, conflicts: [] },
   { id: 'solar', cat: 'power', appear: {month:18}, tier: 3, name: '太阳能背板', icon: '☀️', desc: '晒一晒多活两小时', group: 'back', cost: 5, thick: 0.3, weight: 6, caps: { battery: 10 }, buzz: 7, risk: 10, conflicts: [] },
   { id: 'chrome', cat: 'body', appear: {month:18}, tier: 3, name: '变色后盖', icon: '🦎', desc: '电致变色，一键换皮', group: 'back', cost: 6, thick: 0.2, weight: 4, caps: {}, buzz: 8, risk: 12, conflicts: [] },
@@ -468,6 +493,9 @@ export function hasAppeared(id, ctx) {
     const used = new Set((ctx.models || []).flatMap((m) => m.design.concepts || []));
     if (!used.has(a.after) && !((ctx.month || 1) >= 30)) return false;
   }
+  // v0.11：折叠族概念需已解锁对应形态（时间轴），未解锁时不出现在创新池
+  const foldish = { fold: 22, trifold: 28, rollable: 28, wrap: 22 };
+  if (foldish[id] && (ctx.month || 1) < foldish[id]) return false;
   return true;
 }
 const CBYID = Object.fromEntries(CONCEPTS.map((c) => [c.id, c]));

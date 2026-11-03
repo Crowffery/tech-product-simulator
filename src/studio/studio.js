@@ -49,6 +49,7 @@ import {
 import { sfx } from './sfx.js';
 import { icon, conceptIcon } from '../icons.js';
 import { term, installGlossary } from '../glossary.js';
+import { FORM_FACTORS, formTimeline, formOf, applyFormToDesign, syncFoldConcepts, formAllowsConcept, formUnlockText } from '../game/forms.js';
 
 const MUSEUM_KEY = 'epdg-studio-museum';
 const DRAFT_KEY = 'epdg-studio-draft';
@@ -82,6 +83,7 @@ export function createStudio(root, opts = {}) {
   design.parts = { ...defaultDesign().parts, ...(design.parts || {}) };
   design.concepts ||= [];
   design.redesign ||= 'major';
+  design.formFactor ||= 'thick';
   let museum = game ? opts.museum || [] : readJSON(MUSEUM_KEY, []);
   const saveDraft = () => (game ? opts.onChange?.(design) : writeJSON(DRAFT_KEY, design));
   let tab = 'config';
@@ -109,6 +111,7 @@ export function createStudio(root, opts = {}) {
     design.corner = p.corner;
     design.screenForm = p.screenForm;
     design.layout = p.layout;
+    design.formFactor = p.formFactor || design.formFactor || 'thick';
     design.concepts = [...(p.concepts || [])];
   }
 
@@ -142,9 +145,39 @@ export function createStudio(root, opts = {}) {
     const posField = opts.lockPosition
       ? `<div class="field"><span class="flabel">定位</span><b>${POSITIONS.find((p) => p.id === design.position)?.name || ''}</b> <small class="muted">（企划已定）</small></div>`
       : `<div class="field"><span class="flabel">定位</span><div class="chips">${pos}</div></div>`;
-    return `${posField}${parts}${layRow}${formRow}
+    return `${posField}${formTimelineUI()}${parts}${layRow}${formRow}
       ${chipChart()}
 `;
+  }
+
+  /** v0.11 开罗式形态时间轴 */
+  function formTimelineUI() {
+    const month = opts.getMonth?.() || 1;
+    const tl = formTimeline(month);
+    const eras = tl.eras
+      .map(
+        (e) =>
+          `<span class="ff-era ${e.active ? 'on' : ''} ${e.reached ? 'reached' : 'soon'}" title="${esc(e.blurb)}">${esc(e.name)}</span>`,
+      )
+      .join('<i class="ff-arrow">›</i>');
+    const cards = tl.forms
+      .map((f) => {
+        const on = design.formFactor === f.id;
+        if (!f.unlocked) {
+          return `<button type="button" class="ff-card locked" data-ff="${f.id}" data-locked="1" title="${esc(f.unlockText)}">
+            <span class="ff-ico">${f.icon}</span><b>${esc(f.name)}</b><small>${esc(f.unlockText)}</small><em>🔒</em></button>`;
+        }
+        return `<button type="button" class="ff-card ${on ? 'on' : ''}" data-ff="${f.id}" title="${esc(f.desc)}">
+          <span class="ff-ico">${f.icon}</span><b>${esc(f.name)}</b><small>${esc(f.tag)}</small></button>`;
+      })
+      .join('');
+    const cur = formOf(design.formFactor);
+    return `<div class="ff-block">
+      <div class="ff-h"><span class="flabel">机身形态</span><div class="ff-eras">${eras}</div></div>
+      <p class="ff-blurb">${esc(tl.era.blurb)} · 当前 <b>${esc(cur.name)}</b></p>
+      <div class="ff-rail">${cards}</div>
+      <p class="ff-hint muted">开局只有功能机 / 老年机 / 厚直板；折叠要等到中后期才解锁。</p>
+    </div>`;
   }
 
   /** 芯片跑分对比：本代三档 vs 竞品同期 */
@@ -229,9 +262,13 @@ export function createStudio(root, opts = {}) {
       const full = !on && !PRACTICAL.has(c.id) && innovCount(sel) >= maxC();
       let why = '';
       let block = '';
+      const month = opts.getMonth?.() || 1;
       if (minor()) {
         why = '当前是小改款，切到大改款才能换创新件';
         block = 'minor';
+      } else if (!formAllowsConcept(design.formFactor, c.id, month)) {
+        why = '当前机身形态还装不下；先在「配置」解锁并选择折叠 / 智能机形态';
+        block = 'form';
       } else if (clash) {
         why = `与「${conceptName(clash)}」冲突，先卸下再装`;
         block = 'clash';
@@ -832,6 +869,27 @@ export function createStudio(root, opts = {}) {
           if (Math.abs(gap) > 8) window.scrollBy({ top: gap - 4, behavior: 'smooth' });
         }
         if (tab === 'look' && !exploded) stage?.view('back');
+      } else if (d.ff) {
+        if (d.locked) {
+          const f = formOf(d.ff);
+          const month = opts.getMonth?.() || 1;
+          toast(formUnlockText(f, month));
+          sfx.cancel();
+          return;
+        }
+        if (minor()) {
+          toast('小改款不能换机身形态，请切到大改款');
+          sfx.cancel();
+          return;
+        }
+        applyFormToDesign(design, d.ff);
+        syncFoldConcepts(design);
+        sfx.part(2);
+        update({ panel: true });
+        toast(`形态：${formOf(d.ff).name} — ${formOf(d.ff).desc}`);
+        if (formOf(d.ff).fold && !exploded) {
+          requestAnimationFrame(() => stage?.spotlight('fold', formOf(d.ff).name));
+        }
       } else if (d.pos) {
         sfx.click();
         design.position = d.pos;
