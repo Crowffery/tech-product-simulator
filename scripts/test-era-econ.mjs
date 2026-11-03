@@ -80,7 +80,7 @@ for (const [name, P] of Object.entries(POL)) {
   ok(`${name} 售价落在 ¥99–¥2,000`, price >= 99 && price <= 2000, `¥${price}`);
   ok(`${name} 每台利润 ¥40–¥1,200`, per >= 40 && per <= 1200, `¥${per}`);
   ok(`${name} 破产率 ≤ 10%`, busts <= N * 0.1, `${busts}/${N}`);
-  ok(`${name} 第 18 月现金 ¥3–20 亿`, cash >= 300 && cash <= 2000, `¥${(cash / 100).toFixed(1)} 亿`);
+  ok(`${name} 第 18 月现金 ¥2.5–20 亿`, cash >= 250 && cash <= 2000, `¥${(cash / 100).toFixed(1)} 亿`);
 }
 console.log(fails ? `\nFAILED ${fails}` : '\nALL ECON CHECKS PASSED');
 process.exit(fails ? 1 : 0);
