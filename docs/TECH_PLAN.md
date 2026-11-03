@@ -387,7 +387,8 @@ ERA_PLAN 7.4 七条验收；`test-era-lint` 扩展到「节目单全部文本 + 
 - `state.mode: 'chronicle' | 'quick'`，`createNewGame(name, chip, mode)`；创建公司页增加模式选择卡。
 - `eras/index.js` 增加 `TIMELINES = { chronicle: [...], quick: [...v0.11 FORM_ERAS] }`，`worldEraOf(state)` 读对应表；`forms.js` 的 `unlockMonth` 改为 `unlockAt(mode)` 函数（chronicle 与 quick 不同月份）。
 - `RUN_MONTHS` → `runMonths(state)`（60 / 36）；所有引用点（结局判定、档期日历、HUD）替换。
-- **快速局零变化**：quick 时间轴与 v0.11 完全一致，旧存档迁移为 quick（§10）。
+- **快速局零变化**：quick 时间轴与 v0.11 完全一致，旧存档迁移为 quick（§10）；新游戏的模式选择卡默认选中 `chronicle`。
+- quick 下按键形态同样走 `keypad` 包；`keypad.techRace.worldLevelAt` 按 mode 取表：chronicle `GSM 1 / GPRS 6 / EDGE 12 / 3G 19`，quick `GSM 1 / GPRS 4 / EDGE 7`，quick 第 10 月起世界包切为智能包（芯片竞赛沿用 v0.11 公式）。
 
 ### 7.2 智能机革命
 
@@ -396,10 +397,12 @@ ERA_PLAN 7.4 七条验收；`test-era-lint` 扩展到「节目单全部文本 + 
 - 抉择：以行业大事卡呈现（复用 `marketEventCard` UI），三个选项写入 `state.revolution = 'pivot' | 'dual' | 'hold'`，效果通过 `mods` 实现：
   - `mods` 结构扩展 `{ key, val, until, forms?: string[], decay?: { perMonth, from } }`；
   - `marketMod(state, key, design)`：若 `forms` 存在，只对匹配形态生效；`decay` 型按 `(1 - perMonth) ^ (month - from)` 计算。
-  - `hold`：`{ key:'demand', forms:['feature','flip','slider','swivel'], decay:{ perMonth:0.04, from:19 } }`，并 `faith +8`；
-  - `pivot`：按键形态 demand ×0.8 一次性 + `flags.touchExp = true`（首代智能机完成度 +10，在 `wowNow` 完成度计算处读取）；
+  - `mods` 新增 `floor` 字段：`decay` 结果不低于 `floor`。
+  - **行业趋势（任何选择都加）**：`{ key:'demand', forms:['feature','flip','slider','swivel'], decay:{ perMonth:0.03, from:19 }, floor:0.25 }`；
+  - `hold`：额外 `{ key:'demand', forms:[同上], decay:{ perMonth:-0.01, from:19 }, until:36 }`（与趋势相乘≈每月 −2%，第 37 月起失效），`faith +8`，`flags.touchExp = -5`；
+  - `pivot`：在售按键机 demand ×0.8 一次性 + `flags.touchExp = +10`（首代智能机完成度修正，在 `wowNow` 完成度计算处读取）；
   - `dual`：`{ key:'rnd', val:0.9, until: month+6 }`（`advanceMonth` 研发增量乘它）。
-- **老年机刚需**：`demandUnits` 中 `elder` 形态在智能机时代后使用独立的 `elderMarket` 系数（不受 `decay` 影响），生命周期 `LIFE_MONTHS_BY_FORM.elder = 30`。
+- **老年机刚需**：`elder` 不挂趋势 mod；`demandUnits` 中 `elder` 形态在智能机时代后使用独立的 `elderMarket = 0.35`（相对按键时代普通市场规模），生命周期 `LIFE_MONTHS_BY_FORM.elder = 30`；`test-era-econ` 断言「只做老年机」≤ 最优策略 0.8 倍、普通按键机第 60 月需求 ≥ 25%。
 
 ### 7.3 制式时间表
 
@@ -526,6 +529,7 @@ ERA_PLAN 8.6 六条验收；`scripts/test-era-econ.mjs` 断言 8.5 的数值约�
 | 8 | 智能机时代后芯片竞赛的起点月份 | 若沿用 `1 + floor((m-1)/10)`，第 19 月一进入就落后 2 代 | 7.3：chronicle 下从第 19 月起算 |
 | 9 | 存档 version 两次升级是否会互相影响？ | 迁移顺序 | 10：链式 `migrate`，2→3→4，单独测试脚本覆盖 |
 | 10 | 短片与 `main` 的屏显（`screen` 字段）如何共存？ | 两套演出语言 | 4.1 任务 1：段落先放 `film`（全屏），切回舞台时再设置 `screen` 模式，二者顺序明确 |
+| 11 | ERA_PLAN 拍板决定是否已同步？ | 模式默认、革命强度、快速局定义三处需改 | 已同步到 7.1、7.2（趋势 mod + `floor`、坚守减缓、老年机 0.35） |
 
 ---
 
