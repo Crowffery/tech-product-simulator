@@ -874,3 +874,16 @@ button.hud-stat.cash { cursor: pointer; font: inherit; box-shadow: none; padding
 .launch-overlay.filming .lo-react { z-index: 4; }
 .launch-overlay.filming .lo-sub { background: rgba(0,0,0,.6); }
 .launch-overlay.filming .lo-dm { opacity: .35; }
+
+/* 按键时代电视广告：4:3 电视框 + 扫描线 + 角标 */
+.launch-overlay.tvad::after {
+  content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 0 14px #1b1712, inset 0 0 0 18px #3b3328, inset 0 0 60px 30px rgba(0,0,0,.7);
+  border-radius: 28px;
+}
+.launch-overlay.tvad::before {
+  content: 'AD'; position: absolute; z-index: 6; top: calc(64px + env(safe-area-inset-top, 0px)); right: 26px;
+  font: 900 12px/1 "Noto Sans SC", sans-serif; color: #fff; background: rgba(0,0,0,.5); padding: 3px 6px; border: 1px solid rgba(255,255,255,.6);
+}
+.launch-overlay.tvad .lo-meter, .launch-overlay.tvad .lo-dm, .launch-overlay.tvad .lo-react { opacity: 0; }

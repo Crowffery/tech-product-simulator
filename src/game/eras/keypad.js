@@ -162,6 +162,8 @@ export const KEYPAD_POINT_RULES = {
 };
 
 export const KEYPAD_POS_BASE = { parents: 399, student: 599, biz: 1299, fashion: 1599 };
+/** 各定位细分市场的相对规模（父母刚需人最多） */
+export const KEYPAD_SEGMENT = { parents: 1.5, student: 1.0, biz: 0.9, fashion: 0.9 };
 
 /**
  * 按键时代创新件（与现代 CONCEPTS 同一结构，era: 'keypad'）。
@@ -228,6 +230,7 @@ export const keypadPack = {
   ideal: KEYPAD_IDEAL,
   pointRules: KEYPAD_POINT_RULES,
   posBasePrice: KEYPAD_POS_BASE,
+  segment: KEYPAD_SEGMENT,
   channelRate: 0.12,
   demandBase: 26,
   qualityExp: { parents: 0.9, student: 1.0, biz: 1.2, fashion: 1.3 },

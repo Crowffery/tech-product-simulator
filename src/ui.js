@@ -786,7 +786,7 @@ P.launch = () => {
     };
   const kpEra = productEraOf(state.design) === 'keypad';
   let opts = draft.launchOpts || (draft.launchOpts = L.defaultLaunchOpts('safe', state.design));
-  if (!(L.launchOptFieldsFor(state.design).openTone || []).some((o) => o.id === opts.openTone)) opts = draft.launchOpts = L.defaultLaunchOpts('safe', state.design);
+  if (!L.launchStylesFor(state.design).some((x) => x.id === opts.style)) opts = draft.launchOpts = L.defaultLaunchOpts(kpEra ? 'retail' : 'safe', state.design);
   const chipRow = (field, title) => {
     const list = L.launchOptFieldsFor(state.design)[field] || [];
     if (!list.length) return '';
@@ -797,11 +797,33 @@ P.launch = () => {
       )
       .join('')}</div></div>`;
   };
+  if (kpEra) {
+    // 按键时代：没有演讲式发布会，上市靠渠道、展会和广告
+    const ad = L.KEYPAD_AD_PLANS.find((a) => a.id === opts.ad) || L.KEYPAD_AD_PLANS[0];
+    const ch = L.KEYPAD_LAUNCH_STYLES.find((c) => c.id === opts.style) || L.KEYPAD_LAUNCH_STYLES[2];
+    const spend = (ch.cost || 0) + (ad.cost || 0);
+    return {
+      scene: ['launch', {}],
+      caption: '市场部把上市方案摊在了会议桌上',
+      sheet: `<h2 class="sheet-h">${icon('mic', 22)} 上市方案 <small>零售价 ¥${state.product.price} <button type="button" class="link-btn" data-act="re-price">改价</button></small></h2>
+    <p class="muted launch-hint">这个年代没有人开几十分钟的发布会。新机靠运营商、展会和广告跟用户见面。</p>
+    <h3 class="sub-h">首发渠道</h3>
+    <div class="cards3">${L.KEYPAD_LAUNCH_STYLES.map(
+      (c) => `<button type="button" class="pick ${opts.style === c.id ? 'on' : ''}" data-act="launch-pick-style" data-id="${c.id}"><b>${c.label}</b><small>${c.desc}</small><i>${c.cost ? `费用 ${money(c.cost)}` : c.risk >= 0.1 ? '有点风险' : '稳'}</i></button>`,
+    ).join('')}</div>
+    <div class="launch-custom">
+      ${chipRow('ad', '广告投放')}
+      ${chipRow('camera', '镜头风格')}
+    </div>
+    <p class="risk-line">${spend ? `💰 本次上市要花 ${money(spend)}` : '✓ 不额外花钱'}${ch.id === 'carrier' ? ' · 首批货运营商包销，不会压库存' : ch.id === 'expo' ? ' · 展会上同场竞品多，可能被抢风头' : ''}</p>`,
+      cta: `<button type="button" class="primary big" data-act="launch-go">就这么上市 ▶</button>`,
+    };
+  }
   return {
     scene: ['launch', {}],
     caption: '后台：观众已经入场，主讲人还在背稿',
-    sheet: `<h2 class="sheet-h">${icon('mic', 22)} 发布会 <small>${kpEra ? '零售价' : '首销价'} ¥${state.product.price} <button type="button" class="link-btn" data-act="re-price">改价</button></small></h2>
-    <p class="muted launch-hint">${kpEra ? '这场发布会怎么开？选好风格，再定开场和灯光。' : '先选主风格，再微调演出——都会写进节目单与手机屏。'}</p>
+    sheet: `<h2 class="sheet-h">${icon('mic', 22)} 发布会 <small>首销价 ¥${state.product.price} <button type="button" class="link-btn" data-act="re-price">改价</button></small></h2>
+    <p class="muted launch-hint">先选主风格，再微调演出——都会写进节目单与手机屏。</p>
     <div class="cards3">${L.launchStylesFor(state.design).map(
       (s) => `<button type="button" class="pick ${opts.style === s.id ? 'on' : ''}" data-act="launch-pick-style" data-id="${s.id}"><b>${s.label}</b><small>${s.desc}</small><i>${s.risk >= 0.3 ? '⚠ 很冒险' : s.risk >= 0.1 ? '有点风险' : '稳'}</i></button>`,
     ).join('')}</div>
@@ -813,10 +835,10 @@ P.launch = () => {
       ${chipRow('wallpaper', '壁纸动感')}
       <div class="launch-opt toggles">
         <button type="button" class="chip ${opts.emphasize ? 'on' : ''}" data-act="launch-toggle" data-field="emphasize">主打卖点特写</button>
-        <button type="button" class="chip ${opts.easter ? 'on' : ''}" data-act="launch-toggle" data-field="easter">${kpEra ? '现场互动环节' : '彩蛋页'}${opts.style === 'safe' ? ' · 略增风险' : ''}</button>
+        <button type="button" class="chip ${opts.easter ? 'on' : ''}" data-act="launch-toggle" data-field="easter">彩蛋页${opts.style === 'safe' ? ' · 略增风险' : ''}</button>
       </div>
     </div>
-    <p class="risk-line">${opts.camera === 'wild' || opts.easter ? (kpEra ? '⚠ 现场互动和大幅运镜更热闹，也更容易出状况' : '⚠ 夸张运镜 / 彩蛋会抬高热度上限，也更容易翻车') : '✓ 当前配置偏稳，适合把完成度打满'}</p>`,
+    <p class="risk-line">${opts.camera === 'wild' || opts.easter ? '⚠ 夸张运镜 / 彩蛋会抬高热度上限，也更容易翻车' : '✓ 当前配置偏稳，适合把完成度打满'}</p>`,
     cta: `<button type="button" class="primary big" data-act="launch-go">开场！▶</button>`,
   };
 };
@@ -827,8 +849,10 @@ P.score = () => {
   return {
     scene: ['score', { color: state.design?.color, grade: W.grade, flop: state.launchFlop, hidePhone: !!state.lastCut, concepts: state.design?.concepts || [], formFactor: state.design?.formFactor }],
     imgs: state.lastCut ? [{ src: state.lastCut, x: 50, y: 50, h: 52, cls: 'hero' }] : [],
-    caption: state.launchFlop ? '演示机卡住了，但发布会总算撑完了' : heat >= 85 ? '全场沸腾，掌声停不下来' : '发布会落幕，媒体开始写稿',
-    sheet: `<h2 class="sheet-h">${icon('news', 22)} 媒体评测 <small>发布会结束 30 分钟后</small></h2>
+    caption: productEraOf(state.design) === 'keypad'
+      ? state.launchFlop ? '展台那天出了点状况，好在货已经铺出去了' : '第二天，报纸和杂志的评测陆续出来了'
+      : state.launchFlop ? '演示机卡住了，但发布会总算撑完了' : heat >= 85 ? '全场沸腾，掌声停不下来' : '发布会落幕，媒体开始写稿',
+    sheet: `<h2 class="sheet-h">${icon('news', 22)} 媒体评测 <small>${productEraOf(state.design) === 'keypad' ? '上市第二天的报纸与杂志' : '发布会结束 30 分钟后'}</small></h2>
       <div class="score-big">
         <div class="sb-cell rv-step" data-step="1"><b data-count="${state.mediaScore}">${state.mediaScore}</b><span>媒体评分 → 口碑</span></div>
         <div class="sb-cell rv-step" data-step="2"><b class="sub" data-count="${state.userScore}">${state.userScore}</b><span>用户评分 → 信仰</span></div>
@@ -1131,10 +1155,10 @@ const TUT_KEYPAD = {
   dev: '每个月推进一次研发。哪项最要紧，就点 ⭐ 让大家多花力气。<br/>工程机做出来以后，可以送去做跌落、待机这些测试。',
   event: '出状况了。选一个你能接受的代价。',
   factory: '流水线开工了。等的时候可以随手抽检一台。',
-  launch: '先定零售价，再上台讲。<br/>这个年代的发布会，讲的是铃声、待机、结实——<b>轻点屏幕可以翻页</b>。',
+  launch: '先定零售价，再定上市方案：跟运营商签独家、去通信展摆展台，还是直接铺到卖场？要不要打电视广告？<br/><b>轻点屏幕可以翻页</b>。',
   score: '报纸和论坛的评价出来了。复盘会告诉你下一代该补哪一块。',
   sales: '首月卖得怎么样？营业厅和代理商还会接着帮你卖。',
-  next: '一年过去了。营业厅专柜、县城代理都可以考虑。<br/>听说南边有家公司在做大屏触控手机——到时候是跟还是不跟，你得拿主意。',
+  next: '一年过去了。运营商专柜、小城镇代理都可以考虑。<br/>听说南边有家公司在做大屏触控手机——到时候是跟还是不跟，你得拿主意。',
   revolution: '蓝莓的大屏触控手机来了。普通按键机会一年年卖不动，老年机还会有人要。<br/>转型、两条腿走路、还是守住按键机——三条路都走得通，但走法不一样。',
 };
 function TUT(phase) {
@@ -1602,7 +1626,7 @@ async function playReveal() {
   try {
     const { PhoneStage } = await import('./studio/phone3d.js');
     const { buildKeynote, txt } = await import('./launch/keynote.js');
-    const { KEYPAD_MOMENTS } = await import('./launch/keynote-keypad.js');
+    const { KEYPAD_MOMENTS, KEYPAD_MOMENTS_BY } = await import('./launch/keynote-keypad.js');
     const { danmakuLines } = await import('./launch/crowd.js');
     const { createFilmLayer } = await import('./launch/films.js');
     const filmLayer = createFilmLayer(ov.querySelector('.lo-film'));
@@ -1637,6 +1661,7 @@ async function playReveal() {
       quick,
       eco: state.product.bindEco,
       launchOpts,
+      stock: L.stockedUnits(state),
     });
 
     // 随机现场插曲（放在中段）
@@ -1650,7 +1675,7 @@ async function playReveal() {
     ];
     const mid = Math.max(1, Math.min(seg.length - 2, 3));
     if (!quick && Math.random() < 0.55) {
-      const pool = keypadEra ? KEYPAD_MOMENTS : moments;
+      const pool = keypadEra ? KEYPAD_MOMENTS_BY[launchOpts.style] || KEYPAD_MOMENTS : moments;
       seg.splice(mid, 0, { key: 'moment', ...pool[Math.floor(Math.random() * pool.length)], ms: 3000 });
     }
     if (state.launchFlop) {
@@ -1676,14 +1701,14 @@ async function playReveal() {
       });
     }
     // 开售倒计时 + 谢幕
-    const cdTitle = keypadEra ? '全国营业厅同步上市' : '今晚 20:00 开售';
+    const cdTitle = keypadEra ? '各大门店同步上市' : '今晚 20:00 开售';
     const cdSub = keypadEra ? '营业厅门口已经开始排队了！' : '今晚八点，<b>正式开售</b>！';
     const cdReact = keypadEra ? ['冲营业厅', '带身份证'] : ['定闹钟！', '手速准备'];
     if (!keypadEra) {
       seg.push({ key: 'cd3', wall: (g, Wd) => { txt(g, cdTitle, Wd / 2, 26, 12, '#ffd08a'); txt(g, '3', Wd / 2, 62, 30, '#fff', 'center', 'monospace'); }, sub: cdSub, react: cdReact, mood: 'good', ms: 900, notap: true });
       ['2', '1'].forEach((n) => seg.push({ key: `cd${n}`, wall: (g, Wd) => { txt(g, cdTitle, Wd / 2, 26, 12, '#ffd08a'); txt(g, n, Wd / 2, 62, 30, '#fff', 'center', 'monospace'); }, sub: null, react: [], ms: 700, notap: true, act: () => play('click') }));
     }
-    seg.push({
+    if (!keypadEra) seg.push({
       key: 'end',
       wall: (g, Wd, Hd, t) => {
         const grd = g.createLinearGradient(0, 0, Wd, Hd);
@@ -1696,7 +1721,7 @@ async function playReveal() {
         g.fillRect(x, 0, 18, Hd);
         txt(g, d.modelName, Wd / 2, Hd / 2 + 10, 26, '#fff', 'center', '"ZCOOL KuaiLe",sans-serif');
       },
-      sub: () => (keypadEra ? `谢谢大家。<b>${esc(d.modelName)}</b>，明天起全国营业厅有售。` : `谢谢大家！现场热度：<b>${heat >= 85 ? '🔥 沸腾' : heat >= 65 ? '👏 热烈' : heat >= 45 ? '🙂 还行' : '😶 冷场'}</b>`),
+      sub: () => (keypadEra ? `谢谢大家。<b>${esc(d.modelName)}</b>，明天起各大运营商门店有售。` : `谢谢大家！现场热度：<b>${heat >= 85 ? '🔥 沸腾' : heat >= 65 ? '👏 热烈' : heat >= 45 ? '🙂 还行' : '😶 冷场'}</b>`),
       react: keypadEra ? ['好！', '鼓掌', '散会去营业厅'] : ['🎉🎉🎉', '太燃了', '安可！'],
       mood: 'good',
       pose: ['hero', 'wide', { spin: 0.4 }],
@@ -1732,6 +1757,7 @@ async function playReveal() {
         const fl = typeof sl.film === 'string' ? { name: sl.film, data: {} } : sl.film;
         if (fl && filmLayer.has(fl.name) && !document.body.classList.contains('reduce-motion')) {
           kpi(null);
+          ov.classList.toggle('tvad', !!sl.tv);
           if (sl.filmSub || sl.sub) sub(sl.filmSub || (typeof sl.sub === 'function' ? sl.sub() : sl.sub));
           filmLayer.play(fl.name, { design: d, phys: physical(d), ...(fl.data || {}) });
           ov.classList.add('filming');
@@ -1757,6 +1783,7 @@ async function playReveal() {
         if (sl.light || launchOpts.light) stage.setLaunchOpts?.({ ...launchOpts, light: sl.light || launchOpts.light });
         if (sl.wall) stage.wallAnim(sl.wall);
         ov.classList.toggle('dim', !!sl.dim);
+        ov.classList.toggle('tvad', !!sl.tv);
         kpi(sl.kpi);
         if (sl.sub !== null && sl.sub !== undefined) sub(typeof sl.sub === 'function' ? sl.sub() : sl.sub);
         if (sl.react?.length) react(sl.react, sl.mood);
@@ -1804,7 +1831,7 @@ async function playReveal() {
           play('boom');
           play('fanfare', 0.12);
           play('applause', 3, 0.3);
-          sub(`今天，我们带来——<b>${esc(d.modelName)}</b>`);
+          sub(keypadEra ? `红布揭开——<b>${esc(d.modelName)}</b>` : `今天，我们带来——<b>${esc(d.modelName)}</b>`);
           react(keypadEra ? ['来了', '这就是新机', '好看'] : ['哇！', '来了来了', '📸'], 'good');
           fireworks(2);
           const dm = ov.querySelector('.lo-dm');
@@ -2398,6 +2425,7 @@ function onClick(e) {
       const next = L.defaultLaunchOpts(id, state.design);
       // 保留用户已选的非默认项里与风格无关的：屏显主题
       if (draft.launchOpts?.screenTheme) next.screenTheme = draft.launchOpts.screenTheme;
+      if (draft.launchOpts?.ad) next.ad = draft.launchOpts.ad;
       draft.launchOpts = next;
       break;
     }
@@ -2410,7 +2438,7 @@ function onClick(e) {
       draft.launchOpts[btn.dataset.field] = !draft.launchOpts[btn.dataset.field];
       break;
     case 'launch-go': {
-      const opts = draft.launchOpts || L.defaultLaunchOpts('safe', state.design);
+      const opts = draft.launchOpts || L.defaultLaunchOpts(productEraOf(state.design) === 'keypad' ? 'retail' : 'safe', state.design);
       L.resolveLaunchStyle(state, opts.style || 'safe', opts);
       persist();
       play('press-reveal');

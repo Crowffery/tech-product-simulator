@@ -372,7 +372,7 @@ export const MARKET_EVENTS = [
     id: 'subsidy',
     eras: ['smart', 'fold', 'smart_dawn'],
     icon: '🏛',
-    title: '国补来了：买新手机有补贴',
+    title: '政府换机补贴来了',
     body: '政策刺激消费，接下来半年大家换机的意愿明显变高。',
     choices: [{ label: '好耶（销量 +12%，6 个月）', effect: { mod: { key: 'demand', val: 1.12, months: 6 } } }],
   },
@@ -425,7 +425,7 @@ export const MARKET_EVENTS = [
     id: 'village_agent',
     eras: ['keypad', 'smart_dawn'],
     icon: '🏪',
-    title: '县城代理商愿意压货',
+    title: '小城镇代理商愿意压货',
     body: '一位代理商说：「你这机子耐摔，下面镇上都好卖。」先打一笔订金。',
     choices: [
       { label: '答应独家半年', effect: { cash: 80, mod: { key: 'demand', val: 1.12, months: 6 } } },
@@ -469,15 +469,15 @@ export const AFTERMATH_EVENTS = [
  *   need(state) 解锁条件，needText 条件说明
  */
 export const EXPANSIONS = [
-  { id: 'hall_counter', icon: '🏢', name: '营业厅专柜', cost: 180, upkeep: 2, demand: 1.1, eras: ['keypad', 'smart_dawn'], desc: '运营商柜台主推。按键时代销量 +10%。' },
-  { id: 'county_agent', icon: '🗺', name: '县城代理商网络', cost: 220, upkeep: 2, demand: 1.14, eras: ['keypad', 'smart_dawn'], desc: '下沉渠道。耐用机型走量 +14%。' },
+  { id: 'hall_counter', icon: '🏢', name: '运营商专柜', cost: 180, upkeep: 2, demand: 1.1, eras: ['keypad', 'smart_dawn'], desc: '运营商柜台主推。按键时代销量 +10%。' },
+  { id: 'county_agent', icon: '🗺', name: '小城镇代理网络', cost: 220, upkeep: 2, demand: 1.14, eras: ['keypad', 'smart_dawn'], desc: '下沉渠道。耐用机型走量 +14%。' },
   { id: 'smt_line', icon: '🔧', name: '自建贴片线', cost: 500, upkeep: 4, costMul: 0.94, eras: ['keypad', 'smart_dawn', 'smart'], desc: '单台成本 -6%。少受代工厂卡脖子。' },
   { id: 'stores', icon: '🏬', name: '开线下体验店', cost: 400, upkeep: 4, demand: 1.08, faith: 5, desc: '销量 +8%，信仰 +5。用户能摸到真机。' },
-  { id: 'sea', icon: '🌏', name: '进军东南亚', cost: 350, upkeep: 3, demand: 1.12, desc: '销量 +12%。性价比机型在那里很吃香。', need: (st) => st.generation >= 2, needText: '第 2 代起' },
+  { id: 'sea', icon: '🌏', name: '开拓周边新兴市场', cost: 350, upkeep: 3, demand: 1.12, desc: '销量 +12%。性价比机型在那里很吃香。', need: (st) => st.generation >= 2, needText: '第 2 代起' },
   { id: 'fab', icon: '🏭', name: '自建工厂', cost: 1200, upkeep: 6, costMul: 0.93, cap: 1.5, desc: '单台成本 -7%，产能 +50%（爆款不再断货）。', need: (st) => (st.cumSold || 0) >= 80, needText: '累计卖出 80 万台' },
-  { id: 'eu', icon: '🇪🇺', name: '进军欧洲', cost: 800, upkeep: 6, demand: 1.18, desc: '销量 +18%。欧洲用户看重口碑和环保。', need: (st) => st.reputation >= 55, needText: '口碑 ≥ 55' },
+  { id: 'eu', icon: '🌍', name: '进军海外成熟市场', cost: 800, upkeep: 6, demand: 1.18, desc: '销量 +18%。成熟市场的用户看重口碑和环保。', need: (st) => st.reputation >= 55, needText: '口碑 ≥ 55' },
   { id: 'chiplab', icon: '🧬', name: '芯片设计中心', cost: 900, upkeep: 5, desc: '流片费用 -35%，流片时间 -1 个月。自研路线的护城河。', need: (st) => (st.chip?.gen || 1) >= 2, needText: '自研芯片到第 2 代' },
-  { id: 'na', icon: '🗽', name: '进军北美', cost: 1600, upkeep: 10, demand: 1.25, desc: '销量 +25%，全球最赚钱的市场；但有被制裁的风险。', need: (st) => st.reputation >= 65 && (st.brand || 1) >= 1.05, needText: '口碑 ≥ 65 且品牌溢价 ≥ 1.05' },
+  { id: 'na', icon: '🌐', name: '全球铺货', cost: 1600, upkeep: 10, demand: 1.25, desc: '销量 +25%，覆盖最赚钱的几个市场；但贸易摩擦的风险也跟着来。', need: (st) => st.reputation >= 65 && (st.brand || 1) >= 1.05, needText: '口碑 ≥ 65 且品牌溢价 ≥ 1.05' },
 ];
 
 /** 同期竞品的月出货量（万台），用来算市场份额 */

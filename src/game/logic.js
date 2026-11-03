@@ -739,6 +739,7 @@ export function earlyLaunch(state) {
 
 export function toLaunch(state) {
   state.phase = 'launch';
+  state.launchOpts = null; // 上一代的上市方案不带进本代的销量预测
 }
 
 export const LAUNCH_STYLES = [
@@ -776,29 +777,36 @@ export const LAUNCH_OPT_FIELDS = {
   ],
 };
 
-/** 按键时代发布会：风格与定制项（不出现现代发布会梗） */
+/**
+ * 按键时代的「上市方案」（取代演讲式发布会，见 docs/LAUNCH_HISTORY.md）：
+ * 首发渠道（style）+ 广告投放（opts.ad）。cost 单位 ¥100 万。
+ */
 export const KEYPAD_LAUNCH_STYLES = [
-  { id: 'safe', label: '稳妥发布', desc: '照稿念，少出错', score: 22, risk: 0.06 },
-  { id: 'wow', label: '现场演示', desc: '当场砸核桃、打电话，效果好也可能出丑', score: 32, risk: 0.28 },
-  { id: 'specs', label: '运营商联合', desc: '请营业厅站台，稳中有亮点', score: 26, risk: 0.1 },
+  { id: 'carrier', label: '运营商独家首发', desc: '首批货由运营商包销，不压库存；每台少赚一截，只覆盖一家运营商的用户', score: 22, risk: 0.04, demand: 0.85, channelAdd: 0.08, cost: 0 },
+  { id: 'expo', label: '通信展亮相', desc: '展台现场演示，媒体和话题加分；要付展位费，同场竞品多', score: 30, risk: 0.16, demand: 1, channelAdd: 0, cost: 4 },
+  { id: 'retail', label: '全渠道铺货', desc: '卖场和各家运营商门店同时开卖，正常利润、正常风险', score: 20, risk: 0.05, demand: 1, channelAdd: 0, cost: 0 },
+];
+export const KEYPAD_AD_PLANS = [
+  { id: 'none', label: '不投广告', desc: '省钱', score: 0, demand: 1, cost: 0 },
+  { id: 'print', label: '报纸杂志', desc: '杂志内页 + 评测版面', score: 3, demand: 1.06, cost: 3 },
+  { id: 'tv', label: '电视广告', desc: '30 秒黄金时段广告，销量明显提升', score: 6, demand: 1.25, cost: 15 },
 ];
 export const KEYPAD_LAUNCH_OPT_FIELDS = {
-  openTone: [
-    { id: 'formal', label: '正式致辞', hint: '稳重' },
-    { id: 'ringtone', label: '铃声开场', hint: '先放一段铃声' },
-    { id: 'rugged', label: '跌落录像开场', hint: '先放一段摔手机录像' },
-  ],
-  light: [
-    { id: 'warm', label: '红毯晚会', hint: '喜庆' },
-    { id: 'cool', label: '商务蓝', hint: '稳重' },
-    { id: 'brand', label: '品牌色', hint: '跟机身' },
-  ],
+  ad: KEYPAD_AD_PLANS.map((a) => ({ id: a.id, label: `${a.label}${a.cost ? ` · ${a.cost * 100} 万` : ''}`, hint: a.desc })),
   camera: [
     { id: 'calm', label: '克制', hint: '稳、少晃' },
     { id: 'cinema', label: '电影感', hint: '推拉 + 侧写' },
     { id: 'wild', label: '夸张', hint: '大幅运镜', risk: 0.04 },
   ],
 };
+/** 按键机上市方案对销量 / 渠道费的影响 */
+export function keypadLaunchEffect(state) {
+  if (productEraOf(state.design || 'thick') !== 'keypad') return { demand: 1, channelAdd: 0, carrier: false };
+  const o = state.launchOpts || {};
+  const ch = KEYPAD_LAUNCH_STYLES.find((x) => x.id === o.style) || KEYPAD_LAUNCH_STYLES[2];
+  const ad = KEYPAD_AD_PLANS.find((x) => x.id === o.ad) || KEYPAD_AD_PLANS[0];
+  return { demand: ch.demand * ad.demand, channelAdd: ch.channelAdd, carrier: ch.id === 'carrier', channel: ch, ad };
+}
 const isKeypadDesign = (d) => productEraOf(d || 'thick') === 'keypad';
 export function launchStylesFor(design) {
   return isKeypadDesign(design) ? KEYPAD_LAUNCH_STYLES : LAUNCH_STYLES;
@@ -809,15 +817,10 @@ export function launchOptFieldsFor(design) {
 
 export function defaultLaunchOpts(styleId = 'safe', design = null) {
   const style = styleId || 'safe';
-  if (isKeypadDesign(design))
-    return {
-      style,
-      openTone: style === 'wow' ? 'rugged' : style === 'specs' ? 'formal' : 'formal',
-      light: style === 'wow' ? 'warm' : style === 'specs' ? 'cool' : 'brand',
-      camera: style === 'wow' ? 'wild' : style === 'specs' ? 'calm' : 'cinema',
-      emphasize: true,
-      easter: style === 'wow',
-    };
+  if (isKeypadDesign(design)) {
+    const ch = ['carrier', 'expo', 'retail'].includes(style) ? style : 'retail';
+    return { style: ch, ad: 'none', camera: ch === 'expo' ? 'wild' : 'cinema', light: ch === 'carrier' ? 'cool' : 'brand', emphasize: true, easter: false };
+  }
   return {
     style,
     openTone: style === 'wow' ? 'areyouok' : style === 'specs' ? 'minimal' : 'redefine',
@@ -832,10 +835,16 @@ export function defaultLaunchOpts(styleId = 'safe', design = null) {
 
 export function resolveLaunchStyle(state, styleId, launchOpts = null) {
   const styles = launchStylesFor(state.design);
-  const style = styles.find((s) => s.id === styleId) || styles[0];
+  const style = styles.find((s) => s.id === styleId) || styles.find((s) => s.id === 'retail') || styles[0];
   const opts = { ...defaultLaunchOpts(style.id, state.design), ...(launchOpts || {}), style: style.id };
   state.launchOpts = opts;
   let score = prLaunchBonus(state) + style.score;
+  if (isKeypadDesign(state.design)) {
+    const ad = KEYPAD_AD_PLANS.find((a) => a.id === opts.ad) || KEYPAD_AD_PLANS[0];
+    score += ad.score;
+    if (style.cost) book(state, '展位费', -style.cost);
+    if (ad.cost) book(state, ad.id === 'tv' ? '电视广告' : '报纸杂志广告', -ad.cost);
+  }
   // 轻度挂钩：夸张运镜 / 彩蛋略增风险与上限
   let risk = style.risk;
   if (opts.camera === 'wild') {
@@ -854,12 +863,12 @@ export function resolveLaunchStyle(state, styleId, launchOpts = null) {
   if (Math.random() < risk) {
     score -= 14;
     state.launchFlop = true;
-    state.eventLog.push(`发布会：${style.label}，现场出了点状况`);
+    state.eventLog.push(isKeypadDesign(state.design) ? `上市：${style.label}，${style.id === 'expo' ? '隔壁展台抢走了不少记者' : '现场出了点状况'}` : `发布会：${style.label}，现场出了点状况`);
   } else {
     const bits = [style.label];
     if (opts.openTone === 'areyouok') bits.push('Are you OK');
     if (opts.easter) bits.push(isKeypadDesign(state.design) ? '现场互动' : '彩蛋');
-    state.eventLog.push(`发布会：${bits.join(' · ')}`);
+    state.eventLog.push(`${isKeypadDesign(state.design) ? '上市' : '发布会'}：${bits.join(' · ')}`);
   }
   state.launchScore = score;
   finalizeScores(state);
@@ -1012,7 +1021,11 @@ export function priceEffect(state, price) {
   // 惊艳度越高，用户越不在乎价格（「贵，但值」）
   const wow = (state.wowResult || (state.design ? wowNow(state) : null))?.score || 0;
   const elastic = Math.max(0.8, 1.8 - wow / 70);
-  const demandMul = Math.max(0.25, Math.min(2.6, Math.pow(V / price, elastic))) * marketSize(price, packOf(state.design || state.product?.formFactor || 'thick').priceRange?.ref || 3999);
+  // 按键机：各定位是相对独立的细分市场，参考价取「行业参考价」和「这个定位的基准价」的几何平均
+  const pk = packOf(state.design || state.product?.formFactor || 'thick');
+  const posBase = pk.id === 'keypad' ? pk.posBasePrice?.[state.product?.positioningId] : null;
+  const ref = posBase ? Math.sqrt((pk.priceRange?.ref || 899) * posBase) : pk.priceRange?.ref || 3999;
+  const demandMul = Math.max(0.25, Math.min(2.6, Math.pow(V / price, elastic))) * marketSize(price, ref);
   let user = Math.max(-18, Math.min(8, Math.round((1 - ratio) * 45)));
   const last = state.lastPrices?.[state.product.positioningId];
   let anchorNote = '';
@@ -1049,7 +1062,7 @@ export function stockedUnits(state) {
 export function unitMargin(state, price) {
   const unitCost = Math.round((state.design ? physical(state.design).unitCost : 2400) * (deptLevel(state, 'supply') === 3 ? 0.95 : 1) * marketMod(state, 'cost') * (1 - scaleDiscount(state)) * assetMul(state, 'costMul'));
   const pack = packOf(state.design || state.product?.formFactor);
-  const channel = Math.round(price * (pack.channelRate ?? 0.15)); // 渠道 + 营销
+  const channel = Math.round(price * ((pack.channelRate ?? 0.15) + keypadLaunchEffect(state).channelAdd)); // 渠道 + 营销（运营商独家要分成）
   // 每卖 1 万台进账（单位 ¥100 万）
   return { unitCost, channel, perUnit: price - unitCost - channel, margin: (price - unitCost - channel) / 100 };
 }
@@ -1083,7 +1096,8 @@ function demandUnits(state, { price, media, user, W, tradeBoost = 1 }) {
     }
   }
   const design = state.design || { formFactor: ff };
-  const demand = assetMul(state, 'demand') * fatigue * chipD * (win?.mul || 1) * clashF * pe.demandMul * quality * (state.reputation / 55) * tradeBoost * (state.generation === 1 ? 1.15 : 1) * marketMod(state, 'demand', design) * formMul;
+  const segment = pack.segment?.[state.product.positioningId] || 1;
+  const demand = segment * keypadLaunchEffect(state).demand * assetMul(state, 'demand') * fatigue * chipD * (win?.mul || 1) * clashF * pe.demandMul * quality * (state.reputation / 55) * tradeBoost * (state.generation === 1 ? 1.15 : 1) * marketMod(state, 'demand', design) * formMul;
   return { units: Math.round((pack.demandBase || 17) * demand), win, clash, clashF, pe, fatigue };
 }
 
@@ -1267,7 +1281,9 @@ export function runSales(state) {
   const W = state.wowResult;
   const { units: baseUnits, win, clash, clashF, pe } = demandUnits(state, { price: priceVal, media: state.mediaScore, user: state.userScore, W, tradeBoost });
   const stocked = stockedUnits(state);
-  const sold = Math.min(stocked, baseUnits);
+  const carrierBuyout = keypadLaunchEffect(state).carrier;
+  // 运营商独家：首批货由运营商包销（最多包到需求的 1.4 倍）
+  const sold = carrierBuyout ? Math.min(stocked, Math.max(baseUnits, Math.round(Math.min(stocked, baseUnits * 1.4)))) : Math.min(stocked, baseUnits);
   const { unitCost, margin, perUnit, channel } = unitMargin(state, priceVal);
   // 首月进账 = 卖出万台 × 单台利润（售价 − 成本 − 渠道营销）
   const revenue = Math.round(sold * margin);
@@ -1287,7 +1303,7 @@ export function runSales(state) {
     state.overstocks = (state.overstocks || 0) + 1;
     book(state, '库存积压', -inventoryFee);
   } else {
-    stockNote = '备货大致合适，供应链松了口气。';
+    stockNote = carrierBuyout && sold > baseUnits ? '首批货运营商全部包了，仓库清空。' : '备货大致合适，供应链松了口气。';
     stockState = 'ok';
   }
   const profit = revenue - cogs - inventoryFee;

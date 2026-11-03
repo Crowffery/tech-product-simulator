@@ -11,7 +11,7 @@ const POL = {
   父母刚需走量: { form: 'elder', pos: 'parents', points: ['loud', 'standby', 'tough'], band: 'entry', k: 0.95 },
   学生入门: { form: 'feature', pos: 'student', points: ['chord', 'value'], band: 'mid', k: 0.95 },
   商务: { form: 'feature', pos: 'biz', points: ['standby', 'dualsim'], band: 'high', k: 1, concepts: ['dualsim'] },
-  时尚高价: { form: 'feature', pos: 'fashion', points: ['chord', 'camphone'], band: 'high', k: 1.12 },
+  时尚高价: { form: 'feature', pos: 'fashion', points: ['chord', 'camphone'], band: 'high', k: 1.0, stock: 'safe' },
 };
 
 function run(P) {
@@ -32,7 +32,7 @@ function run(P) {
       if (pool.length) d.concepts = [...(d.concepts || []).slice(-1), pool[s.generation % pool.length].id];
     }
     L.confirmDesign(s, s.designDraft);
-    L.pickLogistics(s, 'balanced', 'normal', 'own');
+    L.pickLogistics(s, 'balanced', P.stock || 'normal', 'own');
     while (['dev', 'event', 'rescue', 'angel'].includes(s.phase)) {
       if (s.phase === 'event') L.resolveEvent(s, L.recommendedEventChoice(s.pendingEvent));
       else if (s.phase === 'rescue') L.leaveRescue(s);

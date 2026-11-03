@@ -72,7 +72,7 @@ const R = {
   dual: ['两个号一部机', '省得揣两部', '生意人要这个'],
   t9: ['打字快', '短信党福音'],
   qwerty: ['像电脑键盘', '回邮件方便', '商务范'],
-  net: ['手机能上网？', '流量贵不贵', '移动梦网'],
+  net: ['手机能上网？', '流量贵不贵', '能看新闻吗'],
   music: ['能听歌', '随身听可以扔了', '耳机自带？'],
   bigtext: ['我妈能看清', '贴心', '字真大'],
   sos: ['（全场安静了几秒）', '这个功能好', '给老人买就要这个'],
@@ -80,7 +80,7 @@ const R = {
   price: { cheap: ['便宜！', '这个价真厚道', '明天就去营业厅'], ok: ['价格还行', '可以考虑', '等等合约机'], high: ['有点贵', '等降价', '这价能买两部'] },
 };
 
-export function buildKeypadKeynote(ctx) {
+function buildCore(ctx) {
   const d = ctx.d || {};
   const phys = ctx.phys || {};
   const parts = d.parts || {};
@@ -426,7 +426,7 @@ export function buildKeypadKeynote(ctx) {
       bg(g, W, H, '#1a2030', '#303848');
       const k = ease(t * 1.6);
       title(g, `¥${Math.round(price * (0.4 + 0.6 * k))}`, W / 2, H / 2 + 4, 32, '#f5b041');
-      small(g, '全国营业厅 · 手机卖场同步上市', W / 2, H - 10, 9, '#ffe08a');
+      small(g, '各大运营商门店 · 卖场同步上市', W / 2, H - 10, 9, '#ffe08a');
     },
     kpi: { label: '零售价', from: Math.round(price * 1.6), to: price, dec: 0, unit: ' 元' },
     sub: `<b>${name}</b>，零售价 <b>${price} 元</b>。${verdict === 'cheap' ? '我们希望，每个人都用得起。' : verdict === 'ok' ? '这是一个对得起它的价格。' : '一分钱，一分货。'}`,
@@ -441,24 +441,200 @@ export function buildKeypadKeynote(ctx) {
   return out;
 }
 
-/** 按键时代发布会现场插曲（随机插在中段） */
-export const KEYPAD_MOMENTS = [
-  {
-    wall: slide('#2a2010', '#3a3018', '能听收音机吗？', ''),
-    sub: '台下一位大爷站起来问：「这个能听收音机吗？」主讲人笑着说：「能，散会送您一副耳机。」',
-    react: ['哈哈哈', '大爷问得好'],
+// ═════════════ 按上市方案重组：没有演讲式发布会（见 docs/LAUNCH_HISTORY.md） ═════════════
+export const CARRIER = '星联通信';
+export const STORE = '数码港';
+export const EXPO = '国际移动通信展';
+export const MAGAZINE = '数码周刊';
+
+const SLOGAN = {
+  standby: '一周一充，说走就走。',
+  tough: '摔不坏的，才是好伙伴。',
+  chord: '一响，全场回头。',
+  loud: '给爸妈的，要简单。',
+  camphone: '随手一拍，马上发出去。',
+  dualsim: '一台手机，两种生活。',
+  value: '好手机，不必贵。',
+};
+const FILM_OF = { standby: 'kp_standby', tough: 'kp_drop', chord: 'kp_ringtone', loud: 'kp_bigtext', camphone: 'kp_camera', dualsim: 'kp_dualsim', value: 'kp_screen' };
+
+export function buildKeypadKeynote(ctx) {
+  const core = buildCore(ctx);
+  const d = ctx.d || {};
+  const name = d.modelName || '新机';
+  const company = d.company || '我们';
+  const opts = ctx.launchOpts || {};
+  const channel = ['carrier', 'expo', 'retail'].includes(opts.style) ? opts.style : 'retail';
+  const points = ctx.points || [];
+  const quick = !!ctx.quick;
+  const price = ctx.price || 399;
+  const byKey = (k) => core.find((x) => x.key === k);
+  const features = core.filter((x) => !['greet', 'price-q', 'price'].includes(x.key));
+  // 主打卖点对应的段落排在前面
+  const MAIN_KEY = { standby: 'standby', tough: 'drop', chord: 'ringtone', loud: 'bigfont', camphone: 'camera', dualsim: 'dualsim' };
+  const mainKeys = new Set(points.map((p) => MAIN_KEY[p]).filter(Boolean));
+  const ordered = [...features.filter((x) => x.key === 'look'), ...features.filter((x) => x.key !== 'look' && mainKeys.has(x.key)), ...features.filter((x) => x.key !== 'look' && !mainKeys.has(x.key))];
+  const cap = quick ? 2 : channel === 'expo' ? 8 : channel === 'carrier' ? 5 : 4;
+  const picked = ordered.slice(0, cap);
+  const out = [];
+  const pose = (view, shot, extra = {}) => [view, shot, { spin: 0.08, push: 0.4, ...extra }];
+
+  if (channel === 'carrier') {
+    out.push({
+      key: 'sign-open',
+      chap: null,
+      wall: slide('#10223a', '#1d3d63', `${CARRIER} × ${company}`, '独家首发 · 合作签约仪式', '#9fd3ff'),
+      sub: `${CARRIER}的副总裁先上台：「这台手机，我们独家首发。」`,
+      react: ['大运营商站台', '这下好卖了'],
+      mood: 'good',
+      pose: pose('front', 'wide'),
+      screen: 'boot',
+      ms: 3000,
+    });
+    picked.forEach((x) => out.push(x));
+    out.push({
+      key: 'sign',
+      chap: '签约',
+      wall: slide('#10223a', '#1d3d63', '签约', `${CARRIER} 首批包销`, '#ffe08a'),
+      kpi: ctx.stock ? { label: '首批订单', from: 0, to: ctx.stock, dec: 0, unit: ' 万台' } : null,
+      sub: `双方在大屏前签字、握手。${ctx.stock ? `首批 <b>${ctx.stock} 万台</b>，${CARRIER}全部包下。` : ''}台下闪光灯一片。`,
+      react: ['签了！', '大单', '握手照'],
+      mood: 'good',
+      sfx: 'shutter',
+      pose: pose('hero', 'wide', { spin: 0.2 }),
+      screen: 'standby',
+      ms: 3200,
+    });
+    out.push({
+      key: 'price',
+      chap: '价格',
+      wall: slide('#1a2030', '#303848', `¥${price}`, `${CARRIER}门店签约购机更优惠`, '#f5b041'),
+      kpi: { label: '零售价', from: Math.round(price * 1.5), to: price, dec: 0, unit: ' 元' },
+      sub: `<b>${name}</b>，零售价 <b>${price} 元</b>。在${CARRIER}门店签约，还能再便宜一截。`,
+      react: ['签约更便宜', '可以考虑', '去门店看看'],
+      mood: 'good',
+      pose: pose('hero', 'high'),
+      screen: 'standby',
+      sfx: 'boom',
+      ms: 2800,
+    });
+  } else if (channel === 'expo') {
+    out.push({
+      key: 'expo-open',
+      chap: null,
+      wall: slide('#14141c', '#26263a', EXPO, `${company} 展台`, '#ffe08a'),
+      sub: '展馆开门半小时，你们的展台前已经围了一圈人。讲解员拿起样机，开始演示。',
+      react: ['挤一挤', '这台是新的？', '让我看看'],
+      mood: 'good',
+      pose: pose('front', 'wide', { spin: 0.3 }),
+      screen: 'boot',
+      ms: 3000,
+    });
+    picked.forEach((x) => out.push(x));
+    out.push({
+      key: 'expo-press',
+      chap: null,
+      wall: slide('#14141c', '#26263a', '媒体围拍', `${MAGAZINE} · 现场报道`, '#ffffff'),
+      sub: '几家杂志的记者挤到前排，闪光灯一直没停。有经销商当场留下名片要订货。',
+      react: ['能拍一张吗', '什么时候上市', '经销商来了'],
+      mood: 'good',
+      sfx: 'shutter',
+      pose: pose('hero', 'push', { push: 1.2, spin: 0.25 }),
+      screen: 'menu',
+      ms: 2800,
+    });
+    const pq = byKey('price-q');
+    if (pq) out.push({ ...pq, sub: '一位经销商直接问：「多少钱？」' });
+    const pr = byKey('price');
+    if (pr) out.push({ ...pr, sub: `<b>${name}</b>，零售价 <b>${price} 元</b>，下个月起在各大运营商门店和卖场有售。` });
+  } else {
+    out.push({
+      key: 'store-open',
+      chap: null,
+      wall: slide('#2a1a10', '#4a3018', `${STORE} · 新品开售`, name, '#ffe08a'),
+      sub: `上午十点，${STORE}的卷帘门拉起来。柜台里摆着刚到的 <b>${name}</b>，店员拿起样机开始给顾客演示。`,
+      react: ['新到的？', '拿出来看看', '有现货吗'],
+      mood: 'good',
+      pose: pose('front', 'wide'),
+      screen: 'boot',
+      ms: 3000,
+    });
+    picked.forEach((x) => out.push(x));
+    out.push({
+      key: 'price',
+      chap: '价格',
+      wall: slide('#2a1a10', '#4a3018', `¥${price}`, '价签已经摆上柜台', '#f5b041'),
+      kpi: { label: '零售价', from: Math.round(price * 1.4), to: price, dec: 0, unit: ' 元' },
+      sub: `店员把价签摆上柜台：<b>${price} 元</b>。`,
+      react: price <= 599 ? ['不贵', '来一台', '开票吧'] : price <= 1299 ? ['还行', '再看看', '有赠品吗'] : ['有点贵', '等等降价', '再逛逛'],
+      mood: price <= 1299 ? 'good' : 'meh',
+      pose: pose('hero', 'high'),
+      screen: 'standby',
+      sfx: 'boom',
+      ms: 2800,
+    });
+  }
+
+  // —— 广告投放 ——
+  if (opts.ad === 'tv' && !quick) {
+    const pt = points.find((p) => SLOGAN[p]) || 'value';
+    const slogan = SLOGAN[pt];
+    out.push({ key: 'tv-1', chap: '电视广告', tv: true, film: { name: 'kp_material', ms: 2200 }, filmSub: '（当晚，电视上播出了 30 秒的广告）', wall: slide('#000', '#111', '', ''), sub: null, react: [], ms: 600, notap: true });
+    out.push({ key: 'tv-2', chap: null, tv: true, film: { name: FILM_OF[pt] || 'kp_screen', ms: 2600 }, filmSub: slogan, wall: slide('#000', '#111', '', ''), sub: null, react: [], ms: 600, notap: true });
+    out.push({
+      key: 'tv-end',
+      chap: null,
+      tv: true,
+      wall: slide('#0b1020', '#1c2540', name, `${slogan} 现已上市`, '#ffffff'),
+      sub: `<b>${name}</b>　${slogan}　现已上市　¥${price}`,
+      react: ['电视上看到了', '这广告好记'],
+      mood: 'good',
+      pose: pose('hero', 'wide', { spin: 0.35 }),
+      screen: 'standby',
+      ms: 2600,
+    });
+  } else if (opts.ad === 'print' && !quick) {
+    out.push({
+      key: 'print',
+      chap: '杂志',
+      wall: slide('#f4ecd8', '#e2d4b0', MAGAZINE, `本期整版：${name}`, '#3a2a10'),
+      sub: `第二天的《${MAGAZINE}》用一整页刊登了 <b>${name}</b> 的广告，评测版面也给了它半页。`,
+      react: ['杂志上看到了', '评测写得不错'],
+      mood: 'good',
+      pose: pose('front', 'push', { push: 1.1 }),
+      screen: 'standby',
+      ms: 2800,
+    });
+  }
+
+  out.push({
+    key: 'end',
+    chap: null,
+    wall: slide('#141c14', '#26382a', name, channel === 'carrier' ? `${CARRIER}独家首发` : '各大运营商门店和卖场有售', '#c6e48b'),
+    sub: channel === 'carrier' ? `<b>${name}</b>，明天起在${CARRIER}门店独家首发。` : channel === 'expo' ? `展会第一天结束。<b>${name}</b>下个月起在各大运营商门店和卖场有售。` : '排在最前面的那位顾客，已经掏出了钱包。',
+    react: channel === 'retail' ? ['开票', '下一位', '还有货吗'] : ['好！', '鼓掌', '回去等货'],
     mood: 'good',
-  },
-  {
-    wall: slide('#102030', '#203040', '现场打一个', ''),
-    sub: '主讲人当场拨通了台下记者的手机——铃声在会场另一头响了起来。',
-    react: ['真响了', '信号不错'],
-    mood: 'good',
-  },
-  {
-    wall: slide('#2a1018', '#401828', '营业厅经理上台', ''),
-    sub: '华夏通信的营业厅经理上台：「首批货，我们包了。」',
-    react: ['大单！', '运营商站台'],
-    mood: 'good',
-  },
-];
+    pose: pose('hero', 'wide', { spin: 0.4 }),
+    screen: 'menu',
+    fanfare: true,
+    ms: 3000,
+  });
+  return out;
+}
+
+/** 按键时代现场插曲：按上市方案分 */
+export const KEYPAD_MOMENTS_BY = {
+  carrier: [
+    { wall: slide('#10223a', '#1d3d63', '现场连线', ''), sub: `${CARRIER}的工程师当场拨通了台下记者的手机——铃声在会场另一头响了起来。`, react: ['真响了', '信号不错'], mood: 'good' },
+  ],
+  expo: [
+    { wall: slide('#14141c', '#26263a', '隔壁展台', ''), sub: '隔壁展台突然放起音乐，人群被吸走了一半。讲解员提高了嗓门。', react: ['那边在干嘛', '回来回来'], mood: 'meh' },
+    { wall: slide('#14141c', '#26263a', '老外客商', ''), sub: '一位外地来的客商比划着问能不能做他们那边的制式版本。', react: ['外贸单', '能做吗'], mood: 'good' },
+  ],
+  retail: [
+    { wall: slide('#2a1a10', '#4a3018', '能听收音机吗？', ''), sub: '一位大爷凑过来问：「这个能听收音机吗？」店员笑着说：「能，买就送耳机。」', react: ['哈哈哈', '大爷问得好'], mood: 'good' },
+    { wall: slide('#2a1a10', '#4a3018', '砸给你看', ''), sub: '店员把样机往柜台上一磕：「放心，结实。」', react: ['真敢砸', '结实'], mood: 'good' },
+  ],
+};
+export const KEYPAD_MOMENTS = Object.values(KEYPAD_MOMENTS_BY).flat();
+

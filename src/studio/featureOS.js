@@ -53,7 +53,7 @@ export function createFeatureScreen(design, { width = 240, height = 320 } = {}) 
     }
     pg.font = 'bold 8px monospace';
     pg.textAlign = 'left';
-    pg.fillText('华夏通信', 26, 10);
+    pg.fillText('星联通信', 26, 10);
     // battery
     pg.strokeStyle = pal.fg;
     pg.strokeRect(W - 18, 3, 12, 7);
@@ -192,7 +192,7 @@ export function createFeatureScreen(design, { width = 240, height = 320 } = {}) 
       // standby
       pg.font = `${elder ? 11 : 9}px monospace`;
       pg.textAlign = 'center';
-      pg.fillText('华夏通信', pxW / 2, 28);
+      pg.fillText('星联通信', pxW / 2, 28);
       const mins = Math.floor(now / 1000) % (24 * 60);
       const hh = String(9 + Math.floor(mins / 60) % 12).padStart(2, '0');
       const mm = String(mins % 60).padStart(2, '0');

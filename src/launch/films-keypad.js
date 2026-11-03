@@ -157,8 +157,8 @@ export function makeKeypadFilms(h) {
         sos: d.design?.formFactor === 'elder',
         drawScreen: (gg, x, y, w, hh) =>
           (d.design?.parts?.screen ?? 0) === 0
-            ? lcdText(gg, x, y, w, hh, [{ t: '华夏通信', size: 0.12, y: 0.25 }, { t: '09:30', size: 0.34, y: 0.68 }])
-            : lcdText(gg, x, y, w, hh, [{ t: '华夏通信', size: 0.12, y: 0.25 }, { t: '09:30', size: 0.34, y: 0.68 }], { bg: '#bfe0ff', fg: '#0d2a52' }),
+            ? lcdText(gg, x, y, w, hh, [{ t: '星联通信', size: 0.12, y: 0.25 }, { t: '09:30', size: 0.34, y: 0.68 }])
+            : lcdText(gg, x, y, w, hh, [{ t: '星联通信', size: 0.12, y: 0.25 }, { t: '09:30', size: 0.34, y: 0.68 }], { bg: '#bfe0ff', fg: '#0d2a52' }),
       });
       // 掠光
       const sweep = ((t * 0.55) % 1.4) - 0.2;
@@ -206,7 +206,7 @@ export function makeKeypadFilms(h) {
       g.fill();
       if (tier === 0) {
         lcdText(g, x0, y0, sw, sh, [
-          { t: '华夏通信', size: 0.09, y: 0.2 },
+          { t: '星联通信', size: 0.09, y: 0.2 },
           { t: `${String(9 + Math.floor(t)).padStart(2, '0')}:${String(Math.floor(t * 12) % 60).padStart(2, '0')}`, size: 0.3, y: 0.58 },
           { t: '菜单        名片夹', size: 0.075, y: 0.92 },
         ]);
@@ -646,7 +646,7 @@ export function makeKeypadFilms(h) {
       const speed = [0.15, 0.4, 0.7, 1][lv];
       const k = clamp(seg(t, 1.6, 3.4) * speed * 1.6);
       lcdText(g, W / 2 - s * 0.32, H * 0.48, s * 0.64, s * 0.36, [
-        { t: lv === 0 ? '短信 · 通话' : '华夏移动梦网', size: 0.1, y: 0.18 },
+        { t: lv === 0 ? '短信 · 通话' : '星联门户网站', size: 0.1, y: 0.18 },
         { t: lv === 0 ? '信号满格' : k >= 1 ? '新闻 · 天气 · 铃声下载' : '正在连接……', size: 0.09, y: 0.5 },
       ]);
       if (lv > 0) {

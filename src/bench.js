@@ -280,7 +280,7 @@ export function openBench(opts) {
   body.innerHTML = keypad
     ? `<div class="bench-info"><div><small>测试机</small><b>${phoneName}</b></div><div><small>基带</small><b>${chipLabel}</b></div>
       <div><small>耐用调校</small><b>${tune}%</b></div></div>
-    <p class="bench-tip">${tune < 60 ? '⚠ 耐用调校才做了一半，现在测会有几项不过关。' : tune < 95 ? '还有提升空间。' : '调校已经做满，可以送检了。'}${rewardable ? '<br/>本代第一份测试报告会登在《电脑报》上。' : ''}</p>`
+    <p class="bench-tip">${tune < 60 ? '⚠ 耐用调校才做了一半，现在测会有几项不过关。' : tune < 95 ? '还有提升空间。' : '调校已经做满，可以送检了。'}${rewardable ? '<br/>本代第一份测试报告会登在《数码周刊》上。' : ''}</p>`
     : `<div class="bench-info"><div><small>测试机</small><b>${phoneName}</b></div><div><small>芯片</small><b>${chipLabel}</b></div>
       <div><small>性能调校</small><b>${tune}%</b></div></div>
     <p class="bench-tip">${tune < 60 ? '⚠ 调校才做了一半，现在跑分会偏低。' : tune < 95 ? '调校还没做满，分数还有上升空间。' : '调校已经做满，可以冲榜了。'}${rewardable ? '<br/>本代第一次正式跑分会被晒到数码论坛。' : ''}</p>`;
@@ -379,7 +379,7 @@ export function openBench(opts) {
       )
       .join('')}</div>
       <p class="bench-verdict">${keypad
-        ? rank === 1 ? '测试报告登上《电脑报》，经销商开始打电话订货。' : beaten > 0 ? `超过了 ${beaten} 款同价位手机，还不是第一。` : '几项测试都不如同价位的竞品，经销商在观望。'
+        ? rank === 1 ? '测试报告登上《数码周刊》，经销商开始打电话订货。' : beaten > 0 ? `超过了 ${beaten} 款同价位手机，还不是第一。` : '几项测试都不如同价位的竞品，经销商在观望。'
         : rank === 1 ? '跑分截图在数码论坛刷屏，#遥遥领先# 冲上热搜。' : beaten > 0 ? `超过了 ${beaten} 款竞品，还不是第一。` : '被竞品全面压制，论坛开始玩梗了……'}${ratio < 0.95 ? `<br/><small>${keypad ? '耐用调校做满后还能再提高。' : '调校做满后还能再涨一截。'}</small>` : ''}</p>
       <div class="bench-btns"><button type="button" data-b="again">↻ ${keypad ? '再测一次' : '再跑一次'}</button><button type="button" class="primary" data-b="close">收好成绩 ✓</button></div>`;
   };

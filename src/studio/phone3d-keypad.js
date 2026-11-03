@@ -81,7 +81,7 @@ function standbyTexture(design, { elder = false } = {}) {
       g.fillStyle = '#9bbc0f';
       g.font = `bold ${elder ? 8 : 7}px monospace`;
       g.textAlign = 'left';
-      g.fillText('华夏通信', 4, 10);
+      g.fillText('星联通信', 4, 10);
       g.textAlign = 'right';
       g.fillText('||||  █', w - 4, 10);
       // 大时间
