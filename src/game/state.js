@@ -67,6 +67,14 @@ export function createNewGame(companyName, chipSeries = '蜂鸟') {
     cumSold: 0,
     shareHist: [],
     debt: 0,
+    loans: [],
+    expandLock: 0,
+    pendingAngel: null,
+    lastAngelId: null,
+    lastAngelMonth: 0,
+    angelResult: null,
+    angelWager: null,
+    angelBack: null,
     recentMemes: [],
     oldPolicyMap: {},
   };
@@ -99,6 +107,11 @@ export function loadGame() {
     data.assets ||= [];
     data.shareHist ||= [];
     data.debt ||= 0;
+    data.loans ||= [];
+    data.expandLock ||= 0;
+    data.pendingAngel ||= null;
+    data.lastAngelId ||= null;
+    data.lastAngelMonth ||= 0;
     data.recentMemes ||= [];
     data.oldPolicyMap ||= {};
     // 旧存档的在售机型转成生命周期格式

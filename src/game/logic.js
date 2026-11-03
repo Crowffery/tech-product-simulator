@@ -22,6 +22,14 @@ import {
   chipName,
   similarity,
 } from '../studio/parts.js';
+import { tickLoans, takeLoan, loanSummary, canExpand, SAFE_CASH, cashPressure, syncDebt } from './finance.js';
+import { rollAngel, applyAngelChoice, resolveAngelWager, angelById } from './angels.js';
+import { defaultFormId, applyFormToDesign, syncFoldConcepts, formOf, formUnlocked as formUnlockedSafe } from './forms.js';
+
+// v0.11 融资 / 天使奇遇（供 UI 直接调用）
+export { takeLoan, loanSummary, canExpand, SAFE_CASH, cashPressure, syncDebt, tickLoans, availableLoans, LOAN_PRODUCTS } from './finance.js';
+export { rollAngel, applyAngelChoice, resolveAngelWager, angelById } from './angels.js';
+export { formTimeline, FORM_FACTORS, formUnlocked, formOf, defaultFormId, applyFormToDesign, syncFoldConcepts, formAllowsConcept, formUnlockText } from './forms.js';
 
 // ═════════════════════════ 账本 ═════════════════════════
 
@@ -69,6 +77,7 @@ export function assetMul(state, key) {
 export function buyExpansion(state, id) {
   const e = EXPANSIONS.find((x) => x.id === id);
   if (!e || hasAsset(state, id)) return { ok: false, msg: '已经有了' };
+  if (!canExpand(state)) return { ok: false, msg: `贷款条款限制扩张（还剩 ${state.expandLock} 月）` };
   if (e.need && !e.need(state)) return { ok: false, msg: `条件不够：${e.needText}` };
   if (state.cash < e.cost) return { ok: false, msg: '现金不够' };
   book(state, '战略投资', -e.cost, e.name);
@@ -252,7 +261,18 @@ export function finishPlan(state, { positioningId, pointIds, priceId, bindEco })
     const d = defaultDesign();
     d.parts = { ...RECOMMENDED[positioningId] };
     d.modelName = `${state.companyName.slice(0, 4)} ${state.generation}`.slice(0, 8);
+    d.formFactor = defaultFormId(state.month);
+    applyFormToDesign(d, d.formFactor);
+    syncFoldConcepts(d);
     state.designDraft = d;
+  } else if (!state.designDraft.formFactor) {
+    state.designDraft.formFactor = defaultFormId(state.month);
+    applyFormToDesign(state.designDraft, state.designDraft.formFactor);
+  } else if (!formUnlockedSafe(state.designDraft.formFactor, state.month)) {
+    // 读档卡在未解锁形态时回退
+    state.designDraft.formFactor = defaultFormId(state.month);
+    applyFormToDesign(state.designDraft, state.designDraft.formFactor);
+    syncFoldConcepts(state.designDraft);
   }
   state.designDraft.position = positioningId;
   state.designDraft.chipGen = state.chip.gen;
@@ -266,6 +286,9 @@ export function finishPlan(state, { positioningId, pointIds, priceId, bindEco })
 // ═════════════════════════ 设计 ═════════════════════════
 
 export function confirmDesign(state, design) {
+  if (!design.formFactor) design.formFactor = defaultFormId(state.month);
+  applyFormToDesign(design, design.formFactor);
+  syncFoldConcepts(design);
   state.design = design;
   state.designDraft = design;
   state.product.name = design.modelName || state.product.name;
@@ -379,6 +402,8 @@ export function advanceMonth(state, allocation) {
   // 净额 = 工资/运营 + 在售续销（HUD / 月报大字用这个，别只显示负数工资）
   state.monthDelta = -pay - up + (tail.income || 0);
   const chipDone = tickChip(state);
+  const loanTick = tickLoans(state);
+  if (loanTick.paid) state.monthDelta = (state.monthDelta || 0) - loanTick.paid;
   state.monthsLeft = Math.max(0, state.monthsLeft - 1);
   state.month += 1;
 
@@ -392,9 +417,12 @@ export function advanceMonth(state, allocation) {
     const ev = pool[Math.floor(Math.random() * pool.length)];
     state.pendingEvent = ev.id;
     state.phase = 'event';
-    return { ok: true, event: true, gains, tail, chipDone };
+    return { ok: true, event: true, gains, tail, chipDone, loanTick };
   }
-  return { ...afterDevCheck(state), gains, tail, chipDone };
+  // 无研发事故时，有机会触发天使奇遇（不与事件同月叠）
+  const angel = rollAngel(state);
+  if (angel) return { ok: true, angel: true, gains, tail, chipDone, loanTick };
+  return { ...afterDevCheck(state), gains, tail, chipDone, loanTick };
 }
 
 // ═════════════════════════ 产品生命周期 ═════════════════════════
@@ -810,6 +838,8 @@ export function finalizeScores(state) {
   state.mediaScore = media;
   state.userScore = user;
   state.headline = W ? W.headline : '中规中矩';
+  const wager = resolveAngelWager(state, media);
+  if (wager) state.wagerResult = wager;
   // 研发点：拆成可展示的进账项（公式与原先一致）
   const parts = {
     base: 2,
@@ -1158,8 +1188,9 @@ export function shelfSell(state, months = 2) {
     if (!(state.onSale || []).length) break;
     if (state.month >= RUN_MONTHS) break;
     const tail = sellTail(state);
+    const loanTick = tickLoans(state);
     state.month += 1;
-    income += tail.income || 0;
+    income += (tail.income || 0) - (loanTick.paid || 0);
     out.push(tail);
   }
   state.shelfResult = { months: out.length, income, lines: out.flatMap((t) => t.lines || []) };
@@ -1247,7 +1278,7 @@ export const PHASE_STEPS = [
 ];
 
 export function stepIndex(phase) {
-  const map = { event: 'dev', score: 'launch', next: 'sales', bust: 'sales', ending: 'sales', rescue: 'sales' };
+  const map = { event: 'dev', angel: 'dev', score: 'launch', next: 'sales', bust: 'sales', ending: 'sales', rescue: 'sales' };
   return PHASE_STEPS.findIndex((s) => s.id === (map[phase] || phase));
 }
 
